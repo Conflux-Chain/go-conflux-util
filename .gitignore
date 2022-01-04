@@ -13,3 +13,12 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# Go module
+go.sum
+
+# vim temp file
+*.swp
+
+# MacOS
+.DS_Store
