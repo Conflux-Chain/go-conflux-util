@@ -3,25 +3,30 @@ package log
 import (
 	"strings"
 
+	viperutil "github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 )
 
-// InitFromViper inits logging from viper settings and adapts Geth logger.
-//
-// Note that viper must be initilized before, otherwise settings will not
-// be loaded correctly.
-func InitFromViper() {
-	lvl := viper.GetString("log.level")
-	level, err := logrus.ParseLevel(lvl)
-	if err != nil {
-		logrus.WithField("logLevel", lvl).WithError(err).Info(
-			"Invalid log level parsed from viper config, use info level as default.",
-		)
+// LoggingConfig logging configuration such as log level etc.,
+type LoggingConfig struct {
+	Level string `default:"info"` // logging level
+}
 
-		level = logrus.InfoLevel
+// MustInit inits logging from viper settings and adapts Geth logger.
+//
+// Note that viper must be initilized before this, and it will panic
+// and exit if any error happens.
+func MustInit() {
+	var conf LoggingConfig
+	viperutil.MustUnmarshalKey("log", &conf)
+
+	level, err := logrus.ParseLevel(conf.Level)
+	if err != nil {
+		logrus.WithError(err).
+			WithField("logLevel", conf.Level).
+			Fatal("Invalid log level parsed from viper config")
 	}
 
 	logrus.SetLevel(level)
