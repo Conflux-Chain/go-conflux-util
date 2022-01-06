@@ -14,11 +14,11 @@ type LoggingConfig struct {
 	Level string `default:"info"` // logging level
 }
 
-// MustInit inits logging from viper settings and adapts Geth logger.
+// MustInitFromViper inits logging from viper settings and adapts Geth logger.
 //
 // Note that viper must be initilized before this, and it will panic
 // and exit if any error happens.
-func MustInit() {
+func MustInitFromViper() {
 	var conf LoggingConfig
 	viperutil.MustUnmarshalKey("log", &conf)
 

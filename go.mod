@@ -3,10 +3,7 @@ module github.com/Conflux-Chain/go-conflux-util
 go 1.17
 
 require (
-	github.com/Conflux-Chain/go-conflux-sdk v1.0.21
 	github.com/ethereum/go-ethereum v1.10.14
-	github.com/google/uuid v1.1.5
-	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
 	github.com/mcuadros/go-defaults v1.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/royeo/dingrobot v1.0.1-0.20191230075228-c90a788ca8fd
@@ -16,9 +13,7 @@ require (
 )
 
 require (
-	github.com/btcsuite/btcd v0.20.1-beta // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/deckarep/golang-set v0.0.0-20180603214616-504e848d77ea // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
@@ -26,13 +21,11 @@ require (
 	github.com/mitchellh/mapstructure v1.4.3 // indirect
 	github.com/pelletier/go-toml v1.9.4 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/rjeczalik/notify v0.9.1 // indirect
 	github.com/spf13/afero v1.6.0 // indirect
 	github.com/spf13/cast v1.4.1 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/subosito/gotenv v1.2.0 // indirect
-	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5 // indirect
 	golang.org/x/sys v0.0.0-20211205182925-97ca703d548d // indirect
 	golang.org/x/text v0.3.7 // indirect
 	gopkg.in/ini.v1 v1.66.2 // indirect
