@@ -9,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// CfxClientConfig Conflux sdk client configurations
 type CfxClientConfig struct {
 	// websocket endpoint
 	WebsocketUrl string `default:"" mapstructure:"ws"`
