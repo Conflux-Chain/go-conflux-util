@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/royeo/dingrobot"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -15,48 +14,33 @@ const (
 )
 
 var (
-	// Custom tags are usually used to differentiate between different networks and enviroments
-	// such as mainnet/testnet, prod/test/dev or any custom info for more details.
-	dingTalkCustomTags    []string
 	dingTalkCustomTagsStr string
-
-	dingTalkAtMobiles []string // mobiles for @ members
-	dingTalkIsAtAll   bool     // whether to @ all members
-
-	dingRobot dingrobot.Roboter
+	dingTalkConfig        *DingTalkConfig
+	dingRobot             dingrobot.Roboter
 )
 
-func init() {
-	// only init DingTalk robot from viper if enabled
-	if viper.GetBool("alert.dingtalk.enabled") {
-		InitDingRobotFromViper()
+// InitDingTalk inits DingTalk with provided configurations.
+func InitDingTalk(config *DingTalkConfig, customTags []string) {
+	if !config.Enabled {
+		return
 	}
-}
 
-// InitDingRobotFromViper inits DingTalk robot from Viper
-func InitDingRobotFromViper() {
-	dingTalkCustomTags = viper.GetStringSlice("alert.customTags")
-	dingTalkCustomTagsStr = strings.Join(dingTalkCustomTags, "/")
+	dingTalkCustomTagsStr = strings.Join(customTags, "/")
+	dingTalkConfig = config
 
-	dingTalkAtMobiles = viper.GetStringSlice("alert.dingtalk.atMobiles")
-	dingTalkIsAtAll = viper.GetBool("alert.dingtalk.isAtAll")
-
-	// webhook and secrets
-	webHook := viper.GetString("alert.dingtalk.webhook")
-	secret := viper.GetString("alert.dingtalk.secret")
-
-	dingRobot = dingrobot.NewRobot(webHook)
-	dingRobot.SetSecret(secret)
+	// init DingTalk robots
+	dingRobot = dingrobot.NewRobot(config.Webhook)
+	dingRobot.SetSecret(config.Secret)
 }
 
 // SendDingTalkTextMessage sends text message to DingTalk group chat.
 func SendDingTalkTextMessage(level, brief, detail string) error {
-	if dingRobot == nil {
+	if dingRobot == nil { // robot not set
 		return nil
 	}
 
 	nowStr := time.Now().Format("2006-01-02T15:04:05-0700")
 	msg := fmt.Sprintf(dingTalkAlertMsgTpl, dingTalkCustomTagsStr, level, brief, detail, nowStr)
 
-	return dingRobot.SendText(msg, dingTalkAtMobiles, dingTalkIsAtAll)
+	return dingRobot.SendText(msg, dingTalkConfig.AtMobiles, dingTalkConfig.IsAtAll)
 }

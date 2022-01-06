@@ -11,7 +11,7 @@ import (
 
 // LoggingConfig logging configuration such as log level etc.,
 type LoggingConfig struct {
-	Level string `default:"info"` // logging level
+	Level string `default:"info" mapstructure:"level"` // logging level
 }
 
 // MustInitFromViper inits logging from viper settings and adapts Geth logger.
@@ -29,6 +29,11 @@ func MustInitFromViper() {
 			Fatal("Invalid log level parsed from viper config")
 	}
 
+	Init(level)
+}
+
+// Init inits logging with specified log level
+func Init(level logrus.Level) {
 	logrus.SetLevel(level)
 
 	// adapt geth logger
