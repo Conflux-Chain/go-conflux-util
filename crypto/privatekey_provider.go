@@ -264,6 +264,7 @@ func (p *HmacPrivKeyProvider) writeKeyStore() {
 	}
 }
 
+// convertCfxAccountAddr converts a 160 bit Ethereum address to Conflux one.
 // TODO: Use SDK method to construct conflux address from geth common.Address
 // once relative issue resolved:
 // https://github.com/Conflux-Chain/go-conflux-sdk/issues/116
