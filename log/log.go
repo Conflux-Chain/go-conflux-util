@@ -29,6 +29,11 @@ func MustInitFromViper() {
 			Fatal("Invalid log level parsed from viper config")
 	}
 
+	Init(level)
+}
+
+// Init inits logging with specified log level
+func Init(level logrus.Level) {
 	logrus.SetLevel(level)
 
 	// adapt geth logger

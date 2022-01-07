@@ -1,28 +1,18 @@
 package log
 
 import (
-	"os"
-	"strings"
 	"testing"
 
 	"github.com/Conflux-Chain/go-conflux-util/alert"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 )
 
 func initTest() {
-	viper.AutomaticEnv()
-	viper.SetEnvPrefix("cfx")
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-
-	os.Setenv("CFX_ALERT_CUSTOMTAGS", "log hook test")
-	os.Setenv("CFX_ALERT_DINGTALK_ENABLED", "true")
-	os.Setenv("CFX_ALERT_DINGTALK_ATMOBILES", "")
-	os.Setenv("CFX_ALERT_DINGTALK_ISATALL", "false")
-	os.Setenv("CFX_ALERT_DINGTALK_WEBHOOK", "")
-	os.Setenv("CFX_ALERT_DINGTALK_SECRET", "")
-
-	alert.InitDingRobotFromViper()
+	alert.InitDingTalk(&alert.DingTalkConfig{
+		Enabled: true,
+		Webhook: "http://test.webhook",
+		Secret:  "test.secret",
+	}, []string{"log", "hook", "test"})
 }
 
 func TestLogrusAddHooks(t *testing.T) {
