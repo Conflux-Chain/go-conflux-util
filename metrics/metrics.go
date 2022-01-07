@@ -27,7 +27,7 @@ type MetricsConfig struct {
 	// switch to turn on or off metrics
 	Enabled bool
 	// namespace for metrics reporting
-	Namespace string `default:"cfx"`
+	Namespace string
 	// interval to report metrics to influxdb
 	ReportInterval time.Duration `default:"10s"`
 	// settings for influxdb to be reported to
