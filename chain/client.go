@@ -4,42 +4,32 @@ import (
 	"time"
 
 	sdk "github.com/Conflux-Chain/go-conflux-sdk"
-	viperutil "github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
-// CfxClientConfig Conflux sdk client configurations
-type CfxClientConfig struct {
-	// websocket endpoint
-	WebsocketUrl string `default:"" mapstructure:"ws"`
-	// http endpoint
-	HttpUrl string `default:"" mapstructure:"http"`
+// CfxClientOptionConfig Conflux SDK client option configurations.
+type CfxClientOptionConfig struct {
 	// retry counts if request failed
-	Retry int `default:"3" mapstructure:"retry"`
+	Retry int `default:"3"`
 	// retry interval if request failed
-	RetryInterval time.Duration `default:"1s" mapstructure:"retryInterval"`
+	RetryInterval time.Duration `default:"1s"`
 	// request timeout
-	RequestTimeout time.Duration `default:"3s" mapstructure:"requestTimeout"`
+	RequestTimeout time.Duration `default:"3s"`
 }
 
 // MustNewCfxClientFromViper creates an instance of Conflux client
 // from viper or panic on error.
 func MustNewCfxClientFromViper(isWebSocket ...bool) *sdk.Client {
-	var option CfxClientConfig
-	viperutil.MustUnmarshalKey("cfx", &option)
-
-	endpoint := option.HttpUrl
+	endpoint := viper.GetString("cfx.http")
 	if len(isWebSocket) > 0 && isWebSocket[0] {
-		endpoint = option.WebsocketUrl
+		endpoint = viper.GetString("cfx.ws")
 	}
 
-	client, err := sdk.NewClient(
-		endpoint, sdkClientOptionFromConfig(&option),
-	)
-
+	client, err := NewCfxClientWithOptionFromViper(endpoint)
 	if err != nil {
-		logrus.WithField("option", option).
+		logrus.WithField("endpoint", endpoint).
 			WithError(err).
 			Fatal("Failed to create CFX client")
 	}
@@ -47,26 +37,20 @@ func MustNewCfxClientFromViper(isWebSocket ...bool) *sdk.Client {
 	return client
 }
 
-// GetCfxClientOptionFromViper gets Conflux client option from viper.
-//
-// Note that viper must be initialized before calling this function,
-// otherwise settings might not be loaded correctly.
-func GetCfxClientOptionFromViper() (sdk.ClientOption, error) {
-	var option CfxClientConfig
+// NewCfxClientWithOptionFromViper creates an instance of Conflux client
+// with option provided from viper.
+func NewCfxClientWithOptionFromViper(endpoint string) (*sdk.Client, error) {
+	var optConfig CfxClientOptionConfig
 
-	err := viperutil.UnmarshalKey("cfx", &option)
-	if err != nil {
-		return sdk.ClientOption{}, errors.WithMessage(err, "failed to unmarshal Conflux client config")
+	if err := viper.UnmarshalKey("cfx", &optConfig); err != nil {
+		err = errors.WithMessage(err, "failed to unmarshal config from viper")
+		return nil, err
 	}
 
-	return sdkClientOptionFromConfig(&option), nil
-}
-
-// sdkClientOptionFromConfig generates sdk client option from config.
-func sdkClientOptionFromConfig(config *CfxClientConfig) sdk.ClientOption {
-	return sdk.ClientOption{
-		RetryCount:     config.Retry,
-		RetryInterval:  config.RetryInterval,
-		RequestTimeout: config.RequestTimeout,
+	option := sdk.ClientOption{
+		RetryCount:     optConfig.Retry,
+		RetryInterval:  optConfig.RetryInterval,
+		RequestTimeout: optConfig.RequestTimeout,
 	}
+	return sdk.NewClient(endpoint, option)
 }

@@ -11,7 +11,7 @@ import (
 
 // LoggingConfig logging configuration such as log level etc.,
 type LoggingConfig struct {
-	Level string `default:"info" mapstructure:"level"` // logging level
+	Level string `default:"info"` // logging level
 }
 
 // MustInitFromViper inits logging from viper settings and adapts Geth logger.

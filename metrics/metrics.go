@@ -25,25 +25,25 @@ var (
 // MetricsConfig metrics configurations such as influxdb settings.,
 type MetricsConfig struct {
 	// switch to turn on or off metrics
-	Enabled bool `default:"false" mapstructure:"enabled"`
+	Enabled bool
 	// namespace for metrics reporting
-	Namespace string `default:"" mapstructure:"namespace"`
+	Namespace string `default:"cfx"`
 	// interval to report metrics to influxdb
-	ReportInterval time.Duration `default:"10s" mapstructure:"reportInterval"`
+	ReportInterval time.Duration `default:"10s"`
 	// settings for influxdb to be reported to
-	InfluxDb *InfluxDbConfig `mapstructure:"influxdb"`
+	InfluxDb *InfluxDbConfig
 }
 
 // InfluxDbConfig influxdb configurations.
 type InfluxDbConfig struct {
 	// host path
-	Host string `default:"http://127.0.0.1:8086" mapstructure:"host"`
+	Host string `default:"http://127.0.0.1:8086"`
 	// database name
-	Db string `default:"metrics_db" mapstructure:"db"`
+	Db string `default:"metrics_db"`
 	// authenticated username
-	Username string `default:"" mapstructure:"username"`
+	Username string
 	// authenticated password
-	Password string `default:"" mapstructure:"password"`
+	Password string
 }
 
 // MustInitFromViper inits metrics from viper settings.
