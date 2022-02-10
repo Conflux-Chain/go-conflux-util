@@ -3,7 +3,6 @@ package viper
 import (
 	"bytes"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -29,9 +28,7 @@ type pruneConfig struct {
 }
 
 func init() {
-	viper.AutomaticEnv()
-	viper.SetEnvPrefix("cfx")
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	initEnv("cfx")
 }
 
 func TestViperSub(t *testing.T) {
