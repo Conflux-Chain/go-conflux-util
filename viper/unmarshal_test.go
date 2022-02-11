@@ -139,3 +139,53 @@ func TestEnvWithoutConfig(t *testing.T) {
 	assert.True(t, conf.Enabled)
 	assert.True(t, conf.SubConfig.Enabled)
 }
+
+func TestEnvConfigMixed(t *testing.T) {
+	var conf struct {
+		Val0 string
+		Val1 string `default:"v1"`
+		Val2 string `default:"v2"` // env
+		Val3 string `default:"v3"` // yml
+		Val4 string `default:"v4"` // yml + env: env will overwrite yml
+	}
+
+	os.Setenv("CFX_TESTCONFIG_VAL2", "env2")
+	os.Setenv("CFX_TESTCONFIG_VAL4", "env4")
+
+	var jsonConf = []byte(`
+testConfig:
+  val3: yml3
+  val4: yml4
+`)
+	viper.SetConfigType("yaml")
+	assert.NoError(t, viper.ReadConfig(bytes.NewBuffer(jsonConf)))
+
+	MustUnmarshalKey("testConfig", &conf)
+	assert.Equal(t, "", conf.Val0)
+	assert.Equal(t, "v1", conf.Val1)
+	assert.Equal(t, "env2", conf.Val2)
+	assert.Equal(t, "yml3", conf.Val3)
+	assert.Equal(t, "env4", conf.Val4)
+}
+
+/*
+ * For environment value, `UnmarshalKey` and `GetStringSlice` require different format.
+ * - `UnmarshalKey` requires comma separated value, e.g. "a,b,c"
+ * - `GetStringSlice` requires space separated value, e.g. "a b c"
+ */
+func TestEnvStringSlice(t *testing.T) {
+	var conf struct {
+		Names1 []string
+		Names2 []string
+	}
+
+	os.Setenv("CFX_TESTCONFIG_NAMES1", "a,b,c")
+	os.Setenv("CFX_TESTCONFIG_NAMES2", "a b c")
+
+	MustUnmarshalKey("testConfig", &conf)
+	assert.Equal(t, []string{"a", "b", "c"}, conf.Names1)
+	assert.Equal(t, []string{"a b c"}, conf.Names2)
+
+	assert.Equal(t, []string{"a,b,c"}, viper.GetStringSlice("testConfig.names1"))
+	assert.Equal(t, []string{"a", "b", "c"}, viper.GetStringSlice("testConfig.names2"))
+}
