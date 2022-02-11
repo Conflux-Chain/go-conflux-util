@@ -15,6 +15,7 @@ type ValueResolver func(key string) (interface{}, bool)
 
 // keys load all viper keys both from config file and env vars.
 func keys(prefix string) map[string]bool {
+	prefix = strings.ToLower(prefix)
 	result := make(map[string]bool)
 
 	// load keys from configuration file
@@ -25,7 +26,6 @@ func keys(prefix string) map[string]bool {
 	}
 
 	// load keys from environments
-	prefix = strings.ToLower(prefix)
 	for _, v := range os.Environ() {
 		if !strings.HasPrefix(v, envKeyPrefix) {
 			continue
