@@ -9,10 +9,7 @@ import (
 
 var envKeyPrefix string // environment variable prefix
 
-// MustInit inits viper with provided env var prefix.
-//
-// Note that it will panic and exit if any error happens.
-func MustInit(envPrefix string) {
+func initEnv(envPrefix string) {
 	envKeyPrefix = strings.ToUpper(envPrefix + "_")
 
 	// Read system enviroment prefixed variables.
@@ -20,6 +17,13 @@ func MustInit(envPrefix string) {
 	viper.AutomaticEnv()
 	viper.SetEnvPrefix(envPrefix)
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+}
+
+// MustInit inits viper with provided env var prefix.
+//
+// Note that it will panic and exit if any error happens.
+func MustInit(envPrefix string) {
+	initEnv(envPrefix)
 
 	// Read config file from current directory or under config folder.
 	viper.SetConfigName("config")

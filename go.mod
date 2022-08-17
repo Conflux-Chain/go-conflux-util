@@ -3,9 +3,9 @@ module github.com/Conflux-Chain/go-conflux-util
 go 1.17
 
 require (
-	github.com/Conflux-Chain/go-conflux-sdk v1.0.23
-	github.com/ethereum/go-ethereum v1.10.14
-	github.com/go-redis/redis/v8 v8.11.4
+	github.com/Conflux-Chain/go-conflux-sdk v1.0.29
+	github.com/ethereum/go-ethereum v1.10.15
+  github.com/go-redis/redis/v8 v8.11.4
 	github.com/mcuadros/go-defaults v1.2.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
