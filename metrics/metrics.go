@@ -47,6 +47,9 @@ type InfluxDbConfig struct {
 }
 
 // MustInitFromViper inits metrics from viper settings.
+// This should be called before any metric (e.g. timer, histogram) created.
+// Because `metrics.Enabled` in go-ethereum is `false` by default, which leads to noop
+// metric created for static variables in any package.
 //
 // Note that viper must be initialized before this, otherwise metrics
 // settings may not be loaded correctly. Besides, this init will panic
@@ -61,9 +64,12 @@ func MustInitFromViper() {
 // Init inits metrics with provided metrics configurations.
 func Init(config *MetricsConfig) {
 	if !config.Enabled { // metrics not enabled?
-		logrus.Info("Metrics not enabled")
 		return
 	}
+
+	// go-ethereum `metrics.Enabled` must be set, otherwise it will lead to
+	// noop metric created for static variables in any package.
+	metrics.Enabled = true
 
 	// starts a InfluxDB reporter
 	go influxdb.InfluxDB(
