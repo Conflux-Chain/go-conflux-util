@@ -1,12 +1,16 @@
 package log
 
 import (
+	stdLog "log"
+	"os"
 	"strings"
+	"time"
 
 	viperutil "github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 // LoggingConfig logging configuration such as log level etc.,
@@ -38,6 +42,9 @@ func Init(level logrus.Level) {
 
 	// adapt geth logger
 	adaptGethLogger()
+
+	// adapt gorm logger
+	adaptGormLogger()
 }
 
 // AddDingTalkAlertHook adds logrus hook for DingTalk alert with specified log levels.
@@ -83,4 +90,32 @@ func adaptGethLogger() {
 
 		return nil
 	}))
+}
+
+// adaptGormLogger adapt gorm logger to work with logrus.
+func adaptGormLogger() {
+	// gorm logs info level is somewhat verbose, only turn it on for logrus
+	// trace level.
+	gLogLevel := gormlogger.Error
+	if logrus.IsLevelEnabled(logrus.TraceLevel) {
+		gLogLevel = gormlogger.Info
+	} else if logrus.IsLevelEnabled(logrus.WarnLevel) {
+		gLogLevel = gormlogger.Warn
+	}
+
+	// customize the default gorm logger
+	gormlogger.Default = gormlogger.New(
+		// io writer
+		stdLog.New(os.Stdout, "\r\n", stdLog.LstdFlags),
+		gormlogger.Config{
+			// slow SQL threshold (200ms)
+			SlowThreshold: time.Millisecond * 200,
+			// log level
+			LogLevel: gLogLevel,
+			// never logging on ErrRecordNotFound error, otherwise logs may grow exploded
+			IgnoreRecordNotFoundError: true,
+			// use colorful print
+			Colorful: true,
+		},
+	)
 }
