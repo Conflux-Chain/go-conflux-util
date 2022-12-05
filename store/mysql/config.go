@@ -2,15 +2,16 @@ package mysql
 
 import (
 	"fmt"
-	stdLog "log"
+	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/sirupsen/logrus"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	gormLogger "gorm.io/gorm/logger"
+	"gorm.io/gorm/logger"
 )
 
 type Config struct {
@@ -23,6 +24,7 @@ type Config struct {
 	MaxOpenConns    int           `default:"10"`
 	MaxIdleConns    int           `default:"10"`
 
+	LogLevel      string        `default:"warn"`
 	SlowThreshold time.Duration `default:"200ms"`
 }
 
@@ -62,29 +64,38 @@ func (config *Config) MustOpenOrCreate(tables ...interface{}) *gorm.DB {
 	return db
 }
 
-func (config *Config) MustNewDB(database string) *gorm.DB {
-	gLogLevel := gormLogger.Error
-	if logrus.IsLevelEnabled(logrus.TraceLevel) {
-		gLogLevel = gormLogger.Info
-	} else if logrus.IsLevelEnabled(logrus.WarnLevel) {
-		gLogLevel = gormLogger.Warn
+func (config *Config) getGormLogLevel() logger.LogLevel {
+	switch strings.ToLower(config.LogLevel) {
+	case "silent":
+		return logger.Silent
+	case "info":
+		return logger.Info
+	case "warn":
+		return logger.Warn
+	case "error":
+		return logger.Error
+	default:
+		logrus.WithField("level", config.LogLevel).Fatal("Invalid grom log level")
+		return logger.Error
 	}
+}
 
+func (config *Config) MustNewDB(database string) *gorm.DB {
 	// create gorm logger by customizing the default logger
-	gLogger := gormLogger.New(
-		stdLog.New(os.Stdout, "\r\n", stdLog.LstdFlags), // io writer
-		gormLogger.Config{
-			SlowThreshold:             config.SlowThreshold, // slow SQL threshold
-			LogLevel:                  gLogLevel,            // log level
-			IgnoreRecordNotFoundError: true,                 // never logging on ErrRecordNotFound error, otherwise logs may grow exploded
-			Colorful:                  true,                 // use colorful print
+	logger := logger.New(
+		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
+		logger.Config{
+			SlowThreshold:             config.SlowThreshold,     // slow SQL threshold
+			LogLevel:                  config.getGormLogLevel(), // log level
+			IgnoreRecordNotFoundError: true,                     // never logging on ErrRecordNotFound error, otherwise logs may grow exploded
+			Colorful:                  true,                     // use colorful print
 		},
 	)
 
 	// refer to https://github.com/go-sql-driver/mysql#dsn-data-source-name
 	dsn := fmt.Sprintf("%v:%v@tcp(%v)/%v?parseTime=true", config.Username, config.Password, config.Host, database)
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		Logger: gLogger,
+		Logger: logger,
 	})
 
 	if err != nil {

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/Conflux-Chain/go-conflux-util/viper"
@@ -14,6 +15,7 @@ type Config struct {
 
 	RecoveryDisabled bool
 	CorsOrigins      []string
+	Logger           bool
 }
 
 type RouteFactory func(router *gin.Engine)
@@ -33,7 +35,7 @@ func MustServe(config Config, factory RouteFactory) {
 
 	router.Use(newCorsMiddleware(config.CorsOrigins))
 
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+	if config.Logger {
 		router.Use(gin.Logger())
 	}
 
@@ -43,6 +45,8 @@ func MustServe(config Config, factory RouteFactory) {
 		Addr:    config.Endpoint,
 		Handler: router,
 	}
+
+	logrus.WithField("config", fmt.Sprintf("%+v", config)).Debug("Start REST API server")
 
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		logrus.WithError(err).WithField("endpoint", config.Endpoint).Fatal("Failed to serve HTTP server")
