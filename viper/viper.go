@@ -34,5 +34,5 @@ func MustInit(envPrefix string) {
 		logrus.WithError(err).Fatal("Failed to read config to initialize viper")
 	}
 
-	logrus.Info("viper initialized")
+	logrus.Info("Viper initialized")
 }

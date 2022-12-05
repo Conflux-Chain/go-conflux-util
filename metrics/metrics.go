@@ -1,9 +1,10 @@
 package metrics
 
 import (
+	"fmt"
 	"time"
 
-	viperutil "github.com/Conflux-Chain/go-conflux-util/viper"
+	"github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
 	"github.com/sirupsen/logrus"
@@ -56,13 +57,13 @@ type InfluxDbConfig struct {
 // and exit if any error happens.
 func MustInitFromViper() {
 	var config MetricsConfig
-	viperutil.MustUnmarshalKey("metrics", &config)
+	viper.MustUnmarshalKey("metrics", &config)
 
-	Init(&config)
+	Init(config)
 }
 
 // Init inits metrics with provided metrics configurations.
-func Init(config *MetricsConfig) {
+func Init(config MetricsConfig) {
 	if !config.Enabled { // metrics not enabled?
 		return
 	}
@@ -71,18 +72,20 @@ func Init(config *MetricsConfig) {
 	// noop metric created for static variables in any package.
 	metrics.Enabled = true
 
-	// starts a InfluxDB reporter
-	go influxdb.InfluxDB(
-		DefaultRegistry,
-		config.ReportInterval,
-		config.InfluxDb.Host,
-		config.InfluxDb.Db,
-		config.InfluxDb.Username,
-		config.InfluxDb.Password,
-		config.Namespace,
-	)
+	if config.InfluxDb != nil {
+		// starts a InfluxDB reporter
+		go influxdb.InfluxDB(
+			DefaultRegistry,
+			config.ReportInterval,
+			config.InfluxDb.Host,
+			config.InfluxDb.Db,
+			config.InfluxDb.Username,
+			config.InfluxDb.Password,
+			config.Namespace,
+		)
+	}
 
-	logrus.Info("Start to report metrics to influxdb periodically")
+	logrus.WithField("config", fmt.Sprintf("%+v", config)).Debug("Metrics initialized")
 }
 
 // GetOrRegisterCounter gets an existed or registers a new counter from

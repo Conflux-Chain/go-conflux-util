@@ -1,9 +1,10 @@
 package log
 
 import (
+	"fmt"
 	"strings"
 
-	viperutil "github.com/Conflux-Chain/go-conflux-util/viper"
+	"github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -11,7 +12,8 @@ import (
 
 // LoggingConfig logging configuration such as log level etc.,
 type LoggingConfig struct {
-	Level string `default:"info"` // logging level
+	Level      string `default:"info"` // logging level
+	ForceColor bool
 }
 
 // MustInitFromViper inits logging from viper settings and adapts Geth logger.
@@ -20,30 +22,30 @@ type LoggingConfig struct {
 // and exit if any error happens.
 func MustInitFromViper() {
 	var conf LoggingConfig
-	viperutil.MustUnmarshalKey("log", &conf)
+	viper.MustUnmarshalKey("log", &conf)
 
-	level, err := logrus.ParseLevel(conf.Level)
-	if err != nil {
-		logrus.WithError(err).
-			WithField("logLevel", conf.Level).
-			Fatal("Invalid log level parsed from viper config")
-	}
-
-	Init(level)
+	MustInit(conf)
 }
 
 // Init inits logging with specified log level
-func Init(level logrus.Level) {
+func MustInit(conf LoggingConfig) {
+	level, err := logrus.ParseLevel(conf.Level)
+	if err != nil {
+		logrus.WithError(err).WithField("level", conf.Level).Fatal("Failed to parse log level")
+	}
 	logrus.SetLevel(level)
+
+	if conf.ForceColor {
+		logrus.SetFormatter(&logrus.TextFormatter{
+			ForceColors:   true,
+			FullTimestamp: true,
+		})
+	}
 
 	// adapt geth logger
 	adaptGethLogger()
-}
 
-// AddDingTalkAlertHook adds logrus hook for DingTalk alert with specified log levels.
-func AddDingTalkAlertHook(hookLevels []logrus.Level) {
-	dingTalkAlertHook := NewDingTalkAlertHook(hookLevels)
-	logrus.AddHook(dingTalkAlertHook)
+	logrus.WithField("config", fmt.Sprintf("%+v", conf)).Debug("Log initialized")
 }
 
 // adaptGethLogger adapt geth logger to work with logrus.

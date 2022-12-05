@@ -1,7 +1,10 @@
 package alert
 
 import (
+	"fmt"
+
 	viperutil "github.com/Conflux-Chain/go-conflux-util/viper"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
 
@@ -12,7 +15,7 @@ type AlertConfig struct {
 	CustomTags []string `default:"[dev,test]"`
 
 	// DingTalk settings
-	DingTalk *DingTalkConfig
+	DingTalk DingTalkConfig
 }
 
 // DingTalkConfig DingTalk configurations
@@ -27,7 +30,6 @@ type DingTalkConfig struct {
 // MustInitFromViper inits alert from viper settings or panic on error.
 func MustInitFromViper() {
 	var config AlertConfig
-
 	viperutil.MustUnmarshalKey("alert", &config, func(key string) (interface{}, bool) {
 		switch key {
 		case "alert.customTags", "alert.dingtalk.atMobiles":
@@ -37,12 +39,13 @@ func MustInitFromViper() {
 		return nil, false
 	})
 
-	Init(&config)
+	Init(config)
 }
 
 // Init inits alert with provided configurations.
-func Init(config *AlertConfig) {
+func Init(config AlertConfig) {
 	if config.DingTalk.Enabled {
-		InitDingTalk(config.DingTalk, config.CustomTags)
+		InitDingTalk(&config.DingTalk, config.CustomTags)
+		logrus.WithField("config", fmt.Sprintf("%+v", config)).Debug("Alert (dingtalk) initialized")
 	}
 }

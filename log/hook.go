@@ -7,6 +7,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// AddDingTalkAlertHook adds logrus hook for DingTalk alert with specified log levels.
+func AddDingTalkAlertHook(hookLevels []logrus.Level) {
+	dingTalkAlertHook := NewDingTalkAlertHook(hookLevels)
+	logrus.AddHook(dingTalkAlertHook)
+}
+
 // DingTalkAlertHook logrus hooks to send specified level logs as
 // text message to DingTalk group chat.
 type DingTalkAlertHook struct {
