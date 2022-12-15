@@ -6,6 +6,7 @@ Utilities for golang developments on Conflux blockchain, especially for backend 
 |[Alert](#alert)|Send notification message to dingtalk.|
 |[API](#api)|REST API utilities based on [gin](https://github.com/gin-gonic/gin).|
 |[Config](#config)|Initialize all modules.|
+|[HTTP](#http)|Provides common used middlewares.|
 |[Log](#log)|Based on [logrus](https://github.com/sirupsen/logrus) and integrated with [Alert](#alert).|
 |[Metrics](#metrics)|To monitor system runtime.|
 |[Store](#store)|Provides utilities to initialize database.|
@@ -71,6 +72,9 @@ The `viperEnvPrefix` is used for overwrite configurations from environment. E.g.
 ```
 FOO_ALERT_DINGTALK_SECRET='dsafsadf'
 ```
+
+## HTTP
+Provides utilities to hook middlewares to HTTP handler, e.g. remote address, API key, rate limit.
 
 ## Log
 We recommend to initialize log module from configuration file, and allow to send dingtalk messages when `warning` or `error` messages occurred.
