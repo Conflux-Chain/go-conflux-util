@@ -1,13 +1,16 @@
 package rate
 
 import (
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
 )
 
 type TokenBucket struct {
-	inner *rate.Limiter
+	inner       *rate.Limiter
+	lastSeen    int64
+	timeoutSecs int64
 }
 
 func NewTokenBucket(qps int, burst int) Limiter {
@@ -15,8 +18,12 @@ func NewTokenBucket(qps int, burst int) Limiter {
 }
 
 func NewTokenBucketRate(qps rate.Limit, burst int) Limiter {
+	timeoutSecs := int64(float64(burst)/float64(qps)) + 1
+
 	return &TokenBucket{
-		inner: rate.NewLimiter(qps, burst),
+		inner:       rate.NewLimiter(qps, burst),
+		lastSeen:    time.Now().Unix(),
+		timeoutSecs: timeoutSecs,
 	}
 }
 
@@ -39,5 +46,12 @@ func (bucket *TokenBucket) LimitAt(now time.Time, n int) error {
 		return errRateLimited(bucket.inner.Burst(), waitTime)
 	}
 
+	atomic.StoreInt64(&bucket.lastSeen, now.Unix())
+
 	return nil
+}
+
+func (bucket *TokenBucket) Expired() bool {
+	lastSeen := atomic.LoadInt64(&bucket.lastSeen)
+	return time.Now().Unix() > lastSeen+bucket.timeoutSecs
 }
