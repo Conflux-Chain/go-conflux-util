@@ -9,7 +9,8 @@ type Middleware func(http.Handler) http.Handler
 type CtxKey string
 
 // Hook hooks middlewares to the specified HTTP handler. Middlewares will be decorated
-// in reversed order.
+// in reversed order, that is, the first middleware is the outermost one, and the last
+// middleware is the innermost.
 func Hook(handler http.Handler, middlewares ...Middleware) http.Handler {
 	for i := len(middlewares) - 1; i >= 0; i-- {
 		handler = middlewares[i](handler)
