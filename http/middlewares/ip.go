@@ -42,7 +42,7 @@ func GetIPAddress(r *http.Request) string {
 	}
 
 	// otherwise, use the RemoteAddr from HTTP request
-	if idx := strings.Index(r.RemoteAddr, ":"); idx != -1 {
+	if idx := strings.LastIndex(r.RemoteAddr, ":"); idx != -1 {
 		return r.RemoteAddr[:idx]
 	}
 
