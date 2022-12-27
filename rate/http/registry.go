@@ -106,4 +106,31 @@ func (r *Registry) ScheduleGC(interval time.Duration) {
 	}
 }
 
-// TODO dynamic update rate limit in batch.
+func (r *Registry) RemoveAll() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.limiters = make(map[string]map[string]map[string]rate.Limiter)
+}
+
+func (r *Registry) Remove(resource, group string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if limiters, ok := r.limiters[resource]; ok {
+		delete(limiters, group)
+	}
+}
+
+func (r *Registry) RemoveBatch(items map[string]map[string]bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for resource, groups := range items {
+		if limiters, ok := r.limiters[resource]; ok {
+			for group := range groups {
+				delete(limiters, group)
+			}
+		}
+	}
+}
