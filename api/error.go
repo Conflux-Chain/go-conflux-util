@@ -1,9 +1,10 @@
 package api
 
 const (
-	ErrCodeSuccess    = 0
-	ErrCodeValidation = 1
-	ErrCodeInternal   = 2
+	ErrCodeSuccess         = 0
+	ErrCodeValidation      = 1
+	ErrCodeInternal        = 2
+	ErrCodeTooManyRequests = 3
 )
 
 type BusinessError struct {
@@ -26,6 +27,10 @@ func ErrValidation(err error) *BusinessError {
 
 func ErrInternal(err error) *BusinessError {
 	return NewBusinessError(ErrCodeInternal, "Internal server error", err.Error())
+}
+
+func ErrTooManyRequests(err error) *BusinessError {
+	return NewBusinessError(ErrCodeTooManyRequests, "Too many requests", err.Error())
 }
 
 func (err *BusinessError) Error() string {

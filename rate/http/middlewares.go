@@ -28,7 +28,9 @@ func NewHttpMiddleware(f LimitFunc, resource string) middlewares.Middleware {
 func NewApiMiddleware(f LimitFunc, resource string) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		if err := f(ctx.Request.Context(), resource); err != nil {
-			api.ResponseError(ctx, err)
+			ctx.AbortWithStatusJSON(http.StatusTooManyRequests, api.ErrTooManyRequests(err))
+		} else {
+			ctx.Next()
 		}
 	}
 }
