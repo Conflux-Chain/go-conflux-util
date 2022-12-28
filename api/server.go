@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/Conflux-Chain/go-conflux-util/http/middlewares"
 	"github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -20,13 +21,13 @@ type Config struct {
 
 type RouteFactory func(router *gin.Engine)
 
-func MustServeFromViper(factory RouteFactory) {
+func MustServeFromViper(factory RouteFactory, middlewares ...middlewares.Middleware) {
 	var config Config
 	viper.MustUnmarshalKey("api", &config)
-	MustServe(config, factory)
+	MustServe(config, factory, middlewares...)
 }
 
-func MustServe(config Config, factory RouteFactory) {
+func MustServe(config Config, factory RouteFactory, mws ...middlewares.Middleware) {
 	router := gin.New()
 
 	if !config.RecoveryDisabled {
@@ -43,7 +44,7 @@ func MustServe(config Config, factory RouteFactory) {
 
 	server := http.Server{
 		Addr:    config.Endpoint,
-		Handler: router,
+		Handler: middlewares.Hook(router, mws...),
 	}
 
 	logrus.WithField("config", fmt.Sprintf("%+v", config)).Debug("Start REST API server")
