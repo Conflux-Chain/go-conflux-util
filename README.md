@@ -1,7 +1,7 @@
 # Golang Development Utilities
 Utilities for golang developments on Conflux blockchain, especially for backend service.
 
-|Module|Comment|
+|Module|Description|
 |------|-------|
 |[Alert](#alert)|Send notification message to dingtalk.|
 |[API](#api)|REST API utilities based on [gin](https://github.com/gin-gonic/gin).|
@@ -9,6 +9,7 @@ Utilities for golang developments on Conflux blockchain, especially for backend 
 |[HTTP](#http)|Provides common used middlewares.|
 |[Log](#log)|Based on [logrus](https://github.com/sirupsen/logrus) and integrated with [Alert](#alert).|
 |[Metrics](#metrics)|To monitor system runtime.|
+|[Rate Limit](#rate-limit)|Utilities to limit request rate.|
 |[Store](#store)|Provides utilities to initialize database.|
 |[Viper](#viper)|To fix some issues of original [viper](https://github.com/spf13/viper).|
 
@@ -44,43 +45,51 @@ type BusinessError struct {
 
 - 1: Invalid parameter, see `Data` for detailed error.
 - 2: Internal server error, see `Data` for detailed error.
+- 3: Too many requests, see `Data` for detailed error.
 
 To distinguish backend service error and gateway error, we only use `200` and `600` as HTTP response status code:
 
-- 200: success, or known business error, e.g. entity node found.
+- 200: success, or known business error, e.g. entity not found.
 - 600: unexpected system error, e.g. database error, io error.
 
 We recommend to initialize REST API from configuration file. Client only requires to provide a factory to setup controllers.
 
 ```go
+// Setup controllers.
 factory := func(router *gin.Engine) {
     router.GET("url", api.Wrap(controller))
 }
 
-api.MustServeFromViper(factory)
+// Start REST API server in a separate goroutine.
+go api.MustServeFromViper(factory)
 ```
 
 ## Config
-Initialize all modules at the entry point of program.
+Initialize all modules at the entry point of program, including [viper](#viper), [log](#log), [metrics](#metrics) and [alert](#alert).
 
 ```go
 config.MustInit(viperEnvPrefix string)
 ```
 
-The `viperEnvPrefix` is used for overwrite configurations from environment. E.g. if the `viperEnvPrefix` is `FOO`, then client could set environment as below to overwrite config `alert.dingTalk.secret`:
+The `viperEnvPrefix` is used to overwrite configurations from environment. E.g. if the `viperEnvPrefix` is `FOO`, then client could set environment as below to overwrite config `alert.dingTalk.secret`:
 
-```
+```sh
 FOO_ALERT_DINGTALK_SECRET='dsafsadf'
 ```
 
 ## HTTP
-Provides utilities to hook middlewares to HTTP handler, e.g. remote address, API key, rate limit.
+Provides utilities to hook middlewares to HTTP handler, e.g. remote address, API key and rate limit.
 
 ## Log
 We recommend to initialize log module from configuration file, and allow to send dingtalk messages when `warning` or `error` messages occurred.
 
 ## Metrics
 We recommend to initialize metrics module from configuration file. Client could also configure influxdb to report metrics periodically. See `MetricsConfig` for more details.
+
+## Rate Limit
+Provides basic rate limit algorithms, including fixed window, token bucket, along with utilities for HTTP middleware.
+
+Note, rate limit middleware depends on the HTTP middleware `RealIP`.
 
 ## Store
 We recommend to initialize store module from configuration file.
@@ -91,4 +100,12 @@ db := config.MustOpenOrCreate(tables ...interface{})
 ```
 
 ## Viper
-Fixes issues when unmarshal configurations from environment.
+Fixes issues when unmarshal configurations from environment. A simple way to load configuration from file is as below:
+
+```go
+viper.MustUnmarshalKey(key string, valPtr interface{}, resolver ...ValueResolver)
+
+// E.g. load `foo` config from file.
+var config FooConfig
+viper.MustUnmarshalKey("foo", &config)
+```
