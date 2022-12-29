@@ -1,0 +1,45 @@
+# Log Configurations
+# log:
+#   level: info
+#   forceColor: false
+
+# Alert Configurations
+# alert:
+#   customTags: [testnet,dev]
+#   dingtalk:
+#     enabled: false
+#     webhook: https://oapi.dingtalk.com/robot/send?access_token=${your_access_token}
+#     secret:  ${your_access_secret}
+#     atMobiles: []
+#     isAtAll: false
+
+# REST API Configurations
+# api:
+#   endpoint: :12345
+#   recoveryDisabled: false
+#   corsOrigins: []
+#   logger: false
+
+# Metrics configurations
+# metrics:
+#   enabled: false
+#   namespace:
+#   reportInterval: 10s
+#   influxdb:
+#     host: http://127.0.0.1:8086
+#     db: metrics_db
+#     username:
+#     password:
+
+# Store Configurations
+store:
+  mysql:
+#     host: 127.0.0.1:3306
+#     username: root
+    password:
+    database: yourdbname
+#     connMaxLifeTime: 3m
+#     maxOpenConns: 10
+#     maxIdleConns: 10
+#     logLevel: warn
+#     slowThreshold: 200ms

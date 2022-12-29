@@ -77,6 +77,8 @@ The `viperEnvPrefix` is used to overwrite configurations from environment. E.g. 
 FOO_ALERT_DINGTALK_SECRET='dsafsadf'
 ```
 
+You could follow the example `config.yaml` under config folder to setup your own configuration file. Generally, you could only overwrite configurations if the default value not suitable.
+
 ## HTTP
 Provides utilities to hook middlewares to HTTP handler, e.g. remote address, API key and rate limit.
 
