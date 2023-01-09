@@ -11,5 +11,7 @@ func errMaxExceeded(max int) error {
 }
 
 func errRateLimited(max int, waitTime time.Duration) error {
-	return errors.Errorf("Too many requests (> %v), try again after %v", max, waitTime)
+	return errors.Errorf(
+		"Too many requests (> %v), try again after %v", max, waitTime.Round(time.Millisecond),
+	)
 }

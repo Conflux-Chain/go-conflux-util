@@ -11,7 +11,7 @@ import (
 
 type LimiterFactory interface {
 	// GetGroupAndKey generates group and key from context
-	GetGroupAndKey(ctx context.Context) (group, key string, err error)
+	GetGroupAndKey(ctx context.Context, resource string) (group, key string, err error)
 	// Create creates limiter by resource and group
 	Create(ctx context.Context, resource, group string) (rate.Limiter, error)
 }
@@ -57,7 +57,7 @@ func (r *Registry) getLimiters(resource, group string) map[string]rate.Limiter {
 // Limit limits request rate according to HTTP request context.
 // Note, it requires to hook IP/API key middlewares for HTTP server.
 func (r *Registry) Limit(ctx context.Context, resource string) error {
-	group, key, err := r.factory.GetGroupAndKey(ctx)
+	group, key, err := r.factory.GetGroupAndKey(ctx, resource)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to get group and key from visit context")
 	}
