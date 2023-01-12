@@ -18,7 +18,7 @@ func NewFixedWindow(interval time.Duration, max int) Limiter {
 	return &FixedWindow{
 		interval:  interval,
 		max:       int64(max),
-		startTime: time.Now().Truncate(interval).UnixMilli(),
+		startTime: toUnixMilli(time.Now().Truncate(interval)),
 	}
 }
 
@@ -45,14 +45,14 @@ func (window *FixedWindow) LimitAt(now time.Time, n int) error {
 	atomic.AddInt64(&window.count, int64(-n))
 
 	startTime := atomic.LoadInt64(&window.startTime)
-	nextTime := time.UnixMilli(startTime).Add(window.interval)
+	nextTime := fromUnixMilli(startTime).Add(window.interval)
 	waitTime := nextTime.Sub(now)
 
 	return errRateLimited(int(window.max), waitTime)
 }
 
 func (window *FixedWindow) advance(now time.Time) {
-	truncated := now.Truncate(window.interval).UnixMilli()
+	truncated := toUnixMilli(now.Truncate(window.interval))
 
 	if startTime := atomic.LoadInt64(&window.startTime); startTime < truncated {
 		// reset
@@ -63,5 +63,18 @@ func (window *FixedWindow) advance(now time.Time) {
 
 func (window *FixedWindow) Expired() bool {
 	startTime := atomic.LoadInt64(&window.startTime)
-	return time.Since(time.UnixMilli(startTime)) > window.interval
+	return time.Since(fromUnixMilli(startTime)) > window.interval
+}
+
+// TODO: deprecate the following time utility functions if the minimum version
+// of Go required by the package is gte 1.7.
+
+// toUnixMilli returns unix timestamp in milliseconds for specific time.
+func toUnixMilli(t time.Time) int64 {
+	return t.UnixNano() / (1e6)
+}
+
+// fromUnixMilli returns time of specific unix timestamp in milliseconds.
+func fromUnixMilli(msec int64) time.Time {
+	return time.Unix(msec/1e3, (msec%1e3)*1e6)
 }
