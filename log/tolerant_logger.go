@@ -9,12 +9,16 @@ import (
 // TolerantLogger is a logger that tolerates a certain number of error tries before
 // escalating to an error level.
 type TolerantLogger struct {
-	errorLimit int32
-	errorCount atomic.Int32
+	errorLimit uint64
+	errorCount atomic.Uint64
 }
 
-func NewTolerantLogger(errorLimit int32) *TolerantLogger {
-	return &TolerantLogger{errorLimit: errorLimit}
+func NewTolerantLogger(errorLimit int) *TolerantLogger {
+	if errorLimit == 0 {
+		errorLimit = 1
+	}
+
+	return &TolerantLogger{errorLimit: uint64(errorLimit)}
 }
 
 func (t *TolerantLogger) Error(logger *logrus.Logger, msg string) {
@@ -23,7 +27,7 @@ func (t *TolerantLogger) Error(logger *logrus.Logger, msg string) {
 
 func (t *TolerantLogger) Errorf(logger *logrus.Logger, msg string, args ...interface{}) {
 	errCnt := t.errorCount.Add(1)
-	if errCnt <= t.errorLimit {
+	if errCnt%t.errorLimit != 0 {
 		logger.Infof(msg, args...)
 	} else {
 		logger.WithField("errCount", errCnt).Errorf(msg, args...)
