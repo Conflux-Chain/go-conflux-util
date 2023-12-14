@@ -23,7 +23,7 @@ func (t *TolerantLogger) Error(logger *logrus.Logger, msg string) {
 
 func (t *TolerantLogger) Errorf(logger *logrus.Logger, msg string, args ...interface{}) {
 	errCnt := t.errorCount.Add(1)
-	if errCnt <= int32(t.errorLimit) {
+	if errCnt <= t.errorLimit {
 		logger.Infof(msg, args...)
 	} else {
 		logger.WithField("errCount", errCnt).Errorf(msg, args...)
