@@ -4,16 +4,15 @@ import (
 	"sync/atomic"
 
 	"github.com/Conflux-Chain/go-conflux-util/viper"
+	"github.com/mcuadros/go-defaults"
 	"github.com/sirupsen/logrus"
 )
 
-var (
-	DefaultErrorToleranceConfig = ErrorToleranceConfig{
-		InfoThreshold:  1,
-		WarnThreshold:  20,
-		ErrorThreshold: 50,
-	}
-)
+var DefaultErrorToleranceConfig ErrorToleranceConfig
+
+func init() {
+	defaults.SetDefaults(&DefaultErrorToleranceConfig)
+}
 
 // ErrorToleranceConfig defines the configuration for error tolerance behavior.
 type ErrorToleranceConfig struct {
