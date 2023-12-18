@@ -8,10 +8,16 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var DefaultErrorToleranceConfig ErrorToleranceConfig
+var (
+	// Default error tolerance config
+	DefaultETConfig ErrorToleranceConfig
+	// Default error tolerance logger
+	DefaultETLogger *ErrorTolerantLogger
+)
 
 func init() {
-	defaults.SetDefaults(&DefaultErrorToleranceConfig)
+	defaults.SetDefaults(&DefaultETConfig)
+	DefaultETLogger = NewErrorTolerantLogger(DefaultETConfig)
 }
 
 // ErrorToleranceConfig defines the configuration for error tolerance behavior.
@@ -44,11 +50,11 @@ func MustNewErrorTolerantLoggerFromViper() *ErrorTolerantLogger {
 }
 
 // Log logs the error message with appropriate level based on the continuous error count.
-func (etl *ErrorTolerantLogger) Log(l *logrus.Logger, err error, msg string) {
+func (etl *ErrorTolerantLogger) Log(l logrus.FieldLogger, err error, msg string) {
 	etl.Logf(l, err, msg)
 }
 
-func (etl *ErrorTolerantLogger) Logf(l *logrus.Logger, err error, msg string, args ...interface{}) {
+func (etl *ErrorTolerantLogger) Logf(l logrus.FieldLogger, err error, msg string, args ...interface{}) {
 	// Reset continuous error count if error is nil.
 	if err == nil {
 		etl.errorCount.Store(0)
