@@ -3,100 +3,77 @@ package log
 import (
 	"sync/atomic"
 
-	"github.com/mcuadros/go-defaults"
+	"github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/sirupsen/logrus"
+)
+
+var (
+	DefaultErrorToleranceConfig = ErrorToleranceConfig{
+		InfoThreshold:  1,
+		WarnThreshold:  20,
+		ErrorThreshold: 50,
+	}
 )
 
 // ErrorToleranceConfig defines the configuration for error tolerance behavior.
 type ErrorToleranceConfig struct {
 	// Thresholds of max continuous errors for different logging levels. Disabled
 	// if the value is 0.
-	traceThreshold int64
-	debugThreshold int64
-	infoThreshold  int64 `default:"1"`
-	warnThreshold  int64 `default:"20"`
-	errorThreshold int64 `default:"50"`
+	TraceThreshold int64
+	DebugThreshold int64
+	InfoThreshold  int64 `default:"1"`
+	WarnThreshold  int64 `default:"20"`
+	ErrorThreshold int64 `default:"50"`
 }
 
 // ErrorTolerantLogger is a thread-safe logger with error tolerance behavior based on
 // the continuous error count.
 type ErrorTolerantLogger struct {
-	*ErrorToleranceConfig
+	conf ErrorToleranceConfig
 	// The counter for continuous errors.
 	errorCount atomic.Int64
 }
 
-func NewErrorTolerantLogger(opts ...func(*ErrorTolerantLogger)) *ErrorTolerantLogger {
-	conf := &ErrorToleranceConfig{}
-	defaults.SetDefaults(conf)
-
-	l := &ErrorTolerantLogger{ErrorToleranceConfig: conf}
-	for i := range opts {
-		opts[i](l)
-	}
-
-	return l
+func NewErrorTolerantLogger(conf ErrorToleranceConfig) *ErrorTolerantLogger {
+	return &ErrorTolerantLogger{conf: conf}
 }
 
-// WithTraceThreshold sets the threshold for logging at trace level.
-func WithTraceThreshold(threshold int64) func(*ErrorTolerantLogger) {
-	return func(l *ErrorTolerantLogger) {
-		l.traceThreshold = threshold
-	}
-}
-
-// WithDebugThreshold sets the threshold for logging at debug level.
-func WithDebugThreshold(threshold int64) func(*ErrorTolerantLogger) {
-	return func(l *ErrorTolerantLogger) {
-		l.debugThreshold = threshold
-	}
-}
-
-// WithInfoThreshold sets the threshold for logging at info level.
-func WithInfoThreshold(threshold int64) func(*ErrorTolerantLogger) {
-	return func(l *ErrorTolerantLogger) {
-		l.infoThreshold = threshold
-	}
-}
-
-// WithWarnThreshold sets the threshold for logging at warn level.
-func WithWarnThreshold(threshold int64) func(*ErrorTolerantLogger) {
-	return func(l *ErrorTolerantLogger) {
-		l.warnThreshold = threshold
-	}
-}
-
-// WithErrorThreshold sets the threshold for logging at error level.
-func WithErrorThreshold(threshold int64) func(*ErrorTolerantLogger) {
-	return func(l *ErrorTolerantLogger) {
-		l.errorThreshold = threshold
-	}
+func MustNewErrorTolerantLoggerFromViper() *ErrorTolerantLogger {
+	var config ErrorToleranceConfig
+	viper.MustUnmarshalKey("log.errorTolerance", &config)
+	return NewErrorTolerantLogger(config)
 }
 
 // Log logs the error message with appropriate level based on the continuous error count.
-func (l *ErrorTolerantLogger) Log(err error, logf func(logrus.Level)) {
+func (etl *ErrorTolerantLogger) Log(l *logrus.Logger, err error, msg string) {
+	etl.Logf(l, err, msg)
+}
+
+func (etl *ErrorTolerantLogger) Logf(l *logrus.Logger, err error, msg string, args ...interface{}) {
 	// Reset continuous error count if error is nil.
 	if err == nil {
-		l.errorCount.Store(0)
+		etl.errorCount.Store(0)
 		return
 	}
 
-	errCnt := l.errorCount.Add(1)
-	logf(l.determineLevel(errCnt))
+	errCnt := etl.errorCount.Add(1)
+	lvl := etl.determineLevel(errCnt)
+
+	l.WithError(err).Logf(lvl, msg, args...)
 }
 
 // determineLevel calculates a log level based on the continuous errors count.
-func (l *ErrorTolerantLogger) determineLevel(errCnt int64) logrus.Level {
+func (etl *ErrorTolerantLogger) determineLevel(errCnt int64) logrus.Level {
 	switch {
-	case l.errorThreshold > 0 && errCnt >= l.errorThreshold:
+	case etl.conf.ErrorThreshold > 0 && errCnt >= etl.conf.ErrorThreshold:
 		return logrus.ErrorLevel
-	case l.warnThreshold > 0 && errCnt >= l.warnThreshold:
+	case etl.conf.WarnThreshold > 0 && errCnt >= etl.conf.WarnThreshold:
 		return logrus.WarnLevel
-	case l.infoThreshold > 0 && errCnt >= l.infoThreshold:
+	case etl.conf.InfoThreshold > 0 && errCnt >= etl.conf.InfoThreshold:
 		return logrus.InfoLevel
-	case l.debugThreshold > 0 && errCnt >= l.debugThreshold:
+	case etl.conf.DebugThreshold > 0 && errCnt >= etl.conf.DebugThreshold:
 		return logrus.DebugLevel
-	case l.traceThreshold > 0 && errCnt >= l.traceThreshold:
+	case etl.conf.TraceThreshold > 0 && errCnt >= etl.conf.TraceThreshold:
 		return logrus.TraceLevel
 	default:
 		return logrus.ErrorLevel
