@@ -36,7 +36,7 @@ type ErrorToleranceConfig struct {
 type ErrorTolerantLogger struct {
 	conf ErrorToleranceConfig
 	// The counter for continuous errors.
-	errorCount atomic.Int64
+	errorCount int64
 }
 
 func NewErrorTolerantLogger(conf ErrorToleranceConfig) *ErrorTolerantLogger {
@@ -57,11 +57,11 @@ func (etl *ErrorTolerantLogger) Log(l logrus.FieldLogger, err error, msg string)
 func (etl *ErrorTolerantLogger) Logf(l logrus.FieldLogger, err error, msg string, args ...interface{}) {
 	// Reset continuous error count if error is nil.
 	if err == nil {
-		etl.errorCount.Store(0)
+		atomic.StoreInt64(&etl.errorCount, 0)
 		return
 	}
 
-	errCnt := etl.errorCount.Add(1)
+	errCnt := atomic.AddInt64(&etl.errorCount, 1)
 	lvl := etl.determineLevel(errCnt)
 
 	l.WithError(err).Logf(lvl, msg, args...)
