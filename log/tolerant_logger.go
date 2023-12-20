@@ -22,13 +22,8 @@ func init() {
 
 // ErrorToleranceConfig defines the configuration for error tolerance behavior.
 type ErrorToleranceConfig struct {
-	// Thresholds of max continuous errors for different logging levels. Disabled
-	// if the value is 0.
-	TraceThreshold int64
-	DebugThreshold int64
-	InfoThreshold  int64 `default:"1"`
-	WarnThreshold  int64 `default:"20"`
-	ErrorThreshold int64 `default:"50"`
+	ReportFailures uint64 `default:"60"`
+	RemindFailures uint64 `default:"60"`
 }
 
 // ErrorTolerantLogger is a thread-safe logger with error tolerance behavior based on
@@ -36,7 +31,7 @@ type ErrorToleranceConfig struct {
 type ErrorTolerantLogger struct {
 	conf ErrorToleranceConfig
 	// The counter for continuous errors.
-	errorCount int64
+	errorCount uint64
 }
 
 func NewErrorTolerantLogger(conf ErrorToleranceConfig) *ErrorTolerantLogger {
@@ -57,30 +52,18 @@ func (etl *ErrorTolerantLogger) Log(l logrus.FieldLogger, err error, msg string)
 func (etl *ErrorTolerantLogger) Logf(l logrus.FieldLogger, err error, msg string, args ...interface{}) {
 	// Reset continuous error count if error is nil.
 	if err == nil {
-		atomic.StoreInt64(&etl.errorCount, 0)
+		atomic.StoreUint64(&etl.errorCount, 0)
 		return
 	}
 
-	errCnt := atomic.AddInt64(&etl.errorCount, 1)
-	lvl := etl.determineLevel(errCnt)
+	// do not report error for temp failures
+	errCnt := atomic.AddUint64(&etl.errorCount, 1)
+	if errCnt < etl.conf.ReportFailures {
+		return
+	}
 
-	l.WithError(err).Logf(lvl, msg, args...)
-}
-
-// determineLevel calculates a log level based on the continuous errors count.
-func (etl *ErrorTolerantLogger) determineLevel(errCnt int64) logrus.Level {
-	switch {
-	case etl.conf.ErrorThreshold > 0 && errCnt >= etl.conf.ErrorThreshold:
-		return logrus.ErrorLevel
-	case etl.conf.WarnThreshold > 0 && errCnt >= etl.conf.WarnThreshold:
-		return logrus.WarnLevel
-	case etl.conf.InfoThreshold > 0 && errCnt >= etl.conf.InfoThreshold:
-		return logrus.InfoLevel
-	case etl.conf.DebugThreshold > 0 && errCnt >= etl.conf.DebugThreshold:
-		return logrus.DebugLevel
-	case etl.conf.TraceThreshold > 0 && errCnt >= etl.conf.TraceThreshold:
-		return logrus.TraceLevel
-	default:
-		return logrus.ErrorLevel
+	// report error for continuous failures
+	if (errCnt-etl.conf.ReportFailures)%etl.conf.RemindFailures == 0 {
+		l.WithError(err).WithField("errCounter", errCnt).Errorf(msg, args...)
 	}
 }
