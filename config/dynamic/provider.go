@@ -86,7 +86,7 @@ func (p *KvConfigProvider) Set(key string, value string) error {
 }
 
 func (p *KvConfigProvider) Watch(ctx context.Context, key string) {
-	t := time.NewTimer(p.monitorInterval)
+	t := time.NewTicker(p.monitorInterval)
 	defer t.Stop()
 
 	var oldChecksum [16]byte
