@@ -57,6 +57,12 @@ func (r *Registry) getLimiters(resource, group string) map[string]rate.Limiter {
 // Limit limits request rate according to HTTP request context.
 // Note, it requires to hook IP/API key middlewares for HTTP server.
 func (r *Registry) Limit(ctx context.Context, resource string) error {
+	return r.LimitN(ctx, resource, 1)
+}
+
+// Limit limits request rate according to HTTP request context.
+// Note, it requires to hook IP/API key middlewares for HTTP server.
+func (r *Registry) LimitN(ctx context.Context, resource string, n int) error {
 	group, key, err := r.factory.GetGroupAndKey(ctx, resource)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to get group and key from visit context")
@@ -73,7 +79,7 @@ func (r *Registry) Limit(ctx context.Context, resource string) error {
 	limiters := r.getLimiters(resource, group)
 
 	if limiter, ok := limiters[key]; ok {
-		return limiter.Limit()
+		return limiter.LimitN(n)
 	}
 
 	limiter, err := r.factory.Create(ctx, resource, group)
@@ -83,7 +89,7 @@ func (r *Registry) Limit(ctx context.Context, resource string) error {
 
 	limiters[key] = limiter
 
-	return limiter.Limit()
+	return limiter.LimitN(n)
 }
 
 func (r *Registry) GC() {
