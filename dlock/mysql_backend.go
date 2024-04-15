@@ -20,6 +20,8 @@ type Dlock struct {
 	Key string `gorm:"index:uidx_key,unique;not null"`
 	// The secret used to release the lock.
 	Nonce string `gorm:"not null"`
+	// Version number incremented with each update.
+	Version uint `gorm:"default:0;not null"`
 	// When the lock expires.
 	ExpiredAt time.Time `gorm:"not null"`
 	// CRUD timestamp.
@@ -47,6 +49,7 @@ func (m *MySQLBackend) WriteEntry(
 	ctxDb := m.db.WithContext(ctx)
 	expAtGormExpr := gorm.Expr("NOW() + INTERVAL ? SECOND", lease.Seconds())
 	nowTsGormExpr := gorm.Expr("CURRENT_TIMESTAMP")
+	verGormExpr := gorm.Expr("version + 1")
 
 	err := ctxDb.First(&Dlock{}, "`key` = ?", key).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -58,6 +61,7 @@ func (m *MySQLBackend) WriteEntry(
 			Where("`key` = ? AND (expired_at < NOW() OR nonce = ?)", key, nonce).
 			Updates(map[string]interface{}{
 				"nonce":      nonce,
+				"version":    verGormExpr,
 				"expired_at": expAtGormExpr,
 				"updated_at": nowTsGormExpr,
 			})
