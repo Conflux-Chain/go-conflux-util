@@ -2,6 +2,7 @@
 # log:
 #   level: info
 #   forceColor: false
+#   disableColor: false
 
 # Alert Configurations
 # alert:
