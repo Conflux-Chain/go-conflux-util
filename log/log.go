@@ -4,16 +4,19 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Conflux-Chain/go-conflux-util/viper"
+	viperUtil "github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 // LoggingConfig logging configuration such as log level etc.,
 type LoggingConfig struct {
-	Level      string `default:"info"` // logging level
-	ForceColor bool
+	Level        string `default:"info"` // logging level
+	ForceColor   bool   // helpful on windows
+	DisableColor bool   // helpful to output logs in file
 }
 
 // MustInitFromViper inits logging from viper settings and adapts Geth logger.
@@ -22,7 +25,7 @@ type LoggingConfig struct {
 // and exit if any error happens.
 func MustInitFromViper() {
 	var conf LoggingConfig
-	viper.MustUnmarshalKey("log", &conf)
+	viperUtil.MustUnmarshalKey("log", &conf)
 
 	MustInit(conf)
 }
@@ -35,12 +38,17 @@ func MustInit(conf LoggingConfig) {
 	}
 	logrus.SetLevel(level)
 
-	if conf.ForceColor {
-		logrus.SetFormatter(&logrus.TextFormatter{
-			ForceColors:   true,
-			FullTimestamp: true,
-		})
+	formatter := &logrus.TextFormatter{
+		FullTimestamp: true,
 	}
+
+	if conf.DisableColor {
+		formatter.DisableColors = true
+	} else if conf.ForceColor {
+		formatter.ForceColors = true
+	}
+
+	logrus.SetFormatter(formatter)
 
 	// adapt geth logger
 	adaptGethLogger()
@@ -85,4 +93,16 @@ func adaptGethLogger() {
 
 		return nil
 	}))
+}
+
+// BindFlags binds logging relevant flags for specified command.
+func BindFlags(cmd *cobra.Command) {
+	cmd.PersistentFlags().String("log-level", "info", "The logging level (trace|debug|info|warn|error|fatal|panic)")
+	viper.BindPFlag("log.level", cmd.Flag("log-level"))
+
+	cmd.PersistentFlags().Bool("log-force-color", false, "Force colored logs")
+	viper.BindPFlag("log.forceColor", cmd.Flag("log-force-color"))
+
+	cmd.PersistentFlags().Bool("log-disable-color", false, "Disable colored logs")
+	viper.BindPFlag("log.disableColor", cmd.Flag("log-disable-color"))
 }
