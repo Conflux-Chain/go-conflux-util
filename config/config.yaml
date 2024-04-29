@@ -3,10 +3,11 @@
 #   level: info
 #   forceColor: false
 #   disableColor: false
+#   alertHookLevels: [warn,error,fatal]
 
 # Alert Configurations
 # alert:
-#   customTags: [testnet,dev]
+#   customTags: [dev,test]
 #   dingtalk:
 #     enabled: false
 #     webhook: https://oapi.dingtalk.com/robot/send?access_token=${your_access_token}

@@ -1,4 +1,4 @@
-package log
+package hook
 
 import (
 	"os"
