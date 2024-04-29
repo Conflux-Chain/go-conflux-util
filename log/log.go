@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Conflux-Chain/go-conflux-util/log/hook"
 	viperUtil "github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/pkg/errors"
@@ -17,6 +18,9 @@ type LoggingConfig struct {
 	Level        string `default:"info"` // logging level
 	ForceColor   bool   // helpful on windows
 	DisableColor bool   // helpful to output logs in file
+
+	// logrus level hooked for alert notification
+	AlertHookLevels []string `default:"[warn,error,fatal]"`
 }
 
 // MustInitFromViper inits logging from viper settings and adapts Geth logger.
@@ -32,12 +36,28 @@ func MustInitFromViper() {
 
 // Init inits logging with specified log level
 func MustInit(conf LoggingConfig) {
+	// parse logging level
 	level, err := logrus.ParseLevel(conf.Level)
 	if err != nil {
 		logrus.WithError(err).WithField("level", conf.Level).Fatal("Failed to parse log level")
 	}
 	logrus.SetLevel(level)
 
+	// hook alert logging levels
+	var hookLvls []logrus.Level
+	for _, lvlStr := range conf.AlertHookLevels {
+		lvl, err := logrus.ParseLevel(lvlStr)
+		if err != nil {
+			logrus.WithError(err).WithField("level", lvlStr).Fatal("Failed to parse log level for alert hooking")
+		}
+		hookLvls = append(hookLvls, lvl)
+	}
+
+	if len(hookLvls) > 0 {
+		hook.AddDingTalkAlertHook(hookLvls)
+	}
+
+	// set text formtter
 	formatter := &logrus.TextFormatter{
 		FullTimestamp: true,
 	}
