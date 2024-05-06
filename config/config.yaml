@@ -3,17 +3,24 @@
 #   level: info
 #   forceColor: false
 #   disableColor: false
-#   alertHookLevels: [warn,error,fatal]
+#   alertHook: # Alert hooking settings
+#     # Hooked logrus levels for alert notification
+#     levels: [warn,error,fatal]
+#     # Default notification channels
+#     channels: []
 
 # Alert Configurations
 # alert:
+#   # Custom tags are usually used to differentiate between different networks and enviroments
+#   # such as mainnet/testnet, prod/test/dev or any custom info for more details.
 #   customTags: [dev,test]
-#   dingtalk:
-#     enabled: false
-#     webhook: https://oapi.dingtalk.com/robot/send?access_token=${your_access_token}
-#     secret:  ${your_access_secret}
-#     atMobiles: []
-#     isAtAll: false
+#   channels: # Notification channels
+#     dingrobot:
+#       platform: dingtalk
+#       webhook: https://oapi.dingtalk.com/robot/send?access_token=${your_access_token}
+#       secret:  ${your_access_secret}
+#       atMobiles: []
+#       isAtAll: false
 
 # REST API Configurations
 # api:

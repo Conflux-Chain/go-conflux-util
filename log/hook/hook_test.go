@@ -8,6 +8,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var (
+	dingrobot *alert.DingTalkChannel
+)
+
 // Please set the following enviroments before running tests:
 // `TEST_DINGTALK_WEBHOOK`: DingTalk webhook;
 // `TEST_DINGTALK_SECRET`: DingTalk secret.
@@ -20,11 +24,12 @@ func TestMain(m *testing.M) {
 		return
 	}
 
-	alert.InitDingTalk(&alert.DingTalkConfig{
-		Enabled: true,
-		Webhook: webhook,
-		Secret:  secret,
-	}, []string{"log", "hook", "test"})
+	fmtter := alert.NewSimpleTextFormatter([]string{"log", "hook", "test"})
+	dingrobot = alert.NewDingTalkChannel("dingrobot", fmtter, alert.DingTalkConfig{
+		Platform: string(alert.ChannelTypeDingTalk),
+		Webhook:  webhook,
+		Secret:   secret,
+	})
 
 	os.Exit(m.Run())
 }
@@ -32,8 +37,7 @@ func TestMain(m *testing.M) {
 func TestLogrusAddHooks(t *testing.T) {
 	// Add alert hook for logrus fatal/warn/error level
 	hookLevels := []logrus.Level{logrus.FatalLevel, logrus.WarnLevel, logrus.ErrorLevel}
-	dingTalkAlertHook := NewDingTalkAlertHook(hookLevels)
-	logrus.AddHook(dingTalkAlertHook)
+	logrus.AddHook(NewAlertHook(hookLevels, []alert.Channel{dingrobot}))
 
 	// Need to manually check if message sent to dingtalk group chat
 	logrus.Warn("Test logrus add hooks warns")
