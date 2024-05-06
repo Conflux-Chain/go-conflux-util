@@ -92,10 +92,10 @@ func (hook *AlertHook) getAlertChannels(logEntry *logrus.Entry) (chs []alert.Cha
 		chns = append(chns, chv)
 	case []string:
 		chms := make(map[string]struct{})
-		for i := range chv {
-			if _, ok := chms[chv[i]]; !ok { // dedupe
-				chms[chv[i]] = struct{}{}
-				chns = append(chns, chv[i])
+		for _, chn := range chv {
+			if _, ok := chms[chn]; !ok { // dedupe
+				chms[chn] = struct{}{}
+				chns = append(chns, chn)
 			}
 		}
 	case alert.Channel:
@@ -105,7 +105,7 @@ func (hook *AlertHook) getAlertChannels(logEntry *logrus.Entry) (chs []alert.Cha
 		chs = append(chs, chv...)
 		return
 	default:
-		return nil, errors.New("invalid log entry value for alert channel")
+		return nil, errors.New("invalid log entry configured for alert channel")
 	}
 
 	// parse notify channel from channel name
