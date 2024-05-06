@@ -14,13 +14,20 @@
 #   # Custom tags are usually used to differentiate between different networks and enviroments
 #   # such as mainnet/testnet, prod/test/dev or any custom info for more details.
 #   customTags: [dev,test]
-#   channels: # Notification channels
-#     dingrobot:
-#       platform: dingtalk
+#   # Channels: Notification channels
+#   # Key: Unique identifier for the channel (e.g., channel ID)
+#   # Value: Configuration for the channel
+#   channels:
+#     dingrobot: # Example channel configuration for DingTalk
+#       platform: dingtalk # Mandatory field indicating the channel type
 #       webhook: https://oapi.dingtalk.com/robot/send?access_token=${your_access_token}
 #       secret:  ${your_access_secret}
 #       atMobiles: []
 #       isAtAll: false
+#     tgrobot: # Example channel configuration for Telegram
+#       platform: telegram # Mandatory field indicating the channel type
+#       apiToken:  ${your_api_token}
+#       chatId: ${your_chat_id}
 
 # REST API Configurations
 # api:

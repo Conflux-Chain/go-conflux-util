@@ -10,7 +10,6 @@ var (
 )
 
 type DingTalkConfig struct {
-	Platform  string   // notify platform
 	AtMobiles []string // mobiles for @ members
 	IsAtAll   bool     // whether to @ all members
 	Webhook   string   // webhook url
@@ -33,7 +32,7 @@ func (dtc *DingTalkChannel) Name() string {
 }
 
 func (dtc *DingTalkChannel) Type() ChannelType {
-	return ChannelType(dtc.Config.Platform)
+	return ChannelTypeDingTalk
 }
 
 func (dtc *DingTalkChannel) Send(note *Notification) error {
