@@ -21,6 +21,11 @@
 #       secret:  ${your_access_secret}
 #       atMobiles: []
 #       isAtAll: false
+#     tgrobot:
+#       platform: telegram
+#       apiToken:  ${your_api_token}
+#       chatId: ${your_chat_id}
+
 
 # REST API Configurations
 # api:

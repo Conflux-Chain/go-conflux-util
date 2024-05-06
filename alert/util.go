@@ -27,6 +27,14 @@ func parseAlertChannel(chID string, chmap map[string]interface{}, fmt Formatter)
 		}
 
 		return NewDingTalkChannel(chID, fmt, dtconf), nil
+	case ChannelTypeTelegram:
+		var tgconf TelegramConfig
+		if err := decodeChannelConfig(chmap, &tgconf); err != nil {
+			return nil, err
+		}
+
+		return NewTelegramChannel(chID, fmt, tgconf)
+
 	// NOTE: add more channel types support here if needed
 	default:
 		return nil, ErrChannelTypeNotSupported(cht)

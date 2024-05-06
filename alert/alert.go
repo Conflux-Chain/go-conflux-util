@@ -35,6 +35,7 @@ type ChannelType string
 
 const (
 	ChannelTypeDingTalk ChannelType = "dingtalk"
+	ChannelTypeTelegram ChannelType = "telegram"
 )
 
 // Notification channel interface.
