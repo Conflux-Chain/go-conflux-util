@@ -1,36 +1,74 @@
 package hook
 
 import (
+	stderr "errors"
+	"fmt"
 	"strings"
 
 	"github.com/Conflux-Chain/go-conflux-util/alert"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
-// AddDingTalkAlertHook adds logrus hook for DingTalk alert with specified log levels.
-func AddDingTalkAlertHook(hookLevels []logrus.Level) {
-	dingTalkAlertHook := NewDingTalkAlertHook(hookLevels)
-	logrus.AddHook(dingTalkAlertHook)
+const (
+	// logrus entry field configured for alert channels
+	chLogEntryField = "@channel"
+
+	// alert message template
+	alertMsgTitle = "logrus alert notification"
+	alertMsgTpl   = "level:\t%v;\nbrief:\t%v;\ndetail:\t%v"
+)
+
+// AddAlertHook adds logrus hook for alert notification with specified log levels.
+func AddAlertHook(hookLevels []logrus.Level, chns []string) error {
+	var chs []alert.Channel
+	for _, chn := range chns {
+		ch, ok := alert.DefaultManager().Channel(chn)
+		if !ok {
+			return alert.ErrChannelNotFound(chn)
+		}
+		chs = append(chs, ch)
+	}
+
+	logrus.AddHook(NewAlertHook(hookLevels, chs))
+	return nil
 }
 
-// DingTalkAlertHook logrus hooks to send specified level logs as
-// text message to DingTalk group chat.
-type DingTalkAlertHook struct {
-	levels []logrus.Level
+// AlertHook logrus hooks to send specified level logs as text message for alerting.
+type AlertHook struct {
+	levels          []logrus.Level
+	defaultChannels []alert.Channel
 }
 
-// NewDingTalkAlertHook constructor to new DingTalkAlertHook instance.
-func NewDingTalkAlertHook(lvls []logrus.Level) *DingTalkAlertHook {
-	return &DingTalkAlertHook{levels: lvls}
+// NewAlertHook constructor to new AlertHook instance.
+func NewAlertHook(lvls []logrus.Level, chs []alert.Channel) *AlertHook {
+	return &AlertHook{levels: lvls, defaultChannels: chs}
 }
 
-// Levels implements logrus.Hook interface `Levels` method.
-func (hook *DingTalkAlertHook) Levels() []logrus.Level {
+// implements `logrus.Hook` interface methods.
+func (hook *AlertHook) Levels() []logrus.Level {
 	return hook.levels
 }
 
-// Fire implements logrus.Hook interface `Fire` method.
-func (hook *DingTalkAlertHook) Fire(logEntry *logrus.Entry) error {
+func (hook *AlertHook) Fire(logEntry *logrus.Entry) (err error) {
+	notifyChans, err := hook.getAlertChannels(logEntry)
+	if err != nil || len(notifyChans) == 0 {
+		return err
+	}
+
+	note := &alert.Notification{
+		Title:   alertMsgTitle,
+		Content: hook.formatMsg(logEntry),
+	}
+
+	for _, ch := range notifyChans {
+		err = stderr.Join(ch.Send(note))
+	}
+
+	return errors.WithMessage(err, "failed to notify channel message")
+}
+
+func (hook *AlertHook) formatMsg(logEntry *logrus.Entry) string {
 	level := logEntry.Level.String()
 	brief := logEntry.Message
 
@@ -39,5 +77,46 @@ func (hook *DingTalkAlertHook) Fire(logEntry *logrus.Entry) error {
 	// Trim last newline char to uniform message format
 	detail := strings.TrimSuffix(string(detailBytes), "\n")
 
-	return alert.SendDingTalkTextMessage(level, brief, detail)
+	return fmt.Sprintf(alertMsgTpl, level, brief, detail)
+}
+
+func (hook *AlertHook) getAlertChannels(logEntry *logrus.Entry) (chs []alert.Channel, err error) {
+	v, ok := logEntry.Data[chLogEntryField]
+	if !ok { // notify channel not configured, use default
+		return hook.defaultChannels, nil
+	}
+
+	var chns []string
+	switch chv := v.(type) {
+	case string:
+		chns = append(chns, chv)
+	case []string:
+		chms := make(map[string]struct{})
+		for i := range chv {
+			if _, ok := chms[chv[i]]; !ok { // dedupe
+				chms[chv[i]] = struct{}{}
+				chns = append(chns, chv[i])
+			}
+		}
+	case alert.Channel:
+		chs = append(chs, chv)
+		return
+	case []alert.Channel:
+		chs = append(chs, chv...)
+		return
+	default:
+		return nil, errors.New("invalid log entry value for alert channel")
+	}
+
+	// parse notify channel from channel name
+	for _, chn := range chns {
+		ch, ok := alert.DefaultManager().Channel(chn)
+		if !ok {
+			return nil, alert.ErrChannelNotFound(chn)
+		}
+
+		chs = append(chs, ch)
+	}
+
+	return chs, nil
 }

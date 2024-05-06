@@ -1,46 +1,48 @@
 package alert
 
 import (
-	"fmt"
-	"strings"
-	"time"
-
+	"github.com/pkg/errors"
 	"github.com/royeo/dingrobot"
 )
 
-const (
-	// DingTalk alert message template
-	dingTalkAlertMsgTpl = "logrus alert notification\ntags:\t%v;\nlevel:\t%v;\nbrief:\t%v;\ndetail:\t%v;\ntime:\t%v\n"
-)
-
 var (
-	dingTalkCustomTagsStr string
-	dingTalkConfig        *DingTalkConfig
-	dingRobot             dingrobot.Roboter
+	_ Channel = (*DingTalkChannel)(nil)
 )
 
-// InitDingTalk inits DingTalk with provided configurations.
-func InitDingTalk(config *DingTalkConfig, customTags []string) {
-	if !config.Enabled {
-		return
-	}
-
-	dingTalkCustomTagsStr = strings.Join(customTags, "/")
-	dingTalkConfig = config
-
-	// init DingTalk robots
-	dingRobot = dingrobot.NewRobot(config.Webhook)
-	dingRobot.SetSecret(config.Secret)
+type DingTalkConfig struct {
+	Platform  string   // notify platform
+	AtMobiles []string // mobiles for @ members
+	IsAtAll   bool     // whether to @ all members
+	Webhook   string   // webhook url
+	Secret    string   // secret token
 }
 
-// SendDingTalkTextMessage sends text message to DingTalk group chat.
-func SendDingTalkTextMessage(level, brief, detail string) error {
-	if dingRobot == nil { // robot not set
-		return nil
+// DingTalkChannel DingTalk notification channel
+type DingTalkChannel struct {
+	Formatter Formatter      // message formatter
+	ID        string         // channel id
+	Config    DingTalkConfig // channel config
+}
+
+func NewDingTalkChannel(chID string, fmt Formatter, conf DingTalkConfig) *DingTalkChannel {
+	return &DingTalkChannel{ID: chID, Formatter: fmt, Config: conf}
+}
+
+func (dtc *DingTalkChannel) Name() string {
+	return dtc.ID
+}
+
+func (dtc *DingTalkChannel) Type() ChannelType {
+	return ChannelType(dtc.Config.Platform)
+}
+
+func (dtc *DingTalkChannel) Send(note *Notification) error {
+	msg, err := dtc.Formatter.Format(note)
+	if err != nil {
+		return errors.WithMessage(err, "failed to format alert msg")
 	}
 
-	nowStr := time.Now().Format("2006-01-02T15:04:05-0700")
-	msg := fmt.Sprintf(dingTalkAlertMsgTpl, dingTalkCustomTagsStr, level, brief, detail, nowStr)
-
-	return dingRobot.SendText(msg, dingTalkConfig.AtMobiles, dingTalkConfig.IsAtAll)
+	dingRobot := dingrobot.NewRobot(dtc.Config.Webhook)
+	dingRobot.SetSecret(dtc.Config.Secret)
+	return dingRobot.SendText(msg, dtc.Config.AtMobiles, dtc.Config.IsAtAll)
 }
