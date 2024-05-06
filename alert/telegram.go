@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/go-telegram/bot"
-	"github.com/go-telegram/bot/models"
 	"github.com/pkg/errors"
 )
 
@@ -51,9 +50,8 @@ func (tc *TelegramChannel) Send(note *Notification) error {
 	}
 
 	_, err = tc.bot.SendMessage(context.Background(), &bot.SendMessageParams{
-		ChatID:    tc.Config.ChatId,
-		Text:      msg,
-		ParseMode: models.ParseModeHTML,
+		ChatID: tc.Config.ChatId,
+		Text:   msg,
 	})
 
 	return err
