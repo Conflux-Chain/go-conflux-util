@@ -15,12 +15,12 @@ func MustInit(viperEnvPrefix string) {
 	// init viper from config file or env var
 	viper.MustInit(viperEnvPrefix)
 
-	// init logging from viper
-	log.MustInitFromViper()
+	// init alert from viper
+	alert.MustInitFromViper()
 
 	// init metrics from viper
 	metrics.MustInitFromViper()
 
-	// init alert from viper
-	alert.MustInitFromViper()
+	// init logging from viper
+	log.MustInitFromViper()
 }
