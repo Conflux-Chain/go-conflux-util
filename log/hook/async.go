@@ -64,6 +64,13 @@ func (w *AsyncWrapper) Fire(entry *logrus.Entry) error {
 		return errNotRunning
 	}
 
+	if entry.Level <= logrus.FatalLevel {
+		// For fatal or panic level logging, we have to fire the wrapped hook
+		// synchronously, otherwise the hook would never be triggered due to
+		// application life cycle.
+		return w.Hook.Fire(entry)
+	}
+
 	select {
 	case w.jobQueue <- entry:
 		return nil
