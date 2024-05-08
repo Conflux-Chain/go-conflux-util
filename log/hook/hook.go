@@ -55,8 +55,10 @@ func AddAlertHook(conf Config) error {
 		hookLvls = append(hookLvls, l)
 	}
 
-	alertHook := NewAsyncWrapper(NewAlertHook(hookLvls, chs), conf.Async)
-	alertHook.Start(context.Background())
+	var alertHook logrus.Hook = NewAlertHook(hookLvls, chs)
+	if conf.Async.Enabled { // use async mode
+		alertHook = NewAsyncHook(context.Background(), alertHook, conf.Async)
+	}
 
 	logrus.AddHook(alertHook)
 	return nil
