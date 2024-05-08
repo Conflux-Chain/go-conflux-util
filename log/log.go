@@ -13,19 +13,12 @@ import (
 	"github.com/spf13/viper"
 )
 
-type AlertHookConfig struct {
-	// logrus level hooked for alert notification
-	Levels []string `default:"[warn,error,fatal]"`
-	// default alert channels
-	Channels []string
-}
-
 // LoggingConfig logging configuration such as log level etc.,
 type LoggingConfig struct {
-	Level        string          `default:"info"` // logging level
-	ForceColor   bool            // helpful on windows
-	DisableColor bool            // helpful to output logs in file
-	AlertHook    AlertHookConfig // alert hooking configurations
+	Level        string      `default:"info"` // logging level
+	ForceColor   bool        // helpful on windows
+	DisableColor bool        // helpful to output logs in file
+	AlertHook    hook.Config // alert hooking configurations
 }
 
 // MustInitFromViper inits logging from viper settings and adapts Geth logger.
@@ -48,17 +41,8 @@ func MustInit(conf LoggingConfig) {
 	}
 	logrus.SetLevel(level)
 
-	// hook alert logging levels
-	var hookLvls []logrus.Level
-	for _, lvlStr := range conf.AlertHook.Levels {
-		lvl, err := logrus.ParseLevel(lvlStr)
-		if err != nil {
-			logrus.WithError(err).WithField("level", lvlStr).Fatal("Failed to parse log level for alert hooking")
-		}
-		hookLvls = append(hookLvls, lvl)
-	}
-
-	if err := hook.AddAlertHook(hookLvls, conf.AlertHook.Channels); err != nil {
+	err = hook.AddAlertHook(conf.AlertHook)
+	if err != nil {
 		logrus.WithError(err).Fatal("Failed to add alert hook")
 	}
 
