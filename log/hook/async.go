@@ -109,11 +109,11 @@ func (w *AsyncWrapper) Stop() {
 		return
 	}
 
+	w.setRunningFlag(statusStopped)
+
 	// cancel and wait for all workers to complete and exit
 	w.cancel()
 	w.workerTracker.Wait()
-
-	w.setRunningFlag(statusStopped)
 }
 
 // boost starts extra goroutine to help empty out the job queue.
