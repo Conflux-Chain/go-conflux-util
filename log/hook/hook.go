@@ -51,7 +51,7 @@ func AddAlertHook(conf Config) error {
 	}
 
 	var hookLvls []logrus.Level
-	for l := logrus.FatalLevel; l <= lvl; l++ {
+	for l := logrus.PanicLevel; l <= lvl; l++ {
 		hookLvls = append(hookLvls, l)
 	}
 
