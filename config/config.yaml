@@ -10,12 +10,12 @@
 #     channels: []
 #     # Async worker options for sending alert
 #     async:
-#       # The number of goroutines kept in a pool while idle.
-#       idlePoolWorkers: 4
-#       # The max number of goroutines that can be running concurrently while busy.
-#       maxConcurrentWorkers: 16
+#       # Whether to enable async worker
+#       enabled: false
+#       # The max number of goroutines that can be running concurrently.
+#       maxWorkers: 4
 #       # The maximum number of jobs that can be queued before processing begins.
-#       JobQueueSize: 128
+#       queueSize: 32
 
 # Alert Configurations
 # alert:
