@@ -20,7 +20,7 @@ type AsyncOption struct {
 	QueueSize uint32 `default:"32"`
 }
 
-// AsyncHook is an async wrapper that uses goroutines to invoke an wrapped hook.
+// AsyncHook is an async wrapper that uses goroutines to invoke the wrapped hook.
 type AsyncHook struct {
 	logrus.Hook
 	AsyncOption
