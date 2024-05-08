@@ -109,11 +109,11 @@ func (w *AsyncWrapper) Stop() {
 		return
 	}
 
-	w.setRunningFlag(statusStopped)
+	// cancel and wait for all workers to complete and exit
 	w.cancel()
-
-	// wait for all workers to complete and exit
 	w.workerTracker.Wait()
+
+	w.setRunningFlag(statusStopped)
 }
 
 // boost starts extra goroutine to help empty out the job queue.
@@ -162,7 +162,7 @@ func (w *AsyncWrapper) setRunningFlag(status runningStatus) {
 
 // check if the async hook is running or not
 func (w *AsyncWrapper) isRunning() bool {
-	return atomic.LoadUint32(&w.runningFlag) == 1
+	return atomic.LoadUint32(&w.runningFlag) == uint32(statusStarted)
 }
 
 // decrement the number of job workers by 1
