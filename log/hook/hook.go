@@ -30,7 +30,7 @@ type Config struct {
 }
 
 // AddAlertHook adds logrus hook for alert notification with specified log levels.
-func AddAlertHook(conf Config) error {
+func AddAlertHook(ctx context.Context, conf Config) error {
 	if len(conf.Channels) == 0 {
 		return nil
 	}
@@ -57,7 +57,7 @@ func AddAlertHook(conf Config) error {
 
 	var alertHook logrus.Hook = NewAlertHook(hookLvls, chs)
 	if conf.Async.Enabled { // use async mode
-		alertHook = NewAsyncHook(context.Background(), alertHook, conf.Async)
+		alertHook = NewAsyncHook(ctx, alertHook, conf.Async)
 	}
 
 	logrus.AddHook(alertHook)

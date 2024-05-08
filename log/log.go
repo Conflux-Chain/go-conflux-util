@@ -1,6 +1,7 @@
 package log
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -41,7 +42,7 @@ func MustInit(conf LoggingConfig) {
 	}
 	logrus.SetLevel(level)
 
-	err = hook.AddAlertHook(conf.AlertHook)
+	err = hook.AddAlertHook(context.Background(), conf.AlertHook)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to add alert hook")
 	}
