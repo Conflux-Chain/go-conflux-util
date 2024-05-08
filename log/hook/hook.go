@@ -1,6 +1,7 @@
 package hook
 
 import (
+	"context"
 	stderr "errors"
 
 	"github.com/Conflux-Chain/go-conflux-util/alert"
@@ -16,10 +17,23 @@ const (
 	alertMsgTitle = "logrus alert notification"
 )
 
+type Config struct {
+	// logrus level hooked for alert notification
+	Level string `default:"warn"`
+	// default alert channels
+	Channels []string
+	// async worker options
+	Async AsyncOption
+}
+
 // AddAlertHook adds logrus hook for alert notification with specified log levels.
-func AddAlertHook(hookLevels []logrus.Level, chns []string) error {
+func AddAlertHook(conf Config) error {
+	if len(conf.Channels) == 0 {
+		return nil
+	}
+
 	var chs []alert.Channel
-	for _, chn := range chns {
+	for _, chn := range conf.Channels {
 		ch, ok := alert.DefaultManager().Channel(chn)
 		if !ok {
 			return alert.ErrChannelNotFound(chn)
@@ -27,7 +41,21 @@ func AddAlertHook(hookLevels []logrus.Level, chns []string) error {
 		chs = append(chs, ch)
 	}
 
-	logrus.AddHook(NewAlertHook(hookLevels, chs))
+	// hook alert logging levels
+	lvl, err := logrus.ParseLevel(conf.Level)
+	if err != nil {
+		return errors.WithMessage(err, "failed to parse log level")
+	}
+
+	var hookLvls []logrus.Level
+	for l := logrus.FatalLevel; l <= lvl; l++ {
+		hookLvls = append(hookLvls, l)
+	}
+
+	alertHook := NewAsyncWrapper(NewAlertHook(hookLvls, chs), conf.Async)
+	alertHook.Start(context.Background())
+
+	logrus.AddHook(alertHook)
 	return nil
 }
 
