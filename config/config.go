@@ -12,15 +12,17 @@ import (
 //
 // Note that it will panic and exit if any error happens.
 func MustInit(viperEnvPrefix string) {
+	// NOTE, INITIALIZATION ORDER IS IMPORTANT!
+
 	// init viper from config file or env var
 	viper.MustInit(viperEnvPrefix)
-
-	// init alert from viper
-	alert.MustInitFromViper()
 
 	// init metrics from viper
 	metrics.MustInitFromViper()
 
-	// init logging from viper
+	// init alert from viper
+	alert.MustInitFromViper()
+
+	// init logging from viper which depends on alert initialization
 	log.MustInitFromViper()
 }

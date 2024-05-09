@@ -6,6 +6,8 @@ Utilities for golang developments on Conflux blockchain, especially for backend 
 |[Alert](#alert)|Send notification message to dingtalk.|
 |[API](#api)|REST API utilities based on [gin](https://github.com/gin-gonic/gin).|
 |[Config](#config)|Initialize all modules.|
+|[DLock](#distributed-lock)|Utilities for distributed lock.|
+|[Health](#health)|Utilities for health management.|
 |[HTTP](#http)|Provides common used middlewares.|
 |[Log](#log)|Based on [logrus](https://github.com/sirupsen/logrus) and integrated with [Alert](#alert).|
 |[Metrics](#metrics)|To monitor system runtime.|
@@ -27,7 +29,7 @@ Or, initialize from configuration file, which is recommended:
 alert.MustInitFromViper()
 ```
 
-Moreover, alert could be integrated with `log` module, so as to send messages to dingtalk when `warning` or `error` logs occurred.
+Moreover, alert could be integrated with [log](#log) module, so as to send messages to dingtalk when `warning` or `error` logs occurred.
 
 ## API
 This module provides common HTTP responses along with standard errors in JSON format.
@@ -78,6 +80,17 @@ FOO_ALERT_DINGTALK_SECRET='dsafsadf'
 ```
 
 You could follow the example `config.yaml` under config folder to setup your own configuration file. Generally, you could only overwrite configurations if the default value not suitable.
+
+## Distributed Lock
+Utilities to achieve high availability.
+
+## Health
+Provides utilities for error tolerant health monitoring to avoid massive duplicated alerts.
+
+Generally, system shall not report failure if auto resolved in a short time. However, system should report failure if not solved in a short time, and periodically remind failure if unrecovered for a long time.
+
+- [Counter](./health/counter.go): manage health status based on the number of continous failures.
+- [TimedCounter](./health/timed_counter.go): manage health status based on duration since the first failure.
 
 ## HTTP
 Provides utilities to hook middlewares to HTTP handler, e.g. remote address, API key and rate limit.
