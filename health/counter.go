@@ -8,15 +8,7 @@ type CounterConfig struct {
 // Counter represents an error tolerant health counter, which allows failures in short time
 // and periodically remind unhealthy if unrecovered in time.
 type Counter struct {
-	CounterConfig
-
 	failures uint64
-}
-
-func NewCounter(config CounterConfig) *Counter {
-	return &Counter{
-		CounterConfig: config,
-	}
 }
 
 // IsSuccess indicates whether any failure occurred.
@@ -29,14 +21,14 @@ func (counter *Counter) IsSuccess() bool {
 // `recovered`: indicates if recovered from unhealthy status.
 //
 // `failures`: indicates the number of failures before success.
-func (counter *Counter) OnSuccess() (recovered bool, failures uint64) {
+func (counter *Counter) OnSuccess(config CounterConfig) (recovered bool, failures uint64) {
 	// last time was success status
 	if counter.failures == 0 {
 		return
 	}
 
 	// report health now after a long time
-	if failures = counter.failures; failures > counter.Threshold {
+	if failures = counter.failures; failures > config.Threshold {
 		recovered = true
 	}
 
@@ -53,17 +45,17 @@ func (counter *Counter) OnSuccess() (recovered bool, failures uint64) {
 // `unrecovered`: indicates continous failures and unrecovered in a long time.
 //
 // `failures`: indicates the number of failures so far.
-func (counter *Counter) OnFailure() (unhealthy bool, unrecovered bool, failures uint64) {
+func (counter *Counter) OnFailure(config CounterConfig) (unhealthy bool, unrecovered bool, failures uint64) {
 	counter.failures++
 
 	// error tolerant in short time
-	if failures = counter.failures; failures <= counter.Threshold {
+	if failures = counter.failures; failures <= config.Threshold {
 		return
 	}
 
-	if delta := failures - counter.Threshold - 1; delta == 0 {
+	if delta := failures - config.Threshold - 1; delta == 0 {
 		unhealthy = true
-	} else if delta%counter.Remind == 0 {
+	} else if delta%config.Remind == 0 {
 		unrecovered = true
 	}
 
