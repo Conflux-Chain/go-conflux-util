@@ -13,7 +13,7 @@ func ErrChannelNotFound(ch string) error {
 	return errors.Errorf("channel %s not found", ch)
 }
 
-func parseAlertChannel(chID string, chmap map[string]interface{}, fmt Formatter) (Channel, error) {
+func parseAlertChannel(chID string, chmap map[string]interface{}, tags []string) (Channel, error) {
 	cht, ok := chmap["platform"].(string)
 	if !ok {
 		return nil, ErrChannelTypeNotSupported(cht)
@@ -26,10 +26,20 @@ func parseAlertChannel(chID string, chmap map[string]interface{}, fmt Formatter)
 			return nil, err
 		}
 
+		fmt, err := NewDingtalkMarkdownFormatter(tags)
+		if err != nil {
+			return nil, err
+		}
+
 		return NewDingTalkChannel(chID, fmt, dtconf), nil
 	case ChannelTypeTelegram:
 		var tgconf TelegramConfig
 		if err := decodeChannelConfig(chmap, &tgconf); err != nil {
+			return nil, err
+		}
+
+		fmt, err := NewTelegramMarkdownFormatter(tags)
+		if err != nil {
 			return nil, err
 		}
 

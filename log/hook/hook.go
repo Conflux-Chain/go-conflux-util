@@ -2,8 +2,6 @@ package hook
 
 import (
 	stderr "errors"
-	"fmt"
-	"strings"
 
 	"github.com/Conflux-Chain/go-conflux-util/alert"
 	"github.com/pkg/errors"
@@ -14,9 +12,8 @@ const (
 	// logrus entry field configured for alert channels
 	chLogEntryField = "@channel"
 
-	// alert message template
+	// alert message title
 	alertMsgTitle = "logrus alert notification"
-	alertMsgTpl   = "level:\t%v;\nbrief:\t%v;\ndetail:\t%v"
 )
 
 // AddAlertHook adds logrus hook for alert notification with specified log levels.
@@ -58,7 +55,7 @@ func (hook *AlertHook) Fire(logEntry *logrus.Entry) (err error) {
 
 	note := &alert.Notification{
 		Title:   alertMsgTitle,
-		Content: hook.formatMsg(logEntry),
+		Content: logEntry,
 	}
 
 	for _, ch := range notifyChans {
@@ -66,18 +63,6 @@ func (hook *AlertHook) Fire(logEntry *logrus.Entry) (err error) {
 	}
 
 	return errors.WithMessage(err, "failed to notify channel message")
-}
-
-func (hook *AlertHook) formatMsg(logEntry *logrus.Entry) string {
-	level := logEntry.Level.String()
-	brief := logEntry.Message
-
-	formatter := &logrus.JSONFormatter{}
-	detailBytes, _ := formatter.Format(logEntry)
-	// Trim last newline char to uniform message format
-	detail := strings.TrimSuffix(string(detailBytes), "\n")
-
-	return fmt.Sprintf(alertMsgTpl, level, brief, detail)
 }
 
 func (hook *AlertHook) getAlertChannels(logEntry *logrus.Entry) (chs []alert.Channel, err error) {

@@ -13,7 +13,7 @@
 # alert:
 #   # Custom tags are usually used to differentiate between different networks and enviroments
 #   # such as mainnet/testnet, prod/test/dev or any custom info for more details.
-#   customTags: [dev,test]
+#   customTags: [dev]
 #   # Channels: Notification channels
 #   # Key: Unique identifier for the channel (e.g., channel ID)
 #   # Value: Configuration for the channel

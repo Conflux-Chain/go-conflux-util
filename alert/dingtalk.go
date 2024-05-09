@@ -43,5 +43,5 @@ func (dtc *DingTalkChannel) Send(note *Notification) error {
 
 	dingRobot := dingrobot.NewRobot(dtc.Config.Webhook)
 	dingRobot.SetSecret(dtc.Config.Secret)
-	return dingRobot.SendText(msg, dtc.Config.AtMobiles, dtc.Config.IsAtAll)
+	return dingRobot.SendMarkdown(note.Title, msg, dtc.Config.AtMobiles, dtc.Config.IsAtAll)
 }
