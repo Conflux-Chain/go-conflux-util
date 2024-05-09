@@ -47,25 +47,24 @@ type Channel interface {
 
 // Notification represents core information for an alert.
 type Notification struct {
-	Title    string   // message title
-	Content  string   // message content
-	Severity Severity // severity level
+	Title    string      // message title
+	Content  interface{} // message content
+	Severity Severity    // severity level
 }
 
 // MustInitFromViper inits alert from viper settings or panic on error.
 func MustInitFromViper() {
 	var conf struct {
-		CustomTags []string `default:"[dev,test]"`
+		CustomTags []string `default:"[dev]"`
 		Channels   map[string]interface{}
 	}
 
 	viperutil.MustUnmarshalKey("alert", &conf)
 
-	formatter := NewSimpleTextFormatter(conf.CustomTags)
 	for chID, chmap := range conf.Channels {
-		ch, err := parseAlertChannel(chID, chmap.(map[string]interface{}), formatter)
+		ch, err := parseAlertChannel(chID, chmap.(map[string]interface{}), conf.CustomTags)
 		if err != nil {
-			logrus.WithField("channelId", chID).Fatal("Failed to parse alert channel")
+			logrus.WithField("channelId", chID).WithError(err).Fatal("Failed to parse alert channel")
 		}
 
 		DefaultManager().Add(ch)
