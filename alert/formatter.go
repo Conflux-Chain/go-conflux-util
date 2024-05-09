@@ -25,8 +25,11 @@ type markdownFormatter struct {
 }
 
 func newMarkdownFormatter(
-	tags []string, funcMap template.FuncMap, strTemplates [2]string) (f *markdownFormatter, err error) {
+	tags []string, funcMap template.FuncMap, defaultStrTpl, logEntryStrTpl string,
+) (f *markdownFormatter, err error) {
 	var tpls [2]*template.Template
+
+	strTemplates := [2]string{defaultStrTpl, logEntryStrTpl}
 	for i := range strTemplates {
 		tpls[i], err = template.New("markdown").Funcs(funcMap).Parse(strTemplates[i])
 		if err != nil {
@@ -99,7 +102,9 @@ type DingTalkMarkdownFormatter struct {
 
 func NewDingtalkMarkdownFormatter(tags []string) (*DingTalkMarkdownFormatter, error) {
 	funcMap := template.FuncMap{"formatRFC3339": formatRFC3339}
-	mf, err := newMarkdownFormatter(tags, funcMap, [2]string(dingTalkMarkdownTemplates))
+	mf, err := newMarkdownFormatter(
+		tags, funcMap, dingTalkMarkdownTemplates[0], dingTalkMarkdownTemplates[1],
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +125,9 @@ func NewTelegramMarkdownFormatter(tags []string) (f *TelegramMarkdownFormatter, 
 		"escapeMarkdown": escapeMarkdown,
 		"formatRFC3339":  formatRFC3339,
 	}
-	mf, err := newMarkdownFormatter(tags, funcMap, [2]string(telegramMarkdownTemplates))
+	mf, err := newMarkdownFormatter(
+		tags, funcMap, telegramMarkdownTemplates[0], telegramMarkdownTemplates[1],
+	)
 	if err != nil {
 		return nil, err
 	}
