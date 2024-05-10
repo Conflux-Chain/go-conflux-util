@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/Conflux-Chain/go-conflux-util/log/hook"
 	viperUtil "github.com/Conflux-Chain/go-conflux-util/viper"
@@ -26,15 +27,15 @@ type LoggingConfig struct {
 //
 // Note that viper must be initilized before this, and it will panic
 // and exit if any error happens.
-func MustInitFromViper() {
+func MustInitFromViper(ctx context.Context, wg *sync.WaitGroup) {
 	var conf LoggingConfig
 	viperUtil.MustUnmarshalKey("log", &conf)
 
-	MustInit(conf)
+	MustInit(ctx, wg, conf)
 }
 
 // Init inits logging with specified log level
-func MustInit(conf LoggingConfig) {
+func MustInit(ctx context.Context, wg *sync.WaitGroup, conf LoggingConfig) {
 	// parse logging level
 	level, err := logrus.ParseLevel(conf.Level)
 	if err != nil {
@@ -42,7 +43,7 @@ func MustInit(conf LoggingConfig) {
 	}
 	logrus.SetLevel(level)
 
-	err = hook.AddAlertHook(context.Background(), conf.AlertHook)
+	err = hook.AddAlertHook(ctx, wg, conf.AlertHook)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to add alert hook")
 	}

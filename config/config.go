@@ -1,6 +1,9 @@
 package config
 
 import (
+	"context"
+	"sync"
+
 	"github.com/Conflux-Chain/go-conflux-util/alert"
 	"github.com/Conflux-Chain/go-conflux-util/log"
 	"github.com/Conflux-Chain/go-conflux-util/metrics"
@@ -11,7 +14,7 @@ import (
 // to viper etc., to prepare using any utility.
 //
 // Note that it will panic and exit if any error happens.
-func MustInit(viperEnvPrefix string) {
+func MustInit(ctx context.Context, wg *sync.WaitGroup, viperEnvPrefix string) {
 	// NOTE, INITIALIZATION ORDER IS IMPORTANT!
 
 	// init viper from config file or env var
@@ -24,5 +27,5 @@ func MustInit(viperEnvPrefix string) {
 	alert.MustInitFromViper()
 
 	// init logging from viper which depends on alert initialization
-	log.MustInitFromViper()
+	log.MustInitFromViper(ctx, wg)
 }
