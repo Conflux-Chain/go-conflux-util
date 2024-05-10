@@ -3,6 +3,7 @@ package hook
 import (
 	"context"
 	stderr "errors"
+	"sync"
 
 	"github.com/Conflux-Chain/go-conflux-util/alert"
 	"github.com/pkg/errors"
@@ -27,7 +28,7 @@ type Config struct {
 }
 
 // AddAlertHook adds logrus hook for alert notification with specified log levels.
-func AddAlertHook(ctx context.Context, conf Config) error {
+func AddAlertHook(ctx context.Context, wg *sync.WaitGroup, conf Config) error {
 	if len(conf.Channels) == 0 {
 		return nil
 	}
@@ -53,8 +54,8 @@ func AddAlertHook(ctx context.Context, conf Config) error {
 	}
 
 	var alertHook logrus.Hook = NewAlertHook(hookLvls, chs)
-	if conf.Async.Enabled { // use async mode
-		alertHook = NewAsyncHook(ctx, alertHook, conf.Async)
+	if conf.Async.NumWorkers > 0 { // use async mode
+		alertHook = NewAsyncHook(ctx, wg, alertHook, conf.Async)
 	}
 
 	logrus.AddHook(alertHook)

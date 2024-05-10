@@ -10,12 +10,12 @@
 #     channels: []
 #     # Async worker options for sending alert
 #     async:
-#       # Whether to enable async worker
-#       enabled: false
-#       # The max number of goroutines that can be running concurrently.
-#       maxWorkers: 4
-#       # The maximum number of jobs that can be queued before processing begins.
-#       queueSize: 32
+#       # The number of worker goroutines (set `0` to turn off async mode).
+#       numWorkers: 1
+#       # The maximum number of queued jobs.
+#       queueSize: 60
+#       # Maximum Timeout allowed to gracefully stop..
+#       StopTimeout: 5s
 
 # Alert Configurations
 # alert:
