@@ -58,9 +58,9 @@ var (
 {{.Msg | escapeMarkdown}}
 
 {{with .Error}}*Reason*
-{{.Error | escapeMarkdown}}{{ end }}
+{{.Error | escapeMarkdown}}
 
-{{ if .CtxFields }}*Context Fields*:{{ range $Key, $Val := .CtxFields }}
+{{else}}{{ end }}{{ if .CtxFields }}*Context Fields*:{{ range $Key, $Val := .CtxFields }}
     *{{$Key | escapeMarkdown}}*: {{$Val | escapeMarkdown}}{{ end }}{{ end }}
 `,
 	}
