@@ -1,11 +1,10 @@
 package hook
 
 import (
-	"context"
 	stderr "errors"
-	"sync"
 
 	"github.com/Conflux-Chain/go-conflux-util/alert"
+	"github.com/Conflux-Chain/go-conflux-util/graceful"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -19,20 +18,27 @@ const (
 )
 
 type Config struct {
-	// logrus level hooked for alert notification
+	// Level is the minimum logrus level at which alerts will be triggered.
 	Level string `default:"warn"`
-	// default alert channels
+
+	// Channels lists the default alert notification channels to use.
 	Channels []string
-	// async worker options
+
+	// Async configures the behavior of the asynchronous worker for handling log alerts.
 	Async AsyncOption
 }
 
-// AddAlertHook adds logrus hook for alert notification with specified log levels.
-func AddAlertHook(ctx context.Context, wg *sync.WaitGroup, conf Config) error {
+// AddAlertHook attaches a custom logrus Hook for generating alert notifications
+// based on configured levels and channels.
+// It supports both synchronous and asynchronous operation modes, with optional
+// graceful shutdown integration.
+func AddAlertHook(conf Config, ghs ...*graceful.ShutdownHandler) error {
 	if len(conf.Channels) == 0 {
+		// No channels configured, so no hook needs to be added.
 		return nil
 	}
 
+	// Retrieve and validate configured alert channels.
 	var chs []alert.Channel
 	for _, chn := range conf.Channels {
 		ch, ok := alert.DefaultManager().Channel(chn)
@@ -42,7 +48,7 @@ func AddAlertHook(ctx context.Context, wg *sync.WaitGroup, conf Config) error {
 		chs = append(chs, ch)
 	}
 
-	// hook alert logging levels
+	// Parse the configured log level for alert triggering.
 	lvl, err := logrus.ParseLevel(conf.Level)
 	if err != nil {
 		return errors.WithMessage(err, "failed to parse log level")
@@ -53,13 +59,28 @@ func AddAlertHook(ctx context.Context, wg *sync.WaitGroup, conf Config) error {
 		hookLvls = append(hookLvls, l)
 	}
 
+	// Instantiate the base AlertHook.
 	var alertHook logrus.Hook = NewAlertHook(hookLvls, chs)
-	if conf.Async.NumWorkers > 0 { // use async mode
-		alertHook = NewAsyncHook(ctx, wg, alertHook, conf.Async)
+
+	// Wrap with asynchronous processing if configured.
+	if conf.Async.NumWorkers > 0 {
+		alertHook = wrapAsyncHook(alertHook, conf.Async, ghs...)
 	}
 
+	// Finally, add the hook to Logrus.
 	logrus.AddHook(alertHook)
+
 	return nil
+}
+
+// wrapAsyncHook wraps the given hook with asynchronous processing, optionally integrating
+// graceful shutdown support.
+func wrapAsyncHook(
+	hook logrus.Hook, asyncOpt AsyncOption, ghs ...*graceful.ShutdownHandler) logrus.Hook {
+	if len(ghs) > 0 {
+		return NewGracefulAsyncHook(hook, asyncOpt, ghs[0])
+	}
+	return NewAsyncHook(hook, asyncOpt)
 }
 
 // AlertHook logrus hooks to send specified level logs as text message for alerting.
