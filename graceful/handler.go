@@ -2,11 +2,12 @@ package graceful
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
+
+	"github.com/sirupsen/logrus"
 )
 
 // ShutdownHandler manages the graceful shutdown process for an application by
@@ -35,7 +36,7 @@ func NewShutdownHandler() *ShutdownHandler {
 	go func() {
 		<-termChan // Block until a termination signal is received.
 
-		fmt.Println("SIGTERM/SIGINT received, shutdown process initiated")
+		logrus.Info("SIGTERM/SIGINT received, shutdown process initiated")
 		cancel() // Signal shutdown by cancelling the context.
 	}()
 

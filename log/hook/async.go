@@ -38,12 +38,13 @@ type AsyncHook struct {
 
 // NewGracefulAsyncHook initializes and starts a new AsyncHook instance that integrates with
 // graceful shutdown handling.
-// It's designed to work harmoniously with your application's shutdown process to ensure
+// It's designed to work harmoniously with the application's shutdown process to ensure
 // no logs are lost during shutdown.
 func NewGracefulAsyncHook(
 	hook logrus.Hook, opts AsyncOption, sh *graceful.ShutdownHandler) *AsyncHook {
 	h := newAsyncHook(hook, opts)
 	h.startGraceful(sh)
+
 	return h
 }
 
