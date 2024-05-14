@@ -58,7 +58,7 @@ func MustInit(conf LoggingConfig) {
 	mustInit(conf, nil, nil)
 }
 
-// MustInitWithContext performs the similiar initializations as `MustInit` with support for
+// MustInitWithCtx performs the similiar initializations as `MustInit` with support for
 // graceful shutdown by accepting a context and a wait group.
 func MustInitWithCtx(ctx context.Context, wg *sync.WaitGroup, conf LoggingConfig) {
 	mustInit(conf, ctx, wg)

@@ -111,7 +111,7 @@ func (h *AsyncHook) startWithCtx(ctx context.Context, wg *sync.WaitGroup) {
 	}()
 }
 
-// start launches the hook's worker goroutines with no lifecycle managment.
+// start launches the hook's worker goroutines without lifecycle managment.
 func (h *AsyncHook) start() {
 	defer h.started.Store(true) // Mark the hook as started.
 

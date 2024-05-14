@@ -82,7 +82,7 @@ func wrapAsyncHook(
 		return NewAsyncHookWithCtx(ctx, wg, hook, opt)
 	}
 
-	return newAsyncHook(hook, opt)
+	return NewAsyncHook(hook, opt)
 }
 
 // AlertHook logrus hooks to send specified level logs as text message for alerting.

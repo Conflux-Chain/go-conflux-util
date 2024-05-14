@@ -30,7 +30,7 @@ func MustInit(viperEnvPrefix string) {
 	mustInit(viperEnvPrefix, nil, nil)
 }
 
-// MustInitWithContext carries out the same initializations as `MustInit` except for support for
+// MustInitWithCtx carries out the same initializations as `MustInit` except for support for
 // graceful shutdown by accepting a context and a wait group.
 //
 // Parameters:
