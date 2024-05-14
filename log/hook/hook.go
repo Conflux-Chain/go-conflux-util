@@ -1,10 +1,11 @@
 package hook
 
 import (
+	"context"
 	stderr "errors"
+	"sync"
 
 	"github.com/Conflux-Chain/go-conflux-util/alert"
-	"github.com/Conflux-Chain/go-conflux-util/graceful"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -32,7 +33,7 @@ type Config struct {
 // based on configured levels and channels.
 // It supports both synchronous and asynchronous operation modes, with optional
 // graceful shutdown integration.
-func AddAlertHook(conf Config, ghs ...*graceful.ShutdownHandler) error {
+func AddAlertHook(ctx context.Context, wg *sync.WaitGroup, conf Config) error {
 	if len(conf.Channels) == 0 {
 		// No channels configured, so no hook needs to be added.
 		return nil
@@ -64,7 +65,7 @@ func AddAlertHook(conf Config, ghs ...*graceful.ShutdownHandler) error {
 
 	// Wrap with asynchronous processing if configured.
 	if conf.Async.NumWorkers > 0 {
-		alertHook = wrapAsyncHook(alertHook, conf.Async, ghs...)
+		alertHook = wrapAsyncHook(ctx, wg, alertHook, conf.Async)
 	}
 
 	// Finally, add the hook to Logrus.
@@ -74,13 +75,14 @@ func AddAlertHook(conf Config, ghs ...*graceful.ShutdownHandler) error {
 }
 
 // wrapAsyncHook wraps the given hook with asynchronous processing, optionally integrating
-// graceful shutdown support.
+// graceful shutdown support if a context and wait group are provided.
 func wrapAsyncHook(
-	hook logrus.Hook, asyncOpt AsyncOption, ghs ...*graceful.ShutdownHandler) logrus.Hook {
-	if len(ghs) > 0 {
-		return NewGracefulAsyncHook(hook, asyncOpt, ghs[0])
+	ctx context.Context, wg *sync.WaitGroup, hook logrus.Hook, opt AsyncOption) *AsyncHook {
+	if ctx != nil && wg != nil {
+		return NewAsyncHookWithCtx(ctx, wg, hook, opt)
 	}
-	return NewAsyncHook(hook, asyncOpt)
+
+	return newAsyncHook(hook, opt)
 }
 
 // AlertHook logrus hooks to send specified level logs as text message for alerting.

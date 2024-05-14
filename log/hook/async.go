@@ -9,7 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Conflux-Chain/go-conflux-util/graceful"
 	"github.com/Conflux-Chain/go-conflux-util/health"
 	"github.com/sirupsen/logrus"
 )
@@ -36,14 +35,14 @@ type AsyncHook struct {
 	jobQueue chan *logrus.Entry // Buffered channel for enqueuing log entries.
 }
 
-// NewGracefulAsyncHook initializes and starts a new AsyncHook instance that integrates with
+// NewAsyncHookWithCtx initializes and starts a new AsyncHook instance that integrates with
 // graceful shutdown handling.
 // It's designed to work harmoniously with the application's shutdown process to ensure
 // no logs are lost during shutdown.
-func NewGracefulAsyncHook(
-	hook logrus.Hook, opts AsyncOption, sh *graceful.ShutdownHandler) *AsyncHook {
+func NewAsyncHookWithCtx(
+	ctx context.Context, wg *sync.WaitGroup, hook logrus.Hook, opts AsyncOption) *AsyncHook {
 	h := newAsyncHook(hook, opts)
-	h.startGraceful(sh)
+	h.startWithCtx(ctx, wg)
 
 	return h
 }
@@ -58,7 +57,7 @@ func NewAsyncHook(hook logrus.Hook, opts AsyncOption) *AsyncHook {
 }
 
 // newAsyncHook is a private constructor that sets up the necessary components for an AsyncHook.
-// It should not be used directly; instead, use NewAsyncHook or NewGracefulAsyncHook.
+// It should not be used directly; instead, use `NewAsyncHook` or `NewAsyncHookWithCtx`.
 func newAsyncHook(hook logrus.Hook, opts AsyncOption) *AsyncHook {
 	return &AsyncHook{
 		AsyncOption:  opts,
@@ -86,31 +85,33 @@ func (h *AsyncHook) Fire(entry *logrus.Entry) error {
 	}
 }
 
-// startGraceful starts the hook similar to `start` method but also integrates with
-// the provided `ShutdownHandler` to gracefully drain the job queue during shutdown.
-func (h *AsyncHook) startGraceful(sh *graceful.ShutdownHandler) {
-	defer h.started.Store(true) // Mark the hook as started.
+// startWithCtx initiates the hook's workers and sets up a mechanism to gracefully
+// drain the job queue upon receiving a shutdown signal through the provided context.
+func (h *AsyncHook) startWithCtx(ctx context.Context, wg *sync.WaitGroup) {
+	defer h.started.Store(true)
 
-	sh.Acquire(1)
+	wg.Add(1)
 	go func() {
-		defer sh.Release()
+		defer wg.Done()
 
 		var awg sync.WaitGroup
 		for i := 0; i < h.NumWorkers; i++ {
 			awg.Add(1)
 			go func() {
 				defer awg.Done()
-				h.worker(sh.Context())
+				h.worker(ctx)
 			}()
 		}
 
-		// waits for all workers to drain the job queue
+		// Waits for all workers before attempting to drain the job queue.
 		awg.Wait()
+
+		// Drain remaining jobs in the queue to ensure no logs are lost during shutdown.
 		h.drainJobQueue()
 	}()
 }
 
-// start launches worker goroutines and manages their lifecycle.
+// start launches the hook's worker goroutines with no lifecycle managment.
 func (h *AsyncHook) start() {
 	defer h.started.Store(true) // Mark the hook as started.
 

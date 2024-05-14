@@ -1,14 +1,15 @@
 package log
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
-	"github.com/Conflux-Chain/go-conflux-util/graceful"
 	"github.com/Conflux-Chain/go-conflux-util/log/hook"
 	viperUtil "github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -22,29 +23,50 @@ type LoggingConfig struct {
 	AlertHook    hook.Config // alert hooking configurations
 }
 
-// MustInitFromViper initializes the logging system using configurations fetched from Viper.
-// It also integrates the logger with any provided graceful shutdown handlers to ensure
-// logs are handled appropriately during shutdown sequences.
+// MustInitFromViper initializes the logging system using configurations from viper.
 //
 // Precondition:
 //   - Viper must be initialized with appropriate configurations before calling this function.
 //
-// This function will panic if it encounters any errors during initialization.
-func MustInitFromViper(ghs ...*graceful.ShutdownHandler) {
-	// Unmarshal the 'log' section from Viper's configurations into a LoggingConfig instance.
+// Panics:
+//   - This function will panic if it encounters any errors during initialization.
+func MustInitFromViper() {
 	var conf LoggingConfig
-	viperUtil.MustUnmarshalKey("log", &conf) // Panics if unmarshalling fails.
+	viperUtil.MustUnmarshalKey("log", &conf)
 
-	// Delegate the actual initialization to the MustInit function, passing the parsed config and
-	// shutdown handler.
-	MustInit(conf, ghs...)
+	MustInit(conf)
+}
+
+// MustInitWithCtxFromViper performs the similar initializations as `MustInitFromViper` with
+// support for graceful shutdown by accepting a context and a wait group.
+//
+// Parameters:
+//   - ctx: The context for graceful shutdown handling.
+//   - wg: The wait group to track goroutines for shutdown synchronization.
+func MustInitWithCtxFromViper(ctx context.Context, wg *sync.WaitGroup) {
+	var conf LoggingConfig
+	viperUtil.MustUnmarshalKey("log", &conf)
+
+	MustInitWithCtx(ctx, wg, conf)
 }
 
 // MustInit sets up the logging system according to the provided LoggingConfig and log level.
-// It configures the log level, adds an alert hook, sets a text formatter, and adapts the logger for
-// Geth compatibility.
+// It configures the log level, adds an alert hook, sets a text formatter, and adapts the logger
+// for Geth compatibility.
 // In case of any error during initialization, this function will panic.
-func MustInit(conf LoggingConfig, ghs ...*graceful.ShutdownHandler) {
+func MustInit(conf LoggingConfig) {
+	mustInit(conf, nil, nil)
+}
+
+// MustInitWithContext performs the similiar initializations as `MustInit` with support for
+// graceful shutdown by accepting a context and a wait group.
+func MustInitWithCtx(ctx context.Context, wg *sync.WaitGroup, conf LoggingConfig) {
+	mustInit(conf, ctx, wg)
+}
+
+// mustInit initializes the logging system with the provided configuration and sets up an alert hook.
+// It supports graceful shutdown by optionally using a context and wait group for the alert hook registration.
+func mustInit(conf LoggingConfig, ctx context.Context, wg *sync.WaitGroup) {
 	// Parse the log level string from the configuration into a logrus.Level.
 	// If parsing fails, log the error along with the attempted level and terminate the application.
 	level, err := logrus.ParseLevel(conf.Level)
@@ -53,9 +75,8 @@ func MustInit(conf LoggingConfig, ghs ...*graceful.ShutdownHandler) {
 	}
 	logrus.SetLevel(level) // Set the parsed log level.
 
-	// Attempt to add an alert hook as configured. If adding the hook fails, log the error and terminate.
-	err = hook.AddAlertHook(conf.AlertHook, ghs...)
-	if err != nil {
+	// Attempt to add an alert hook as configured.
+	if err := hook.AddAlertHook(ctx, wg, conf.AlertHook); err != nil {
 		logrus.WithError(err).Fatal("Failed to add alert hook")
 	}
 
