@@ -44,13 +44,13 @@ func (tc *TelegramChannel) Type() ChannelType {
 	return ChannelTypeTelegram
 }
 
-func (tc *TelegramChannel) Send(note *Notification) error {
+func (tc *TelegramChannel) Send(ctx context.Context, note *Notification) error {
 	msg, err := tc.Formatter.Format(note)
 	if err != nil {
 		return errors.WithMessage(err, "failed to format alert msg")
 	}
 
-	_, err = tc.bot.SendMessage(context.Background(), &bot.SendMessageParams{
+	_, err = tc.bot.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID:    tc.Config.ChatId,
 		Text:      msg,
 		ParseMode: models.ParseModeMarkdown,

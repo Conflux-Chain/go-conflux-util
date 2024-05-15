@@ -1,8 +1,10 @@
 package alert
 
 import (
+	"context"
+
+	"github.com/Conflux-Chain/go-conflux-util/alert/dingtalk"
 	"github.com/pkg/errors"
-	"github.com/royeo/dingrobot"
 )
 
 var (
@@ -21,10 +23,15 @@ type DingTalkChannel struct {
 	Formatter Formatter      // message formatter
 	ID        string         // channel id
 	Config    DingTalkConfig // channel config
+
+	bot *dingtalk.Robot
 }
 
 func NewDingTalkChannel(chID string, fmt Formatter, conf DingTalkConfig) *DingTalkChannel {
-	return &DingTalkChannel{ID: chID, Formatter: fmt, Config: conf}
+	return &DingTalkChannel{
+		ID: chID, Formatter: fmt, Config: conf,
+		bot: dingtalk.NewRobot(conf.Webhook, conf.Secret),
+	}
 }
 
 func (dtc *DingTalkChannel) Name() string {
@@ -35,13 +42,11 @@ func (dtc *DingTalkChannel) Type() ChannelType {
 	return ChannelTypeDingTalk
 }
 
-func (dtc *DingTalkChannel) Send(note *Notification) error {
+func (dtc *DingTalkChannel) Send(ctx context.Context, note *Notification) error {
 	msg, err := dtc.Formatter.Format(note)
 	if err != nil {
 		return errors.WithMessage(err, "failed to format alert msg")
 	}
 
-	dingRobot := dingrobot.NewRobot(dtc.Config.Webhook)
-	dingRobot.SetSecret(dtc.Config.Secret)
-	return dingRobot.SendMarkdown(note.Title, msg, dtc.Config.AtMobiles, dtc.Config.IsAtAll)
+	return dtc.bot.SendMarkdown(ctx, note.Title, msg, dtc.Config.AtMobiles, dtc.Config.IsAtAll)
 }

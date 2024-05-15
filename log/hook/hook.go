@@ -4,6 +4,7 @@ import (
 	"context"
 	stderr "errors"
 	"sync"
+	"time"
 
 	"github.com/Conflux-Chain/go-conflux-util/alert"
 	"github.com/pkg/errors"
@@ -24,6 +25,9 @@ type Config struct {
 
 	// Channels lists the default alert notification channels to use.
 	Channels []string
+
+	// Maximum request timeout allowed to send alert.
+	SendTimeout time.Duration `default:"5s"`
 
 	// Async configures the behavior of the asynchronous worker for handling log alerts.
 	Async AsyncOption
@@ -61,7 +65,7 @@ func AddAlertHook(ctx context.Context, wg *sync.WaitGroup, conf Config) error {
 	}
 
 	// Instantiate the base AlertHook.
-	var alertHook logrus.Hook = NewAlertHook(hookLvls, chs)
+	var alertHook logrus.Hook = NewAlertHook(hookLvls, chs, conf.SendTimeout)
 
 	// Wrap with asynchronous processing if configured.
 	if conf.Async.NumWorkers > 0 {
@@ -89,11 +93,12 @@ func wrapAsyncHook(
 type AlertHook struct {
 	levels          []logrus.Level
 	defaultChannels []alert.Channel
+	sendTimeout     time.Duration
 }
 
 // NewAlertHook constructor to new AlertHook instance.
-func NewAlertHook(lvls []logrus.Level, chs []alert.Channel) *AlertHook {
-	return &AlertHook{levels: lvls, defaultChannels: chs}
+func NewAlertHook(lvls []logrus.Level, chs []alert.Channel, timeout time.Duration) *AlertHook {
+	return &AlertHook{levels: lvls, defaultChannels: chs, sendTimeout: timeout}
 }
 
 // implements `logrus.Hook` interface methods.
@@ -112,8 +117,11 @@ func (hook *AlertHook) Fire(logEntry *logrus.Entry) (err error) {
 		Content: logEntry,
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), hook.sendTimeout)
+	defer cancel()
+
 	for _, ch := range notifyChans {
-		err = stderr.Join(ch.Send(note))
+		err = stderr.Join(ch.Send(ctx, note))
 	}
 
 	return errors.WithMessage(err, "failed to notify channel message")
