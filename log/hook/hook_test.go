@@ -3,6 +3,7 @@ package hook
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/Conflux-Chain/go-conflux-util/alert"
 	"github.com/sirupsen/logrus"
@@ -52,7 +53,7 @@ func TestLogrusAddHooks(t *testing.T) {
 
 	// Add alert hook for logrus fatal/warn/error level
 	hookLevels := []logrus.Level{logrus.FatalLevel, logrus.WarnLevel, logrus.ErrorLevel}
-	logrus.AddHook(NewAlertHook(hookLevels, channels))
+	logrus.AddHook(NewAlertHook(hookLevels, channels, 3*time.Second))
 
 	// Need to manually check if message sent to dingtalk group chat
 	logrus.Warn("Test logrus add hooks warns")
