@@ -27,7 +27,7 @@ type Config struct {
 	Channels []string
 
 	// Maximum request timeout allowed to send alert.
-	SendTimeout time.Duration `default:"5s"`
+	SendTimeout time.Duration `default:"3s"`
 
 	// Async configures the behavior of the asynchronous worker for handling log alerts.
 	Async AsyncOption
