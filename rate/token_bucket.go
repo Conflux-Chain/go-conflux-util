@@ -43,7 +43,7 @@ func (bucket *TokenBucket) LimitAt(now time.Time, n int) error {
 
 	if waitTime := rsv.Delay(); waitTime > 0 {
 		rsv.Cancel()
-		return errRateLimited(bucket.inner.Burst(), waitTime)
+		return errRateLimited(int(bucket.inner.Limit()), waitTime)
 	}
 
 	atomic.StoreInt64(&bucket.lastSeen, now.Unix())
