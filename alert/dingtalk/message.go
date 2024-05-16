@@ -1,10 +1,7 @@
 package dingtalk
 
 const (
-	msgTypeText       = "text"
-	msgTypeLink       = "link"
-	msgTypeMarkdown   = "markdown"
-	msgTypeActionCard = "actionCard"
+	msgTypeMarkdown = "markdown"
 )
 
 type atParams struct {

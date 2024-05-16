@@ -9,7 +9,7 @@
 #     # Default notification channels
 #     channels: []
 #     # Maximum request timeout allowed to send alert.
-#     SendTimeout: 5s
+#     SendTimeout: 3s
 #     # Async worker options for sending alert
 #     async:
 #       # The number of worker goroutines (set `0` to turn off async mode).
