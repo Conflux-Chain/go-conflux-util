@@ -17,11 +17,74 @@ type Formatter interface {
 	Format(note *Notification) (string, error)
 }
 
-type markdownFormatter struct {
+type tplFormatter struct {
 	tags []string
 
 	defaultTpl  *template.Template
 	logEntryTpl *template.Template
+}
+
+func newTplFormatter(
+	tags []string, defaultTpl, logEntryTpl *template.Template) *tplFormatter {
+	return &tplFormatter{
+		tags: tags, defaultTpl: defaultTpl, logEntryTpl: logEntryTpl,
+	}
+}
+
+func (f *tplFormatter) Format(note *Notification) (string, error) {
+	if _, ok := note.Content.(*logrus.Entry); ok {
+		return f.formatLogrusEntry(note)
+	}
+
+	return f.formatDefault(note)
+}
+
+func (f *tplFormatter) formatLogrusEntry(note *Notification) (string, error) {
+	entry := note.Content.(*logrus.Entry)
+	entryError, _ := entry.Data[logrus.ErrorKey].(error)
+
+	ctxFields := make(map[string]interface{})
+	for k, v := range entry.Data {
+		if k == logrus.ErrorKey {
+			continue
+		}
+		ctxFields[k] = v
+	}
+
+	buffer := bytes.Buffer{}
+	err := f.logEntryTpl.Execute(&buffer, struct {
+		Level     logrus.Level
+		Tags      []string
+		Time      time.Time
+		Msg       string
+		Error     error
+		CtxFields map[string]interface{}
+	}{entry.Level, f.tags, entry.Time, entry.Message, entryError, ctxFields})
+	if err != nil {
+		return "", errors.WithMessage(err, "template exec error")
+	}
+
+	return buffer.String(), nil
+}
+
+func (f *tplFormatter) formatDefault(note *Notification) (string, error) {
+	buffer := bytes.Buffer{}
+	err := f.defaultTpl.Execute(&buffer, struct {
+		Title    string
+		Tags     []string
+		Severity Severity
+		Time     time.Time
+		Content  interface{}
+	}{note.Title, f.tags, note.Severity, time.Now(), note.Content})
+	if err != nil {
+		return "", errors.WithMessage(err, "template exec error")
+	}
+
+	return buffer.String(), nil
+}
+
+type markdownFormatter struct {
+	*tplFormatter
 }
 
 func newMarkdownFormatter(
@@ -33,14 +96,12 @@ func newMarkdownFormatter(
 	for i := range strTemplates {
 		tpls[i], err = template.New("markdown").Funcs(funcMap).Parse(strTemplates[i])
 		if err != nil {
-			return nil, errors.WithMessage(err, "bad template")
+			return nil, errors.WithMessage(err, "bad markdown template")
 		}
 	}
 
 	return &markdownFormatter{
-		tags:        tags,
-		defaultTpl:  tpls[0],
-		logEntryTpl: tpls[1],
+		tplFormatter: newTplFormatter(tags, tpls[0], tpls[1]),
 	}, nil
 }
 
@@ -137,6 +198,68 @@ func NewTelegramMarkdownFormatter(tags []string) (f *TelegramMarkdownFormatter, 
 
 func escapeMarkdown(v interface{}) string {
 	return bot.EscapeMarkdown(fmt.Sprintf("%v", v))
+}
+
+type htmlFormatter struct {
+	*tplFormatter
+}
+
+func newHtmlFormatter(
+	tags []string, funcMap template.FuncMap, defaultStrTpl, logEntryStrTpl string,
+) (f *htmlFormatter, err error) {
+	var tpls [2]*template.Template
+
+	strTemplates := [2]string{defaultStrTpl, logEntryStrTpl}
+	for i := range strTemplates {
+		tpls[i], err = template.New("html").Funcs(funcMap).Parse(strTemplates[i])
+		if err != nil {
+			return nil, errors.WithMessage(err, "bad html template")
+		}
+	}
+
+	return &htmlFormatter{
+		tplFormatter: newTplFormatter(tags, tpls[0], tpls[1]),
+	}, nil
+}
+
+type SmtpHtmlFormatter struct {
+	*htmlFormatter
+	conf SmtpConfig
+}
+
+func NewSmtpHtmlFormatter(
+	conf SmtpConfig, tags []string) (f *SmtpHtmlFormatter, err error) {
+	funcMap := template.FuncMap{
+		"formatRFC3339": formatRFC3339,
+	}
+	hf, err := newHtmlFormatter(
+		tags, funcMap, htmlTemplates[0], htmlTemplates[1],
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SmtpHtmlFormatter{conf: conf, htmlFormatter: hf}, nil
+}
+
+func (f *SmtpHtmlFormatter) Format(note *Notification) (msg string, err error) {
+	body, err := f.htmlFormatter.Format(note)
+	if err != nil {
+		return "", err
+	}
+
+	header := make(map[string]string)
+	header["From"] = f.conf.From
+	header["To"] = strings.Join(f.conf.To, ";")
+	header["Subject"] = note.Title
+	header["Content-Type"] = "text/html; charset=UTF-8"
+
+	for k, v := range header {
+		msg += fmt.Sprintf("%s: %s\r\n", k, v)
+	}
+
+	msg += "\r\n" + body
+	return msg, nil
 }
 
 type SimpleTextFormatter struct {

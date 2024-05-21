@@ -32,13 +32,19 @@
 #     dingrobot: # Example channel configuration for DingTalk
 #       platform: dingtalk # Mandatory field indicating the channel type
 #       webhook: https://oapi.dingtalk.com/robot/send?access_token=${your_access_token}
-#       secret:  ${your_access_secret}
+#       secret: ${your_access_secret}
 #       atMobiles: []
 #       isAtAll: false
 #     tgrobot: # Example channel configuration for Telegram
 #       platform: telegram # Mandatory field indicating the channel type
-#       apiToken:  ${your_api_token}
+#       apiToken: ${your_api_token}
 #       chatId: ${your_chat_id}
+#     smtpbot: # Example channel configuration for SMTP email (over TLS/SSL only)
+#       platform: smtp # Mandatory field indicating the channel type
+#       host: smtpdm-ap-southeast-1.aliyuncs.com:465
+#       from: ${your_sender_address}
+#       to: [${your_recipient_address}]
+#       password: ${your_smtp_password}
 
 # REST API Configurations
 # api:
