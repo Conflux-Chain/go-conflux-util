@@ -64,4 +64,39 @@ var (
     *{{$Key | escapeMarkdown}}*: {{$Val | escapeMarkdown}}{{ end }}{{ end }}
 `,
 	}
+
+	htmlTemplates = []string{
+		`{{- /* default HTML template */ -}}
+<h1>{{.Title}}</h1>
+<ul>
+	<li><b>Tags</b>: {{.Tags}}</li>
+	<li><b>Severity</b>: {{.Severity}}</li>
+	<li><b>Time</b>: {{.Time | formatRFC3339}}</li>
+</ul>
+<p>{{.Content}}</p>
+`,
+		`{{- /* logrus entry HTML template */ -}}
+<h1>{{.Level}}</h1>
+<ul>
+<li><b>Tags</b>: {{.Tags}}</li>
+<li><b>Time</b>: {{.Time | formatRFC3339}}</li>
+</ul>
+<hr/>
+<h2>Message</h2>
+<p>{{.Msg}}</p>
+{{with .Error}}
+<hr/>
+<h2>Reason</h2>
+<p>{{.Error}}</p>
+{{ end }}
+{{ if .CtxFields }}
+<hr/>
+<h2>Context Fields</h2>
+<ul>
+{{ range $Key, $Val := .CtxFields }}
+<li><b>{{$Key}}</b>: {{$Val}}</li>
+{{ end }}
+{{ end }}
+`,
+	}
 )
