@@ -18,9 +18,9 @@ var ErrAsyncQueueFull = errors.New("async hook queue is full")
 
 // AsyncOption defines configuration options for the AsyncHook.
 type AsyncOption struct {
-	NumWorkers  int           `default:"1"`  // Number of worker goroutines.
+	NumWorkers  int           // Number of worker goroutines. If set to 0 (default), async mode is disabled.
 	QueueSize   int           `default:"60"` // Maximum number of queued jobs.
-	StopTimeout time.Duration `default:"5s"` // Timeout before forced exit of async processing.
+	StopTimeout time.Duration `default:"5s"` // Timeout duration before forced exit of async processing.
 }
 
 // AsyncHook is a logrus hook that processes log entries asynchronously.
