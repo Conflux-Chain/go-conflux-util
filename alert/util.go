@@ -1,6 +1,8 @@
 package alert
 
 import (
+	"strings"
+
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -44,6 +46,23 @@ func parseAlertChannel(chID string, chmap map[string]interface{}, tags []string)
 		}
 
 		return NewTelegramChannel(chID, fmt, tgconf)
+	case ChannelTypeSMTP:
+		if toStr, ok := chmap["to"].(string); ok {
+			recipients := strings.Split(toStr, ",")
+			chmap["to"] = recipients
+		}
+
+		var smtpconf SmtpConfig
+		if err := decodeChannelConfig(chmap, &smtpconf); err != nil {
+			return nil, err
+		}
+
+		fmt, err := NewSmtpHtmlFormatter(smtpconf, tags)
+		if err != nil {
+			return nil, err
+		}
+
+		return NewSmtpChannel(chID, fmt, smtpconf), nil
 
 	// NOTE: add more channel types support here if needed
 	default:
