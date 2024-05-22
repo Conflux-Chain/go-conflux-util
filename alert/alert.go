@@ -1,6 +1,8 @@
 package alert
 
 import (
+	"context"
+
 	viperutil "github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/sirupsen/logrus"
 )
@@ -42,7 +44,7 @@ const (
 type Channel interface {
 	Name() string
 	Type() ChannelType
-	Send(note *Notification) error
+	Send(context.Context, *Notification) error
 }
 
 // Notification represents core information for an alert.

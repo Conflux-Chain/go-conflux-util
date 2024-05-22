@@ -8,18 +8,21 @@
 #     level: warn
 #     # Default notification channels
 #     channels: []
+#     # Maximum request timeout allowed to send alert.
+#     SendTimeout: 3s
+
 #     # Async worker options for sending alert
 #     async:
 #       # The number of worker goroutines (set `0` to turn off async mode).
 #       numWorkers: 1
 #       # The maximum number of queued jobs.
 #       queueSize: 60
-#       # Maximum Timeout allowed to gracefully stop..
+#       # Maximum timeout allowed to gracefully stop.
 #       StopTimeout: 5s
 
 # Alert Configurations
 # alert:
-#   # Custom tags are usually used to differentiate between different networks and enviroments
+#   # Custom tags are usually used to differentiate between different networks and environments
 #   # such as mainnet/testnet, prod/test/dev or any custom info for more details.
 #   customTags: [dev]
 #   # Channels: Notification channels
