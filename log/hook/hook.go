@@ -64,7 +64,6 @@ func AddAlertHook(ctx context.Context, wg *sync.WaitGroup, conf Config) error {
 		hookLvls = append(hookLvls, l)
 	}
 
-	// Instantiate the base AlertHook.
 	var alertHook logrus.Hook = NewAlertHook(hookLvls, chs, conf.SendTimeout)
 
 	// Wrap with asynchronous processing if configured.

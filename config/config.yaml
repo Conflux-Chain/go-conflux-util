@@ -21,7 +21,7 @@
 
 # Alert Configurations
 # alert:
-#   # Custom tags are usually used to differentiate between different networks and enviroments
+#   # Custom tags are usually used to differentiate between different networks and environments
 #   # such as mainnet/testnet, prod/test/dev or any custom info for more details.
 #   customTags: [dev]
 #   # Channels: Notification channels
