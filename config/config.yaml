@@ -41,7 +41,7 @@
 #       chatId: ${your_chat_id}
 #     smtpbot: # Example channel configuration for SMTP email (over TLS/SSL only)
 #       platform: smtp # Mandatory field indicating the channel type
-#       host: smtpdm-ap-southeast-1.aliyuncs.com:465
+#       host: ${your_smtp_host}
 #       from: ${your_sender_address}
 #       to: [${your_recipient_address}]
 #       password: ${your_smtp_password}
