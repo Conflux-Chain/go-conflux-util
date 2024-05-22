@@ -1,7 +1,9 @@
 package hook
 
 import (
+	"context"
 	stderr "errors"
+	"sync"
 
 	"github.com/Conflux-Chain/go-conflux-util/alert"
 	"github.com/pkg/errors"
@@ -16,10 +18,30 @@ const (
 	alertMsgTitle = "logrus alert notification"
 )
 
-// AddAlertHook adds logrus hook for alert notification with specified log levels.
-func AddAlertHook(hookLevels []logrus.Level, chns []string) error {
+type Config struct {
+	// Level is the minimum logrus level at which alerts will be triggered.
+	Level string `default:"warn"`
+
+	// Channels lists the default alert notification channels to use.
+	Channels []string
+
+	// Async configures the behavior of the asynchronous worker for handling log alerts.
+	Async AsyncOption
+}
+
+// AddAlertHook attaches a custom logrus Hook for generating alert notifications
+// based on configured levels and channels.
+// It supports both synchronous and asynchronous operation modes, with optional
+// graceful shutdown integration.
+func AddAlertHook(ctx context.Context, wg *sync.WaitGroup, conf Config) error {
+	if len(conf.Channels) == 0 {
+		// No channels configured, so no hook needs to be added.
+		return nil
+	}
+
+	// Retrieve and validate configured alert channels.
 	var chs []alert.Channel
-	for _, chn := range chns {
+	for _, chn := range conf.Channels {
 		ch, ok := alert.DefaultManager().Channel(chn)
 		if !ok {
 			return alert.ErrChannelNotFound(chn)
@@ -27,8 +49,40 @@ func AddAlertHook(hookLevels []logrus.Level, chns []string) error {
 		chs = append(chs, ch)
 	}
 
-	logrus.AddHook(NewAlertHook(hookLevels, chs))
+	// Parse the configured log level for alert triggering.
+	lvl, err := logrus.ParseLevel(conf.Level)
+	if err != nil {
+		return errors.WithMessage(err, "failed to parse log level")
+	}
+
+	var hookLvls []logrus.Level
+	for l := logrus.PanicLevel; l <= lvl; l++ {
+		hookLvls = append(hookLvls, l)
+	}
+
+	// Instantiate the base AlertHook.
+	var alertHook logrus.Hook = NewAlertHook(hookLvls, chs)
+
+	// Wrap with asynchronous processing if configured.
+	if conf.Async.NumWorkers > 0 {
+		alertHook = wrapAsyncHook(ctx, wg, alertHook, conf.Async)
+	}
+
+	// Finally, add the hook to Logrus.
+	logrus.AddHook(alertHook)
+
 	return nil
+}
+
+// wrapAsyncHook wraps the given hook with asynchronous processing, optionally integrating
+// graceful shutdown support if a context and wait group are provided.
+func wrapAsyncHook(
+	ctx context.Context, wg *sync.WaitGroup, hook logrus.Hook, opt AsyncOption) *AsyncHook {
+	if ctx != nil && wg != nil {
+		return NewAsyncHookWithCtx(ctx, wg, hook, opt)
+	}
+
+	return NewAsyncHook(hook, opt)
 }
 
 // AlertHook logrus hooks to send specified level logs as text message for alerting.

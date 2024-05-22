@@ -4,10 +4,18 @@
 #   forceColor: false
 #   disableColor: false
 #   alertHook: # Alert hooking settings
-#     # Hooked logrus levels for alert notification
-#     levels: [warn,error,fatal]
+#     # Hooked logrus level for alert notification
+#     level: warn
 #     # Default notification channels
 #     channels: []
+#     # Async worker options for sending alert
+#     async:
+#       # The number of worker goroutines (set `0` to turn off async mode).
+#       numWorkers: 1
+#       # The maximum number of queued jobs.
+#       queueSize: 60
+#       # Maximum Timeout allowed to gracefully stop..
+#       StopTimeout: 5s
 
 # Alert Configurations
 # alert:

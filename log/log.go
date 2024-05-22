@@ -1,37 +1,35 @@
 package log
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/Conflux-Chain/go-conflux-util/log/hook"
 	viperUtil "github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
-type AlertHookConfig struct {
-	// logrus level hooked for alert notification
-	Levels []string `default:"[warn,error,fatal]"`
-	// default alert channels
-	Channels []string
-}
-
 // LoggingConfig logging configuration such as log level etc.,
 type LoggingConfig struct {
-	Level        string          `default:"info"` // logging level
-	ForceColor   bool            // helpful on windows
-	DisableColor bool            // helpful to output logs in file
-	AlertHook    AlertHookConfig // alert hooking configurations
+	Level        string      `default:"info"` // logging level
+	ForceColor   bool        // helpful on windows
+	DisableColor bool        // helpful to output logs in file
+	AlertHook    hook.Config // alert hooking configurations
 }
 
-// MustInitFromViper inits logging from viper settings and adapts Geth logger.
+// MustInitFromViper initializes the logging system using configurations from viper.
 //
-// Note that viper must be initilized before this, and it will panic
-// and exit if any error happens.
+// Precondition:
+//   - Viper must be initialized with appropriate configurations before calling this function.
+//
+// Panics:
+//   - This function will panic if it encounters any errors during initialization.
 func MustInitFromViper() {
 	var conf LoggingConfig
 	viperUtil.MustUnmarshalKey("log", &conf)
@@ -39,45 +37,68 @@ func MustInitFromViper() {
 	MustInit(conf)
 }
 
-// Init inits logging with specified log level
+// MustInitWithCtxFromViper performs the similar initializations as `MustInitFromViper` with
+// support for graceful shutdown by accepting a context and a wait group.
+//
+// Parameters:
+//   - ctx: The context for graceful shutdown handling.
+//   - wg: The wait group to track goroutines for shutdown synchronization.
+func MustInitWithCtxFromViper(ctx context.Context, wg *sync.WaitGroup) {
+	var conf LoggingConfig
+	viperUtil.MustUnmarshalKey("log", &conf)
+
+	MustInitWithCtx(ctx, wg, conf)
+}
+
+// MustInit sets up the logging system according to the provided LoggingConfig and log level.
+// It configures the log level, adds an alert hook, sets a text formatter, and adapts the logger
+// for Geth compatibility.
+// In case of any error during initialization, this function will panic.
 func MustInit(conf LoggingConfig) {
-	// parse logging level
+	mustInit(conf, nil, nil)
+}
+
+// MustInitWithCtx performs the similiar initializations as `MustInit` with support for
+// graceful shutdown by accepting a context and a wait group.
+func MustInitWithCtx(ctx context.Context, wg *sync.WaitGroup, conf LoggingConfig) {
+	mustInit(conf, ctx, wg)
+}
+
+// mustInit initializes the logging system with the provided configuration and sets up an alert hook.
+// It supports graceful shutdown by optionally using a context and wait group for the alert hook registration.
+func mustInit(conf LoggingConfig, ctx context.Context, wg *sync.WaitGroup) {
+	// Parse the log level string from the configuration into a logrus.Level.
+	// If parsing fails, log the error along with the attempted level and terminate the application.
 	level, err := logrus.ParseLevel(conf.Level)
 	if err != nil {
 		logrus.WithError(err).WithField("level", conf.Level).Fatal("Failed to parse log level")
 	}
-	logrus.SetLevel(level)
+	logrus.SetLevel(level) // Set the parsed log level.
 
-	// hook alert logging levels
-	var hookLvls []logrus.Level
-	for _, lvlStr := range conf.AlertHook.Levels {
-		lvl, err := logrus.ParseLevel(lvlStr)
-		if err != nil {
-			logrus.WithError(err).WithField("level", lvlStr).Fatal("Failed to parse log level for alert hooking")
-		}
-		hookLvls = append(hookLvls, lvl)
-	}
-
-	if err := hook.AddAlertHook(hookLvls, conf.AlertHook.Channels); err != nil {
+	// Attempt to add an alert hook as configured.
+	if err := hook.AddAlertHook(ctx, wg, conf.AlertHook); err != nil {
 		logrus.WithError(err).Fatal("Failed to add alert hook")
 	}
 
-	// set text formtter
+	// Configure the log formatter to use a text format with a full timestamp.
 	formatter := &logrus.TextFormatter{
 		FullTimestamp: true,
 	}
 
+	// Adjust the color settings of the formatter based on the configuration.
 	if conf.DisableColor {
 		formatter.DisableColors = true
 	} else if conf.ForceColor {
 		formatter.ForceColors = true
 	}
 
+	// Apply the configured formatter to the logger.
 	logrus.SetFormatter(formatter)
 
-	// adapt geth logger
+	// Adapt the logger for use with Geth that uses a custom logging mechanism.
 	adaptGethLogger()
 
+	// Log a debug message indicating successful initialization along with the effective configuration.
 	logrus.WithField("config", fmt.Sprintf("%+v", conf)).Debug("Log initialized")
 }
 
