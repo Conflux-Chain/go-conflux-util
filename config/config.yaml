@@ -22,28 +22,48 @@
 
 # Alert Configurations
 # alert:
-#   # Custom tags are usually used to differentiate between different networks and environments
-#   # such as mainnet/testnet, prod/test/dev or any custom info for more details.
+#   # Custom tags are used to distinguish between different networks and environments.
+#   # For example, they can be used to differentiate between mainnet/testnet, prod/test/dev, etc.
 #   customTags: [dev]
-#   # Channels: Notification channels
-#   # Key: Unique identifier for the channel (e.g., channel ID)
-#   # Value: Configuration for the channel
+
+#   # Channels are used for sending notifications.
+#   # Each channel is identified by a unique key (e.g., channel ID), which is case insensitive.
+#   # The value for each key is the configuration for that channel.
 #   channels:
-#     dingrobot: # Example channel configuration for DingTalk
-#       platform: dingtalk # Mandatory field indicating the channel type
+#     # Example configuration for the DingTalk robot channel
+#     dingrobot:
+#       # The type of the channel. In this case, it's 'dingtalk'.
+#       platform: dingtalk
+#       # The webhook URL for the DingTalk robot.
 #       webhook: https://oapi.dingtalk.com/robot/send?access_token=${your_access_token}
+#       # The secret key for the DingTalk robot.
 #       secret: ${your_access_secret}
+#       # List of mobile numbers to be mentioned in the alert. If empty, no one is mentioned.
 #       atMobiles: []
+#       # If set to true, all members are mentioned in the alert. If false, only the members
+#       # in 'atMobiles' are mentioned.
 #       isAtAll: false
-#     tgrobot: # Example channel configuration for Telegram
-#       platform: telegram # Mandatory field indicating the channel type
+
+#     # Example configuration for the Telegram robot channel
+#     tgrobot:
+#       # The type of the channel. In this case, it's 'telegram'.
+#       platform: telegram
+#       # The API token for the Telegram robot.
 #       apiToken: ${your_api_token}
+#       # The chat ID for the Telegram chat where the alerts are sent.
 #       chatId: ${your_chat_id}
-#     smtpbot: # Example channel configuration for SMTP email (over TLS/SSL only)
-#       platform: smtp # Mandatory field indicating the channel type
+
+#     # Example configuration for the SMTP (TLS/SSL only) email channel
+#     smtpbot:
+#       # The type of the channel. In this case, it's 'smtp'.
+#       platform: smtp
+#       # The host for the SMTP server (including the port number).
 #       host: ${your_smtp_host}
+#       # The sender's email address.
 #       from: ${your_sender_address}
+#       # List of recipient email addresses.
 #       to: [${your_recipient_address}]
+#       # The password for the SMTP server.
 #       password: ${your_smtp_password}
 
 # REST API Configurations
@@ -65,12 +85,12 @@
 #     password:
 
 # Store Configurations
-store:
-  mysql:
+# store:
+#   mysql:
 #     host: 127.0.0.1:3306
 #     username: root
-    password:
-    database: yourdbname
+#     password:
+#     database: yourdbname
 #     connMaxLifeTime: 3m
 #     maxOpenConns: 10
 #     maxIdleConns: 10
