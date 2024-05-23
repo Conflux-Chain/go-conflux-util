@@ -7,7 +7,9 @@ import (
 	"github.com/spf13/viper"
 )
 
-var envKeyPrefix string // environment variable prefix
+var (
+	envKeyPrefix string // environment variable prefix
+)
 
 func initEnv(envPrefix string) {
 	envKeyPrefix = strings.ToUpper(envPrefix + "_")
@@ -22,13 +24,19 @@ func initEnv(envPrefix string) {
 // MustInit inits viper with provided env var prefix.
 //
 // Note that it will panic and exit if any error happens.
-func MustInit(envPrefix string) {
+func MustInit(envPrefix string, configPath ...string) {
 	initEnv(envPrefix)
 
-	// Read config file from current directory or under config folder.
-	viper.SetConfigName("config")
-	viper.AddConfigPath(".")
-	viper.AddConfigPath("./config")
+	if len(configPath) > 0 {
+		logrus.Infof("Using config file %s", configPath[0])
+		viper.SetConfigFile(configPath[0])
+	} else {
+		logrus.Info("Searching for the default config file")
+		// Read config file from current directory or under config folder.
+		viper.SetConfigName("config")
+		viper.AddConfigPath(".")
+		viper.AddConfigPath("./config")
+	}
 
 	if err := viper.ReadInConfig(); err != nil {
 		logrus.WithError(err).Fatal("Failed to read config to initialize viper")
