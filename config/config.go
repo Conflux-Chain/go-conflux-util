@@ -21,13 +21,15 @@ import (
 // Parameters:
 //   - viperEnvPrefix : The prefix used for environment variables that `Viper` should consider
 //     while initializing configurations.
+//   - configPath : The path to the configuration file. If not provided, search for the default
+//     config file under current directory or `config` subfolder.
 //
 // Panics:
 //   - If any part of the initialization fails, this function will panic, causing the application
 //     to terminate abruptly.
-func MustInit(viperEnvPrefix string) {
+func MustInit(viperEnvPrefix string, configPath ...string) {
 	// Delegates to the shared initialization logic with no context for graceful shutdown.
-	mustInit(viperEnvPrefix, nil, nil)
+	mustInit(viperEnvPrefix, nil, nil, configPath...)
 }
 
 // MustInitWithCtx carries out the same initializations as `MustInit` except for support for
@@ -38,8 +40,11 @@ func MustInit(viperEnvPrefix string) {
 //   - wg: The wait group to track goroutines for shutdown synchronization.
 //   - viperEnvPrefix : The prefix used for environment variables that `Viper` should consider
 //     while initializing configurations.
-func MustInitWithCtx(ctx context.Context, wg *sync.WaitGroup, viperEnvPrefix string) {
-	mustInit(viperEnvPrefix, ctx, wg)
+//   - configPath : The path to the configuration file. If not provided, search for the default
+//     config file under current directory or `config` subfolder.
+func MustInitWithCtx(
+	ctx context.Context, wg *sync.WaitGroup, viperEnvPrefix string, configPath ...string) {
+	mustInit(viperEnvPrefix, ctx, wg, configPath...)
 }
 
 // mustInit is the internal function responsible for the core initialization steps.
@@ -48,10 +53,11 @@ func MustInitWithCtx(ctx context.Context, wg *sync.WaitGroup, viperEnvPrefix str
 //
 // Important: The order in which initializations are performed is critical due to
 // dependencies between components.
-func mustInit(viperEnvPrefix string, ctx context.Context, wg *sync.WaitGroup) {
+func mustInit(
+	viperEnvPrefix string, ctx context.Context, wg *sync.WaitGroup, configPath ...string) {
 	// Initialize `Viper` to read configurations from a file or environment variables.
 	// The provided prefix is used to match and bind environment variables to config keys.
-	viper.MustInit(viperEnvPrefix)
+	viper.MustInit(viperEnvPrefix, configPath...)
 
 	// Initialize metrics collection based on the configurations loaded into `Viper`.
 	// Metrics are typically used for monitoring application performance.
