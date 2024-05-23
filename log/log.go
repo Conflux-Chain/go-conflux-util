@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -146,7 +147,11 @@ func BindFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("log-level", "info", "The logging level (trace|debug|info|warn|error|fatal|panic)")
 	viper.BindPFlag("log.level", cmd.Flag("log-level"))
 
-	cmd.PersistentFlags().Bool("log-force-color", false, "Force colored logs")
+	var defaultLogForceColor bool
+	if runtime.GOOS == "windows" {
+		defaultLogForceColor = true
+	}
+	cmd.PersistentFlags().Bool("log-force-color", defaultLogForceColor, "Force colored logs")
 	viper.BindPFlag("log.forceColor", cmd.Flag("log-force-color"))
 
 	cmd.PersistentFlags().Bool("log-disable-color", false, "Disable colored logs")
