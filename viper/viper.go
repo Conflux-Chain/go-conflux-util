@@ -25,13 +25,13 @@ func initEnv(envPrefix string) {
 //
 // Note that it will panic and exit if any error happens.
 func MustInit(envPrefix string, configPath ...string) {
+	logger := logrus.WithField("envPrefix", envPrefix)
 	initEnv(envPrefix)
 
 	if len(configPath) > 0 {
-		logrus.Infof("Using config file %s", configPath[0])
+		logger = logger.WithField("customConfig", configPath[0])
 		viper.SetConfigFile(configPath[0])
 	} else {
-		logrus.Info("Searching for the default config file")
 		// Read config file from current directory or under config folder.
 		viper.SetConfigName("config")
 		viper.AddConfigPath(".")
@@ -39,8 +39,8 @@ func MustInit(envPrefix string, configPath ...string) {
 	}
 
 	if err := viper.ReadInConfig(); err != nil {
-		logrus.WithError(err).Fatal("Failed to read config to initialize viper")
+		logger.WithError(err).Fatal("Failed to read config to initialize viper")
 	}
 
-	logrus.Info("Viper initialized")
+	logger.Info("Viper initialized")
 }
