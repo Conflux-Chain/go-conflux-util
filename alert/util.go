@@ -7,6 +7,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+var ErrInvalidNotification = errors.New("invalid notification")
+
 func ErrChannelTypeNotSupported(chType string) error {
 	return errors.Errorf("channel type %s not supported", chType)
 }
@@ -63,6 +65,13 @@ func parseAlertChannel(chID string, chmap map[string]interface{}, tags []string)
 		}
 
 		return NewSmtpChannel(chID, fmt, smtpconf), nil
+	case ChannelTypePagerDuty:
+		var pdconf PagerDutyConfig
+		if err := decodeChannelConfig(chmap, &pdconf); err != nil {
+			return nil, err
+		}
+
+		return NewPagerDutyChannel(chID, tags, pdconf), nil
 
 	// NOTE: add more channel types support here if needed
 	default:

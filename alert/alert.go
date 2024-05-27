@@ -36,9 +36,10 @@ func (s Severity) String() string {
 type ChannelType string
 
 const (
-	ChannelTypeDingTalk ChannelType = "dingtalk"
-	ChannelTypeTelegram ChannelType = "telegram"
-	ChannelTypeSMTP     ChannelType = "smtp"
+	ChannelTypeDingTalk  ChannelType = "dingtalk"
+	ChannelTypeTelegram  ChannelType = "telegram"
+	ChannelTypeSMTP      ChannelType = "smtp"
+	ChannelTypePagerDuty ChannelType = "pagerduty"
 )
 
 // Notification channel interface.

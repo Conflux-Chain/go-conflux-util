@@ -66,6 +66,17 @@
 #       # The password for the SMTP server.
 #       password: ${your_smtp_password}
 
+#     # Example configuration for the PagerDuty channel
+#     pagerduty:
+#       # The type of the channel. In this case, it's 'pagerduty'.
+#       platform: pagerduty
+#       # The auth token for the PagerDuty service.
+#       authToken: ${your_auth_token}
+#       # The routinng key for the integration.
+#       routingKey: ${your_routing_key}
+#       # The unique location of the affected system, preferably a hostname or FQDN.
+#       source: ${your_source}
+
 # REST API Configurations
 # api:
 #   endpoint: :12345
