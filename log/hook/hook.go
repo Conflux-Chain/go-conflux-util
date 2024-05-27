@@ -113,8 +113,8 @@ func (hook *AlertHook) Fire(logEntry *logrus.Entry) (err error) {
 	}
 
 	note := &alert.Notification{
-		Title:   alertMsgTitle,
-		Content: logEntry,
+		Title: alertMsgTitle, Content: logEntry,
+		Severity: hook.adaptSeverity(logEntry.Level),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), hook.sendTimeout)
@@ -166,4 +166,18 @@ func (hook *AlertHook) getAlertChannels(logEntry *logrus.Entry) (chs []alert.Cha
 	}
 
 	return chs, nil
+}
+
+// adaptSeverity adapts logrus log level to notification severity level.
+func (hook *AlertHook) adaptSeverity(lvl logrus.Level) alert.Severity {
+	switch lvl {
+	case logrus.PanicLevel, logrus.FatalLevel:
+		return alert.SeverityCritical
+	case logrus.ErrorLevel:
+		return alert.SeverityHigh
+	case logrus.WarnLevel:
+		return alert.SeverityMedium
+	default:
+		return alert.SeverityLow
+	}
 }
