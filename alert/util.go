@@ -7,7 +7,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-var ErrInvalidNotification = errors.New("invalid notification")
+var (
+	ErrInvalidNotification = errors.New("invalid notification")
+	ErrInvalidContentType  = errors.New("invalid content type")
+)
 
 func ErrChannelTypeNotSupported(chType string) error {
 	return errors.Errorf("channel type %s not supported", chType)

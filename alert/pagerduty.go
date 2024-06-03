@@ -49,7 +49,7 @@ func (c *PagerDutyChannel) Type() ChannelType {
 	return ChannelTypePagerDuty
 }
 
-// Send sends a notification using the PagerDuty channel
+// Send sends notification using the PagerDuty channel.
 func (c *PagerDutyChannel) Send(ctx context.Context, note *Notification) error {
 	var payload *pagerduty.V2Payload
 	switch note.Content.(type) {
@@ -59,6 +59,16 @@ func (c *PagerDutyChannel) Send(ctx context.Context, note *Notification) error {
 		payload = c.assemblePayloadDefault(note)
 	default:
 		return ErrInvalidNotification
+	}
+
+	return c.SendRaw(ctx, payload)
+}
+
+// SendRaw sends raw payload using the PagerDuty channel.
+func (c *PagerDutyChannel) SendRaw(ctx context.Context, content interface{}) error {
+	payload, ok := content.(*pagerduty.V2Payload)
+	if !ok {
+		return ErrInvalidContentType
 	}
 
 	// Validate the payload before sending.

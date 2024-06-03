@@ -58,3 +58,23 @@ func (tc *TelegramChannel) Send(ctx context.Context, note *Notification) error {
 
 	return err
 }
+
+// SendRaw sends raw message using the Telegram channel.
+func (tc *TelegramChannel) SendRaw(ctx context.Context, content interface{}) error {
+	var params *bot.SendMessageParams
+
+	switch v := content.(type) {
+	case string:
+		params = &bot.SendMessageParams{
+			ChatID: tc.Config.ChatId,
+			Text:   v,
+		}
+	case *bot.SendMessageParams:
+		params = v
+	default:
+		return ErrInvalidContentType
+	}
+
+	_, err := tc.bot.SendMessage(ctx, params)
+	return err
+}

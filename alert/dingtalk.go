@@ -50,3 +50,15 @@ func (dtc *DingTalkChannel) Send(ctx context.Context, note *Notification) error 
 
 	return dtc.bot.SendMarkdown(ctx, note.Title, msg, dtc.Config.AtMobiles, dtc.Config.IsAtAll)
 }
+
+// SendRaw sends raw message using the DingTalk channel.
+func (dtc *DingTalkChannel) SendRaw(ctx context.Context, content interface{}) error {
+	switch v := content.(type) {
+	case string:
+		return dtc.bot.SendText(ctx, v, dtc.Config.AtMobiles, dtc.Config.IsAtAll)
+	case *dingtalk.TextMessage, *dingtalk.MarkdownMessage:
+		return dtc.bot.Send(ctx, v)
+	default:
+		return ErrInvalidContentType
+	}
+}

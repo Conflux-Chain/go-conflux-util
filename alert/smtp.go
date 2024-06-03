@@ -55,6 +55,16 @@ func (c *SmtpChannel) Send(ctx context.Context, note *Notification) error {
 	return c.send(ctx, msg)
 }
 
+// SendRaw sends raw protocol message.
+func (c *SmtpChannel) SendRaw(ctx context.Context, content interface{}) error {
+	msg, ok := content.(string)
+	if !ok {
+		return ErrInvalidContentType
+	}
+
+	return c.send(ctx, msg)
+}
+
 // send sends a message using the SMTP channel
 func (c *SmtpChannel) send(ctx context.Context, msg string) error {
 	// Dial the SMTP server
