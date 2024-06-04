@@ -19,11 +19,10 @@ type TelegramConfig struct {
 
 // TelegramChannel Telegram notification channel
 type TelegramChannel struct {
+	*bot.Bot
 	Formatter Formatter      // message formatter
 	ID        string         // channel id
 	Config    TelegramConfig // channel config
-
-	bot *bot.Bot
 }
 
 func NewTelegramChannel(chID string, fmt Formatter, conf TelegramConfig) (*TelegramChannel, error) {
@@ -32,7 +31,7 @@ func NewTelegramChannel(chID string, fmt Formatter, conf TelegramConfig) (*Teleg
 		return nil, err
 	}
 
-	tc := &TelegramChannel{ID: chID, Formatter: fmt, Config: conf, bot: bot}
+	tc := &TelegramChannel{ID: chID, Formatter: fmt, Config: conf, Bot: bot}
 	return tc, nil
 }
 
@@ -50,31 +49,11 @@ func (tc *TelegramChannel) Send(ctx context.Context, note *Notification) error {
 		return errors.WithMessage(err, "failed to format alert msg")
 	}
 
-	_, err = tc.bot.SendMessage(ctx, &bot.SendMessageParams{
+	_, err = tc.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID:    tc.Config.ChatId,
 		Text:      msg,
 		ParseMode: models.ParseModeMarkdown,
 	})
 
-	return err
-}
-
-// SendRaw sends raw message using the Telegram channel.
-func (tc *TelegramChannel) SendRaw(ctx context.Context, content interface{}) error {
-	var params *bot.SendMessageParams
-
-	switch v := content.(type) {
-	case string:
-		params = &bot.SendMessageParams{
-			ChatID: tc.Config.ChatId,
-			Text:   v,
-		}
-	case *bot.SendMessageParams:
-		params = v
-	default:
-		return ErrInvalidContentType
-	}
-
-	_, err := tc.bot.SendMessage(ctx, params)
 	return err
 }

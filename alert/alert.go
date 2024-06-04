@@ -47,7 +47,6 @@ type Channel interface {
 	Name() string
 	Type() ChannelType
 	Send(context.Context, *Notification) error
-	SendRaw(context.Context, interface{}) error
 }
 
 // Notification represents core information for an alert.
