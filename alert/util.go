@@ -9,7 +9,6 @@ import (
 
 var (
 	ErrInvalidNotification = errors.New("invalid notification")
-	ErrInvalidContentType  = errors.New("invalid content type")
 )
 
 func ErrChannelTypeNotSupported(chType string) error {

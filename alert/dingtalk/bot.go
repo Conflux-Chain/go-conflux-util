@@ -28,12 +28,12 @@ func NewRobot(webhook, secrect string) *Robot {
 
 // SendText send a text type message.
 func (r Robot) SendText(ctx context.Context, content string, atMobiles []string, isAtAll bool) error {
-	return r.Send(ctx, &TextMessage{
-		MsgType: MsgTypeText,
-		Text: TextParams{
+	return r.send(ctx, &textMessage{
+		MsgType: msgTypeText,
+		Text: textParams{
 			Content: content,
 		},
-		At: AtParams{
+		At: atParams{
 			AtMobiles: atMobiles,
 			IsAtAll:   isAtAll,
 		},
@@ -42,13 +42,13 @@ func (r Robot) SendText(ctx context.Context, content string, atMobiles []string,
 
 // SendMarkdown send a markdown type message.
 func (r Robot) SendMarkdown(ctx context.Context, title, text string, atMobiles []string, isAtAll bool) error {
-	return r.Send(ctx, &MarkdownMessage{
-		MsgType: MsgTypeMarkdown,
-		Markdown: MarkdownParams{
+	return r.send(ctx, &markdownMessage{
+		MsgType: msgTypeMarkdown,
+		Markdown: markdownParams{
 			Title: title,
 			Text:  text,
 		},
-		At: AtParams{
+		At: atParams{
 			AtMobiles: atMobiles,
 			IsAtAll:   isAtAll,
 		},
@@ -60,7 +60,7 @@ type dingResponse struct {
 	Errmsg  string `json:"errmsg"`
 }
 
-func (r Robot) Send(ctx context.Context, msg interface{}) error {
+func (r Robot) send(ctx context.Context, msg interface{}) error {
 	jm, err := json.Marshal(msg)
 	if err != nil {
 		return errors.WithMessage(err, "failed to marshal message")
