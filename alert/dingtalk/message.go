@@ -2,7 +2,18 @@ package dingtalk
 
 const (
 	msgTypeMarkdown = "markdown"
+	msgTypeText     = "text"
 )
+
+type textMessage struct {
+	MsgType string     `json:"msgtype"`
+	Text    textParams `json:"text"`
+	At      atParams   `json:"at"`
+}
+
+type textParams struct {
+	Content string `json:"content"`
+}
 
 type atParams struct {
 	AtMobiles []string `json:"atMobiles,omitempty"`

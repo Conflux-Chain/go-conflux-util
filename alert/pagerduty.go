@@ -24,18 +24,17 @@ type PagerDutyConfig struct {
 
 // PagerDutyChannel represents a PagerDuty notification channel.
 type PagerDutyChannel struct {
+	*pagerduty.Client
 	ID     string          // the identifier of the channel
 	Config PagerDutyConfig // the configuration for the PagerDuty channel
-
-	tags   []string
-	client *pagerduty.Client
+	tags   []string        // the tags used for the PagerDuty channel
 }
 
 // NewPagerDutyChannel creates a new PagerDuty channel with the given ID and configuration
 func NewPagerDutyChannel(chID string, tags []string, conf PagerDutyConfig) *PagerDutyChannel {
 	return &PagerDutyChannel{
 		ID: chID, Config: conf, tags: tags,
-		client: pagerduty.NewClient(conf.AuthToken),
+		Client: pagerduty.NewClient(conf.AuthToken),
 	}
 }
 
@@ -49,7 +48,7 @@ func (c *PagerDutyChannel) Type() ChannelType {
 	return ChannelTypePagerDuty
 }
 
-// Send sends a notification using the PagerDuty channel
+// Send sends notification using the PagerDuty channel.
 func (c *PagerDutyChannel) Send(ctx context.Context, note *Notification) error {
 	var payload *pagerduty.V2Payload
 	switch note.Content.(type) {
@@ -73,7 +72,7 @@ func (c *PagerDutyChannel) Send(ctx context.Context, note *Notification) error {
 		Payload:    payload,
 	}
 
-	_, err := c.client.ManageEventWithContext(ctx, event)
+	_, err := c.ManageEventWithContext(ctx, event)
 	return err
 }
 

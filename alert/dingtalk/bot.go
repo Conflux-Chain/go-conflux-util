@@ -26,6 +26,20 @@ func NewRobot(webhook, secrect string) *Robot {
 	return &Robot{webHook: webhook, secret: secrect}
 }
 
+// SendText send a text type message.
+func (r Robot) SendText(ctx context.Context, content string, atMobiles []string, isAtAll bool) error {
+	return r.send(ctx, &textMessage{
+		MsgType: msgTypeText,
+		Text: textParams{
+			Content: content,
+		},
+		At: atParams{
+			AtMobiles: atMobiles,
+			IsAtAll:   isAtAll,
+		},
+	})
+}
+
 // SendMarkdown send a markdown type message.
 func (r Robot) SendMarkdown(ctx context.Context, title, text string, atMobiles []string, isAtAll bool) error {
 	return r.send(ctx, &markdownMessage{

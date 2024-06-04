@@ -51,12 +51,13 @@ func (c *SmtpChannel) Send(ctx context.Context, note *Notification) error {
 	if err != nil {
 		return errors.WithMessage(err, "failed to format alert msg")
 	}
+
 	// Send the formatted message
-	return c.send(ctx, msg)
+	return c.SendProtoMsg(ctx, msg)
 }
 
-// send sends a message using the SMTP channel
-func (c *SmtpChannel) send(ctx context.Context, msg string) error {
+// SendProtoMsg sends protocol message using the SMTP channel
+func (c *SmtpChannel) SendProtoMsg(ctx context.Context, msg string) error {
 	// Dial the SMTP server
 	client, err := c.dial(ctx)
 	if err != nil {

@@ -20,17 +20,16 @@ type DingTalkConfig struct {
 
 // DingTalkChannel DingTalk notification channel
 type DingTalkChannel struct {
-	Formatter Formatter      // message formatter
+	*dingtalk.Robot
 	ID        string         // channel id
 	Config    DingTalkConfig // channel config
-
-	bot *dingtalk.Robot
+	Formatter Formatter      // message formatter
 }
 
 func NewDingTalkChannel(chID string, fmt Formatter, conf DingTalkConfig) *DingTalkChannel {
 	return &DingTalkChannel{
 		ID: chID, Formatter: fmt, Config: conf,
-		bot: dingtalk.NewRobot(conf.Webhook, conf.Secret),
+		Robot: dingtalk.NewRobot(conf.Webhook, conf.Secret),
 	}
 }
 
@@ -48,5 +47,5 @@ func (dtc *DingTalkChannel) Send(ctx context.Context, note *Notification) error 
 		return errors.WithMessage(err, "failed to format alert msg")
 	}
 
-	return dtc.bot.SendMarkdown(ctx, note.Title, msg, dtc.Config.AtMobiles, dtc.Config.IsAtAll)
+	return dtc.SendMarkdown(ctx, note.Title, msg, dtc.Config.AtMobiles, dtc.Config.IsAtAll)
 }
