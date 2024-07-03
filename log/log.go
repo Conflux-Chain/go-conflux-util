@@ -14,6 +14,12 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	// For go-ethereum v1.10.15, pkg `node` imports pkg `internal/debug`,
+	// which will init the log root with a `GlogHandler` instance.
+	// In case of our custom log root being overridden incounsiously,
+	// we import the `node` package here to ensure that our custom handler is used.
+	_ "github.com/ethereum/go-ethereum/node"
 )
 
 // LoggingConfig logging configuration such as log level etc.,
