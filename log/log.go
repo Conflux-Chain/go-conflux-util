@@ -17,7 +17,7 @@ import (
 
 	// For go-ethereum v1.10.15, pkg `node` imports pkg `internal/debug`,
 	// which will init the log root with a `GlogHandler` instance.
-	// In case of our custom log root being overridden incounsiously,
+	// In case of our custom log root being overridden unconsciously,
 	// we import the `node` package here to ensure that our custom handler is used.
 	_ "github.com/ethereum/go-ethereum/node"
 )
