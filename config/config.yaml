@@ -34,6 +34,8 @@
 #     dingrobot:
 #       # The type of the channel. In this case, it's 'dingtalk'.
 #       platform: dingtalk
+#       # Available message types are `text` and `markdown`.
+#       msgType: markdown
 #       # The webhook URL for the DingTalk robot.
 #       webhook: https://oapi.dingtalk.com/robot/send?access_token=${your_access_token}
 #       # The secret key for the DingTalk robot.

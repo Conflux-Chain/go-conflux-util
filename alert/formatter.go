@@ -6,7 +6,9 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	"unicode"
 
+	"github.com/Conflux-Chain/go-conflux-util/alert/dingtalk"
 	"github.com/go-telegram/bot"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -263,19 +265,49 @@ func (f *SmtpHtmlFormatter) Format(note *Notification) (msg string, err error) {
 }
 
 type SimpleTextFormatter struct {
+	*tplFormatter
 	tags []string
 }
 
-func NewSimpleTextFormatter(tags []string) *SimpleTextFormatter {
-	return &SimpleTextFormatter{tags: tags}
+func NewSimpleTextFormatter(tags []string) (fmt *SimpleTextFormatter, err error) {
+	strTemplates := [2]string{simpleTextTemplates[0], simpleTextTemplates[1]}
+	funcMap := template.FuncMap{"formatRFC3339": formatRFC3339}
+
+	var tpls [2]*template.Template
+	for i := range strTemplates {
+		tpls[i], err = template.New("text").Funcs(funcMap).Parse(strTemplates[i])
+		if err != nil {
+			return nil, errors.WithMessage(err, "bad text template")
+		}
+	}
+
+	fmt = &SimpleTextFormatter{
+		tplFormatter: newTplFormatter(tags, tpls[0], tpls[1]),
+		tags:         tags,
+	}
+	return fmt, nil
 }
 
 func (f *SimpleTextFormatter) Format(note *Notification) (string, error) {
-	tagStr := strings.Join(f.tags, "/")
-	nowStr := time.Now().Format("2006-01-02T15:04:05-0700")
-	str := fmt.Sprintf(
-		"%v\nseverity:\t%s;\ntags:\t%v;\n%v;\ntime:\t%v",
-		note.Title, note.Severity, tagStr, note.Content, nowStr,
-	)
-	return str, nil
+	msg, err := f.tplFormatter.Format(note)
+	if err != nil {
+		return "", err
+	}
+
+	msg = strings.TrimFunc(msg, func(r rune) bool {
+		return unicode.IsSpace(r)
+	})
+
+	return msg, nil
+}
+
+func newDingtalkMsgFormatter(msgType string, tags []string) (Formatter, error) {
+	switch {
+	case strings.EqualFold(msgType, dingtalk.MsgTypeText):
+		return NewSimpleTextFormatter(tags)
+	case strings.EqualFold(msgType, dingtalk.MsgTypeMarkdown):
+		return NewDingtalkMarkdownFormatter(tags)
+	default:
+		return nil, dingtalk.ErrMsgTypeNotSupported(msgType)
+	}
 }

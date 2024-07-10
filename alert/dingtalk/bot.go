@@ -16,6 +16,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+func ErrMsgTypeNotSupported(msgType string) error {
+	return errors.Errorf("message type %s not supported", msgType)
+}
+
 // Robot represents a dingtalk custom robot that can send messages to groups.
 type Robot struct {
 	webHook string
@@ -26,10 +30,22 @@ func NewRobot(webhook, secrect string) *Robot {
 	return &Robot{webHook: webhook, secret: secrect}
 }
 
+// Send send a dingtalk message.
+func (r Robot) Send(ctx context.Context, msgType, title, text string, atMobiles []string, isAtAll bool) error {
+	switch msgType {
+	case MsgTypeText:
+		return r.SendText(ctx, text, atMobiles, isAtAll)
+	case MsgTypeMarkdown:
+		return r.SendMarkdown(ctx, title, text, atMobiles, isAtAll)
+	default:
+		return ErrMsgTypeNotSupported(msgType)
+	}
+}
+
 // SendText send a text type message.
 func (r Robot) SendText(ctx context.Context, content string, atMobiles []string, isAtAll bool) error {
 	return r.send(ctx, &textMessage{
-		MsgType: msgTypeText,
+		MsgType: MsgTypeText,
 		Text: textParams{
 			Content: content,
 		},
@@ -43,7 +59,7 @@ func (r Robot) SendText(ctx context.Context, content string, atMobiles []string,
 // SendMarkdown send a markdown type message.
 func (r Robot) SendMarkdown(ctx context.Context, title, text string, atMobiles []string, isAtAll bool) error {
 	return r.send(ctx, &markdownMessage{
-		MsgType: msgTypeMarkdown,
+		MsgType: MsgTypeMarkdown,
 		Markdown: markdownParams{
 			Title: title,
 			Text:  text,
