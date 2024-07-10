@@ -19,7 +19,10 @@ var (
 // `TEST_TELEGRAM_API_TOKEN`: Telegram API token;
 // `TEST_TELEGRAM_CHAT_ID`: Telegram chat ID.
 func TestMain(m *testing.M) {
-	fmtter := alert.NewSimpleTextFormatter([]string{"log", "hook", "test"})
+	fmtter, err := alert.NewSimpleTextFormatter([]string{"log", "hook", "test"})
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to new simple text formatter")
+	}
 
 	dtWebhook := os.Getenv("TEST_DINGTALK_WEBHOOK")
 	dtSecret := os.Getenv("TEST_DINGTALK_SECRET")

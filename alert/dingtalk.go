@@ -16,6 +16,7 @@ type DingTalkConfig struct {
 	IsAtAll   bool     // whether to @ all members
 	Webhook   string   // webhook url
 	Secret    string   // secret token
+	MsgType   string   `default:"markdown"` // message type: `text` or `markdown`
 }
 
 // DingTalkChannel DingTalk notification channel
@@ -47,5 +48,5 @@ func (dtc *DingTalkChannel) Send(ctx context.Context, note *Notification) error 
 		return errors.WithMessage(err, "failed to format alert msg")
 	}
 
-	return dtc.SendMarkdown(ctx, note.Title, msg, dtc.Config.AtMobiles, dtc.Config.IsAtAll)
+	return dtc.Robot.Send(ctx, dtc.Config.MsgType, note.Title, msg, dtc.Config.AtMobiles, dtc.Config.IsAtAll)
 }

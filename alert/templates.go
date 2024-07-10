@@ -1,6 +1,33 @@
 package alert
 
 var (
+	simpleTextTemplates = []string{
+		`{{- /* default text template */ -}}
+{{.Title}}
+
+Tags: {{.Tags}}
+Severity: {{.Severity}}
+Time: {{.Time | formatRFC3339}}
+
+{{.Content}}
+`,
+		`{{- /* logrus entry text template */ -}}
+{{.Level}}
+
+Tags: {{.Tags}}
+Time: {{.Time | formatRFC3339}}
+
+Message
+{{.Msg}}
+
+{{with .Error}}Reason
+{{.Error}}{{ end }}
+
+{{ if .CtxFields }}Context Fields{{ range $Key, $Val := .CtxFields }}
+{{$Key}}: {{$Val}}{{ end }}{{ end }}
+`,
+	}
+
 	dingTalkMarkdownTemplates = []string{
 		`{{- /* default markdown template */ -}}
 # {{.Title}}

@@ -3,6 +3,7 @@ package alert
 import (
 	"strings"
 
+	"github.com/mcuadros/go-defaults"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -32,7 +33,7 @@ func parseAlertChannel(chID string, chmap map[string]interface{}, tags []string)
 			return nil, err
 		}
 
-		fmt, err := NewDingtalkMarkdownFormatter(tags)
+		fmt, err := newDingtalkMsgFormatter(dtconf.MsgType, tags)
 		if err != nil {
 			return nil, err
 		}
@@ -82,6 +83,7 @@ func parseAlertChannel(chID string, chmap map[string]interface{}, tags []string)
 }
 
 func decodeChannelConfig(chmap map[string]interface{}, valPtr interface{}) error {
+	defaults.SetDefaults(valPtr)
 	decoderConfig := mapstructure.DecoderConfig{
 		TagName: "json",
 		Result:  valPtr,

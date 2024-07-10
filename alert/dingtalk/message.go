@@ -1,8 +1,8 @@
 package dingtalk
 
 const (
-	msgTypeMarkdown = "markdown"
-	msgTypeText     = "text"
+	MsgTypeMarkdown = "markdown"
+	MsgTypeText     = "text"
 )
 
 type textMessage struct {
