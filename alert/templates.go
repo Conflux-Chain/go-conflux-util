@@ -20,8 +20,8 @@ Time: {{.Time | formatRFC3339}}
 Message
 {{.Msg}}
 
-{{with .Error}}Reason
-{{.Error}}{{ end }}
+Reason
+{{with .Error}}{{.Error}}{{ else }}N/A{{ end }}
 
 {{ if .CtxFields }}Context Fields{{ range $Key, $Val := .CtxFields }}
 {{$Key}}: {{$Val}}{{ end }}{{ end }}
