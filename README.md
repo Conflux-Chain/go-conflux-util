@@ -3,7 +3,7 @@ Utilities for golang developments on Conflux blockchain, especially for backend 
 
 |Module|Description|
 |------|-------|
-|[Alert](#alert)|Send notification message to dingtalk.|
+|[Alert](#alert)|Send notification messages to DingTalk, Telegram, SMTP email or PagerDuty.|
 |[API](#api)|REST API utilities based on [gin](https://github.com/gin-gonic/gin).|
 |[Config](#config)|Initialize all modules.|
 |[DLock](#distributed-lock)|Utilities for distributed lock.|
@@ -16,20 +16,42 @@ Utilities for golang developments on Conflux blockchain, especially for backend 
 |[Viper](#viper)|To fix some issues of original [viper](https://github.com/spf13/viper).|
 
 ## Alert
-Before sending any message to dingtalk, client should initialize dingtalk robot when setup program.
+Before sending any message to notification channels, the client should create a channel robot. To construct a channel robot programmatically:
 
-Initialize programmatically:
 ```go
-alert.InitDingTalk(config *DingTalkConfig, tags []string)
-alert.SendDingTalkTextMessage(level, brief, detail string)
+// Construct a notification channel imperatively
+var notifyCh alert.Channel
+
+// DingTalk Channel
+notifyCh = alert.NewDingTalkChannel(...)
+// or PagerDuty Channel
+notifyCh = alert.NewPagerDutyChannel(...)
+// or Smtp email Channel
+notifyCh = alert.NewSmtpChannel(...)
+// or Telegram Channel
+notifyCh = alert.NewTelegramChannel(...)
 ```
 
-Or, initialize from configuration file, which is recommended:
+Alternatively, you can initialize the alert channels from configuration file or environment variables, which is recommended.
+
 ```go
+// Initialize the alert channels from configurations loaded by viper
 alert.MustInitFromViper()
+// After initialization, you can retrieve the notification channel using a unique channel ID
+notifyCh := alert.DefaultManager().Channel(chID)
 ```
 
-Moreover, alert could be integrated with [log](#log) module, so as to send messages to dingtalk when `warning` or `error` logs occurred.
+Once the channel is initialized, you can send a notification message through the channel:
+
+```go
+notifyCh.Send(context.Background(), &alert.Notification{
+    Title:    "Alert testing",
+    Severity: alert.SeverityLow,
+    Content: `This is a test notification message`,
+})
+```
+
+Moreover, alert can be integrated with [log](#log) module, so as to send alerting message when `warning` or `error` logs occurred.
 
 ## API
 This module provides common HTTP responses along with standard errors in JSON format.
@@ -79,10 +101,34 @@ The `viperEnvPrefix` is used to overwrite configurations from environment. E.g. 
 FOO_ALERT_DINGTALK_SECRET='dsafsadf'
 ```
 
-You could follow the example `config.yaml` under config folder to setup your own configuration file. Generally, you could only overwrite configurations if the default value not suitable.
+You could follow the example [config.yaml](./config/config.yaml) under config folder to setup your own configuration file. Generally, you could only overwrite configurations if the default value not suitable.
 
 ## Distributed Lock
-Utilities to achieve high availability.
+The distributed lock ensures atomicity in a distributed environment, such as leader election for achieving high availability.
+
+To create a distributed lock, you need to specify a storage backend. We provide the `MySQLBackend` which handles reading and writing lock information in a MySQL table. Alternatively, you can implement your own storage backend using Redis, etcd, ZooKeeper, or other options.
+
+```go
+// Construct a lock manager with customized storage backend.
+lockMan := dlock.NewLockManager(backend)
+```
+
+Alternatively, you can construct a lock manager with a convenient MySQL backend by using configuration files or environment variables.
+
+```go
+// Construct a lock manager with a MySQL backend from configurations loaded by viper
+lockMan = dlock.NewLockManagerFromViper()
+```
+
+To acquire and release a lock, you can use:
+
+```go
+intent := NewLockIntent("dlock_key", 15 * time.Second)
+// Acquire a lock with key name "dlock_key" for 15 seconds
+lockMan.Acquire(context.Background(), intent)
+// Release the lock immediately
+lockMan.Release(context.Background(), intent)
+```
 
 ## Health
 Provides utilities for error tolerant health monitoring to avoid massive duplicated alerts.
@@ -96,7 +142,39 @@ Generally, system shall not report failure if auto resolved in a short time. How
 Provides utilities to hook middlewares to HTTP handler, e.g. remote address, API key and rate limit.
 
 ## Log
-We recommend to initialize log module from configuration file, and allow to send dingtalk messages when `warning` or `error` messages occurred.
+We recommend initializing the log module from a configuration file or environment variables. Additionally, you can configure the alert hook to set up default notification channels for sending alert messages when `warning` or `error` logs occur.
+
+```go
+// Initialize logging by specifying configurations
+log.MustInit(conf)
+// or Initialize logging from configurations loaded by viper
+log.MustInitFromViper()
+```
+
+### ErrorTolerantLogger
+`ErrorTolerantLogger` is a thread-safe logger that incorporates error tolerance behavior based on the continuous error count.
+
+```go
+// Construct an error tolerant logger imperatively
+etlogger := log.NewErrorTolerantLogger(conf)
+```
+
+Alternatively, you can construct an error tolerant logger from configuration files or environment variables.
+
+```go
+// Construct an error tolerant logger from configurations loaded by viper
+etlogger := log.MustNewErrorTolerantLoggerFromViper()
+```
+Then, you can log the error message using the logger, which will mute the error message unless continuous errors happen.
+
+```go
+// Logging without context fields
+etLogger.Log(logrus.StandardLogger(), err, "Some error")
+// Logging with context fields
+etLogger.Log(logrus.WithField("field", val), err, "Some error")
+```
+
+Please note that it is important to always call the logging function, even if the error is nil, in order to reset the continuous timer.
 
 ## Metrics
 We recommend to initialize metrics module from configuration file. Client could also configure influxdb to report metrics periodically. See `MetricsConfig` for more details.
