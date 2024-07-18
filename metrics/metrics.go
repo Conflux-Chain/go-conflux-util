@@ -21,7 +21,12 @@ const (
 var (
 	// default metrics registry
 	DefaultRegistry = metrics.NewRegistry()
+	// default metrics sample constructor
+	DefaultSampleConstructor = NewDefaultExpDecaySample
 )
+
+// MetricSampleConstructor is a function that creates a new metrics sample.
+type MetricSampleConstructor func() metrics.Sample
 
 // MetricsConfig metrics configurations such as influxdb settings.,
 type MetricsConfig struct {
@@ -90,40 +95,52 @@ func Init(config MetricsConfig) {
 
 // GetOrRegisterCounter gets an existed or registers a new counter from
 // default registry by a specified metrics name.
-func GetOrRegisterCounter(name string) metrics.Counter {
+func GetOrRegisterCounter(nameFormat string, nameArgs ...interface{}) metrics.Counter {
+	name := fmt.Sprintf(nameFormat, nameArgs...)
 	return metrics.GetOrRegisterCounter(name, DefaultRegistry)
 }
 
 // GetOrRegisterGauge gets an existed or registers a new gauge from
 // default registry by a specified metrics name.
-func GetOrRegisterGauge(name string) metrics.Gauge {
+func GetOrRegisterGauge(nameFormat string, nameArgs ...interface{}) metrics.Gauge {
+	name := fmt.Sprintf(nameFormat, nameArgs...)
 	return metrics.GetOrRegisterGauge(name, DefaultRegistry)
 }
 
 // GetOrRegisterGaugeFloat64 gets an existed or registers a new gauge
 // from default registry by a specified metrics name.
-func GetOrRegisterGaugeFloat64(name string) metrics.GaugeFloat64 {
+func GetOrRegisterGaugeFloat64(nameFormat string, nameArgs ...interface{}) metrics.GaugeFloat64 {
+	name := fmt.Sprintf(nameFormat, nameArgs...)
 	return metrics.GetOrRegisterGaugeFloat64(name, DefaultRegistry)
 }
 
 // GetOrRegisterMeter gets an existed or registers a new meter from
 // default registry by a specified metrics name.
-func GetOrRegisterMeter(name string) metrics.Meter {
+func GetOrRegisterMeter(nameFormat string, nameArgs ...interface{}) metrics.Meter {
+	name := fmt.Sprintf(nameFormat, nameArgs...)
 	return metrics.GetOrRegisterMeter(name, DefaultRegistry)
+}
+
+// NewDefaultHistogram creates a new histogram with a default exponentially-decaying sample.
+func NewDefaultHistogram() metrics.Histogram {
+	return metrics.NewHistogram(NewDefaultExpDecaySample())
+}
+
+// NewDefaultExpDecaySample creates a new exponentially-decaying sample with default settings.
+func NewDefaultExpDecaySample() metrics.Sample {
+	return metrics.NewExpDecaySample(expDecaySampleReservoirSize, expDecaySampleAlpha)
 }
 
 // GetOrRegisterHistogram gets an existed or registers a new histogram from
 // default registry by a specified metrics name.
-func GetOrRegisterHistogram(name string) metrics.Histogram {
-	return metrics.GetOrRegisterHistogram(
-		name, DefaultRegistry, metrics.NewExpDecaySample(
-			expDecaySampleReservoirSize, expDecaySampleAlpha,
-		),
-	)
+func GetOrRegisterHistogram(nameFormat string, nameArgs ...interface{}) metrics.Histogram {
+	name := fmt.Sprintf(nameFormat, nameArgs...)
+	return metrics.GetOrRegisterHistogram(name, DefaultRegistry, DefaultSampleConstructor())
 }
 
 // GetOrRegisterTimer gets an existed or registers a new timer from
 // default registry by a specified metrics name.
-func GetOrRegisterTimer(name string) metrics.Timer {
+func GetOrRegisterTimer(nameFormat string, nameArgs ...interface{}) metrics.Timer {
+	name := fmt.Sprintf(nameFormat, nameArgs...)
 	return metrics.GetOrRegisterTimer(name, DefaultRegistry)
 }
