@@ -36,9 +36,9 @@ func getOrRegisterPercentage(factory func() Percentage, name string, args ...int
 // noopPercentage is no-op implementation for Percentage interface.
 type noopPercentage struct{}
 
-func (p *noopPercentage) Mark(marked bool)                       {}
+func (p *noopPercentage) Mark(marked bool)                       { /* noop */ }
 func (p *noopPercentage) Value() float64                         { return 0 }
-func (p *noopPercentage) Update(float64)                         {}
+func (p *noopPercentage) Update(float64)                         { /* noop */ }
 func (p *noopPercentage) Snapshot() metrics.GaugeFloat64Snapshot { return p }
 
 type percentageData struct {
