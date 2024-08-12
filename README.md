@@ -155,7 +155,7 @@ Additionally, you can configure the alert hook to set up default notification ch
 
 ```go
 // Send alert to the 'tgrobot' channel instead.
-logrus.WithField("@channel": "default").Warn("Some warning occurred")
+logrus.WithField("@channel": "tgrobot").Warn("Some warning occurred")
 ```
 
 ### ErrorTolerantLogger
