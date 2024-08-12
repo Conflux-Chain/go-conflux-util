@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	maxAlertMsgLength = 1024 // max length for the alert message
+	maxAlertMsgLength = 4096 // max length for the alert message
 )
 
 // Formatter defines how messages are formatted.

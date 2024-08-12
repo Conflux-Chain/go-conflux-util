@@ -74,7 +74,7 @@ Reason
 *Tags*: {{.Tags | escapeMarkdown}}
 *Severity*: {{.Severity | escapeMarkdown}}
 *Time*: {{.Time | formatRFC3339 | escapeMarkdown}}
-*{{.Content | truncateStringWithTail ｜ escapeMarkdown}}*
+*{{.Content | truncateStringWithTail | escapeMarkdown}}*
 {{ range mentions }}@{{ . }} {{ end }}
 `,
 		`{{- /* logrus entry markdown template */ -}}
