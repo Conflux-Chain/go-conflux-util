@@ -54,6 +54,8 @@
 #       apiToken: ${your_api_token}
 #       # The chat ID for the Telegram chat where the alerts are sent.
 #       chatId: ${your_chat_id}
+#       # List of public usernames in the chat to be mentioned.
+#       atUsers: []
 
 #     # Example configuration for the SMTP (TLS/SSL only) email channel
 #     smtpbot:

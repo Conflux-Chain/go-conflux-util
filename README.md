@@ -142,13 +142,20 @@ Generally, system shall not report failure if auto resolved in a short time. How
 Provides utilities to hook middlewares to HTTP handler, e.g. remote address, API key and rate limit.
 
 ## Log
-We recommend initializing the log module from a configuration file or environment variables. Additionally, you can configure the alert hook to set up default notification channels for sending alert messages when `warning` or `error` logs occur.
+We recommend initializing the log module from a configuration file or environment variables.
 
 ```go
 // Initialize logging by specifying configurations
 log.MustInit(conf)
 // or Initialize logging from configurations loaded by viper
 log.MustInitFromViper()
+```
+
+Additionally, you can configure the alert hook to set up default notification channels for sending alert messages when `warning` or `error` logs occur. You can also customize notifications by specifying the target channel(s) through the `@channel` field in a Logrus entry.
+
+```go
+// Send alert to the 'tgrobot' channel instead.
+logrus.WithField("@channel": "tgrobot").Warn("Some warning occurred")
 ```
 
 ### ErrorTolerantLogger

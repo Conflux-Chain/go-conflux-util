@@ -74,7 +74,8 @@ Reason
 *Tags*: {{.Tags | escapeMarkdown}}
 *Severity*: {{.Severity | escapeMarkdown}}
 *Time*: {{.Time | formatRFC3339 | escapeMarkdown}}
-*{{.Content | escapeMarkdown}}*
+*{{.Content | truncateStringWithTail ｜ escapeMarkdown}}*
+{{ range mentions }}@{{ . }} {{ end }}
 `,
 		`{{- /* logrus entry markdown template */ -}}
 *{{.Level | escapeMarkdown}}*
@@ -82,13 +83,14 @@ Reason
 *Time*: {{.Time | formatRFC3339 | escapeMarkdown}}
 
 *Message*
-{{.Msg | escapeMarkdown}}
+{{.Msg | truncateStringWithTail | escapeMarkdown}}
 
 {{with .Error}}*Reason*
 {{.Error | escapeMarkdown}}
 
 {{else}}{{ end }}{{ if .CtxFields }}*Context Fields*:{{ range $Key, $Val := .CtxFields }}
-    *{{$Key | escapeMarkdown}}*: {{$Val | escapeMarkdown}}{{ end }}{{ end }}
+    *{{$Key | escapeMarkdown}}*: {{$Val | truncateStringWithTail | escapeMarkdown}}{{ end }}{{ end }}
+{{ range mentions }}@{{ . }} {{ end }}
 `,
 	}
 
