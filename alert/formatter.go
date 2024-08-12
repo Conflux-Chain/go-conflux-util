@@ -211,13 +211,12 @@ func escapeMarkdown(v interface{}) string {
 // truncateStringWithTail is used to immediately truncate the input string to the max length limit.
 // A tail "..." is then added to the end of the string, if the string was longer than max length.
 func truncateStringWithTail(s string) string {
-	// Within the msg length limit, no need to truncate
-	if len(s) <= maxAlertMsgLength {
-		return s
+	if len(s) > maxAlertMsgLength {
+		// Ttrim the string and add "..."
+		return s[:maxAlertMsgLength] + "..."
 	}
 
-	// Otherwise, trim the string and add "..."
-	return s[:maxAlertMsgLength] + "..."
+	return s
 }
 
 type htmlFormatter struct {
