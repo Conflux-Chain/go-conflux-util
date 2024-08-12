@@ -14,6 +14,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	maxAlertMsgLength = 1024 // max length for the alert message
+)
+
 // Formatter defines how messages are formatted.
 type Formatter interface {
 	Format(note *Notification) (string, error)
@@ -183,10 +187,12 @@ type TelegramMarkdownFormatter struct {
 	*markdownFormatter
 }
 
-func NewTelegramMarkdownFormatter(tags []string) (f *TelegramMarkdownFormatter, err error) {
+func NewTelegramMarkdownFormatter(tags, atUsers []string) (f *TelegramMarkdownFormatter, err error) {
 	funcMap := template.FuncMap{
-		"escapeMarkdown": escapeMarkdown,
-		"formatRFC3339":  formatRFC3339,
+		"escapeMarkdown":         escapeMarkdown,
+		"formatRFC3339":          formatRFC3339,
+		"truncateStringWithTail": truncateStringWithTail,
+		"mentions":               func() []string { return atUsers },
 	}
 	mf, err := newMarkdownFormatter(
 		tags, funcMap, telegramMarkdownTemplates[0], telegramMarkdownTemplates[1],
@@ -200,6 +206,18 @@ func NewTelegramMarkdownFormatter(tags []string) (f *TelegramMarkdownFormatter, 
 
 func escapeMarkdown(v interface{}) string {
 	return bot.EscapeMarkdown(fmt.Sprintf("%v", v))
+}
+
+// truncateStringWithTail is used to immediately truncate the input string to the max length limit.
+// A tail "..." is then added to the end of the string, if the string was longer than max length.
+func truncateStringWithTail(s string) string {
+	// Within the msg length limit, no need to truncate
+	if len(s) <= maxAlertMsgLength {
+		return s
+	}
+
+	// Otherwise, trim the string and add "..."
+	return s[:maxAlertMsgLength] + "..."
 }
 
 type htmlFormatter struct {

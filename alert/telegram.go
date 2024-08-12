@@ -13,8 +13,9 @@ var (
 )
 
 type TelegramConfig struct {
-	ApiToken string // Api token
-	ChatId   string // Chat ID
+	ApiToken string   // Api token
+	ChatId   string   // Chat ID
+	AtUsers  []string // Mention users
 }
 
 // TelegramChannel Telegram notification channel
@@ -26,7 +27,7 @@ type TelegramChannel struct {
 }
 
 func NewTelegramChannel(chID string, fmt Formatter, conf TelegramConfig) (*TelegramChannel, error) {
-	bot, err := bot.New(conf.ApiToken)
+	bot, err := bot.New(conf.ApiToken, bot.WithSkipGetMe())
 	if err != nil {
 		return nil, err
 	}

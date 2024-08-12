@@ -40,12 +40,17 @@ func parseAlertChannel(chID string, chmap map[string]interface{}, tags []string)
 
 		return NewDingTalkChannel(chID, fmt, dtconf), nil
 	case ChannelTypeTelegram:
+		if toStr, ok := chmap["atusers"].(string); ok {
+			mentions := strings.Split(toStr, ",")
+			chmap["atusers"] = mentions
+		}
+
 		var tgconf TelegramConfig
 		if err := decodeChannelConfig(chmap, &tgconf); err != nil {
 			return nil, err
 		}
 
-		fmt, err := NewTelegramMarkdownFormatter(tags)
+		fmt, err := NewTelegramMarkdownFormatter(tags, tgconf.AtUsers)
 		if err != nil {
 			return nil, err
 		}
