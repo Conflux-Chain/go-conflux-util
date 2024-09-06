@@ -102,13 +102,7 @@ func doWork[T any](ctx context.Context, parallelizable Interface[T], routine int
 			return
 		case task := <-taskCh:
 			val, err := parallelizable.ParallelDo(ctx, routine, task)
-
 			resultCh <- &Result[T]{routine, task, val, err}
-
-			// fail fast
-			if err != nil {
-				return
-			}
 		}
 	}
 }
@@ -123,11 +117,6 @@ func serialCollect[T any](ctx context.Context, parallelizable Interface[T], task
 		case <-ctx.Done():
 			return ctx.Err()
 		case result := <-resultCh:
-			// fail fast
-			if result.err != nil {
-				return result.err
-			}
-
 			// immediately schedule new task if window disabled
 			if opt.Window <= 0 && nextTask < tasks {
 				taskCh <- nextTask

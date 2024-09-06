@@ -17,7 +17,7 @@ func (tester *serialTester) ParallelDo(ctx context.Context, routine, task int) (
 }
 
 func (tester *serialTester) ParallelCollect(ctx context.Context, result *Result[int]) error {
-	assert.Nil(tester.t, result.err)
+	assert.Nil(tester.t, result.Err)
 	assert.Equal(tester.t, len(tester.result), result.Task)
 	assert.Equal(tester.t, result.Task*result.Task, result.Value)
 

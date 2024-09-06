@@ -9,7 +9,7 @@ type Result[T any] struct {
 	Routine int   // routine index
 	Task    int   // task index
 	Value   T     // task execution result
-	err     error // task execution error
+	Err     error // optional task execution error
 }
 
 // Interface defines methods to support parallel execution.
