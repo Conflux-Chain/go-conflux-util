@@ -6,8 +6,8 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 )
 
-// NewTimeWindowPercentage constructs a new time window Percentage.
-func NewTimeWindowPercentage(slotInterval time.Duration, numSlots int) Percentage {
+// NewTimeWindowPercentage constructs a new time window Percentage with optional default value in range [0, 100].
+func NewTimeWindowPercentage(slotInterval time.Duration, numSlots int, defaultValue ...float64) Percentage {
 	if slotInterval == 0 {
 		panic("slotInterval is zero")
 	}
@@ -20,14 +20,26 @@ func NewTimeWindowPercentage(slotInterval time.Duration, numSlots int) Percentag
 		return &noopPercentage{}
 	}
 
-	return newTimeWindowPercentage(slotInterval, numSlots)
+	var val float64
+	if len(defaultValue) > 0 {
+		val = defaultValue[0]
+	}
+
+	if val < 0 || val > 100 {
+		panic("default value should be in range [0, 100]")
+	}
+
+	return &timeWindowPercentage{
+		window:       NewTimeWindow(slotInterval, numSlots, percentageDataAggregator{}),
+		defaultValue: val,
+	}
 }
 
 // GetOrRegisterTimeWindowPercentageDefault returns an existing Percentage or constructs and
 // registers a new time window Percentage.
-func GetOrRegisterTimeWindowPercentageDefault(name string, args ...interface{}) Percentage {
+func GetOrRegisterTimeWindowPercentageDefault(defaultValue float64, name string, args ...interface{}) Percentage {
 	factory := func() Percentage {
-		return NewTimeWindowPercentage(time.Minute, 10)
+		return NewTimeWindowPercentage(time.Minute, 10, defaultValue)
 	}
 
 	return getOrRegisterPercentage(factory, name, args...)
@@ -36,64 +48,44 @@ func GetOrRegisterTimeWindowPercentageDefault(name string, args ...interface{}) 
 // GetOrRegisterTimeWindowPercentage returns an existing Percentage or constructs and registers
 // a new time window Percentage.
 func GetOrRegisterTimeWindowPercentage(
-	slotInterval time.Duration, numSlots int, name string, args ...interface{},
+	defaultValue float64, slotInterval time.Duration, numSlots int, name string, args ...interface{},
 ) Percentage {
 	factory := func() Percentage {
-		return NewTimeWindowPercentage(slotInterval, numSlots)
+		return NewTimeWindowPercentage(slotInterval, numSlots, defaultValue)
 	}
 
 	return getOrRegisterPercentage(factory, name, args...)
 }
 
-// twPercentageData time window percentage data
-type twPercentageData percentageData
+type percentageDataAggregator struct{}
 
-// implements `SlotData` interface
-
-func (d twPercentageData) Add(v SlotData) SlotData {
-	rhs := v.(twPercentageData)
-	return twPercentageData{
-		total: d.total + rhs.total,
-		marks: d.marks + rhs.marks,
+// Add implements the SlotAggregator[percentageData] interface.
+func (percentageDataAggregator) Add(x, y percentageData) percentageData {
+	return percentageData{
+		total: x.total + y.total,
+		marks: x.marks + y.marks,
 	}
 }
 
-func (d twPercentageData) Sub(v SlotData) SlotData {
-	rhs := v.(twPercentageData)
-	return twPercentageData{
-		total: d.total - rhs.total,
-		marks: d.marks - rhs.marks,
+// Sub implements the SlotAggregator[percentageData] interface.
+func (percentageDataAggregator) Sub(x, y percentageData) percentageData {
+	return percentageData{
+		total: x.total - y.total,
+		marks: x.marks - y.marks,
 	}
-}
-
-func (d twPercentageData) SnapShot() SlotData {
-	return d
 }
 
 // timeWindowPercentage implements Percentage interface to record recent percentage.
 type timeWindowPercentage struct {
-	window *TimeWindow
+	window       *TimeWindow[percentageData]
+	defaultValue float64
 }
 
-func newTimeWindowPercentage(slotInterval time.Duration, numSlots int) *timeWindowPercentage {
-	return &timeWindowPercentage{
-		window: NewTimeWindow(slotInterval, numSlots),
-	}
-}
-
+// Mark implements the Percentage interface.
 func (p *timeWindowPercentage) Mark(marked bool) {
-	data := twPercentageData{total: 1}
-	if marked {
-		data.marks++
-	}
-
+	var data percentageData
+	data.update(marked)
 	p.window.Add(data)
-}
-
-// Value implements the metrics.GaugeFloat64 interface.
-func (p *timeWindowPercentage) Value() float64 {
-	aggdata := percentageData(p.window.Data().(twPercentageData))
-	return aggdata.Value()
 }
 
 // Update implements the metrics.GaugeFloat64 interface.
@@ -103,6 +95,6 @@ func (p *timeWindowPercentage) Update(float64) {
 
 // Snapshot implements the metrics.GaugeFloat64 interface.
 func (p *timeWindowPercentage) Snapshot() metrics.GaugeFloat64Snapshot {
-	data := percentageData(p.window.Data().(twPercentageData))
-	return metrics.GaugeFloat64Snapshot(&data)
+	data := p.window.Data()
+	return data.toSnapshot(p.defaultValue)
 }

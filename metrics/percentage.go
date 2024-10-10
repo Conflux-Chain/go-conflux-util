@@ -8,23 +8,40 @@ import (
 )
 
 // Percentage implements the GaugeFloat64 interface for percentage statistic.
+// The value will be in range [0, 100], e.g. 99.38 means 99.38%.
 type Percentage interface {
+	metrics.GaugeFloat64
+
 	Mark(marked bool)
-	Value() float64 // e.g. 99.38 means 99.38%
 }
 
-// NewPercentage constructs a new standard percentage metric.
-func NewPercentage() Percentage {
+// NewPercentage constructs a new standard percentage metric with optional default value in range [0, 100].
+func NewPercentage(defaultValue ...float64) Percentage {
 	if !metrics.Enabled {
 		return &noopPercentage{}
 	}
 
-	return &standardPercentage{}
+	var val float64
+	if len(defaultValue) > 0 {
+		val = defaultValue[0]
+	}
+
+	if val < 0 || val > 100 {
+		panic("default value should be in range [0, 100]")
+	}
+
+	return &standardPercentage{
+		defaultValue: val,
+	}
 }
 
 // GetOrRegisterPercentage returns an existing Percentage or constructs and registers a new standard Percentage.
-func GetOrRegisterPercentage(name string, args ...interface{}) Percentage {
-	return getOrRegisterPercentage(NewPercentage, name, args...)
+func GetOrRegisterPercentage(defaultValue float64, name string, args ...interface{}) Percentage {
+	factory := func() Percentage {
+		return NewPercentage(defaultValue)
+	}
+
+	return getOrRegisterPercentage(factory, name, args...)
 }
 
 // getOrRegisterPercentage gets or constructs Percentage with specified factory.
@@ -37,9 +54,15 @@ func getOrRegisterPercentage(factory func() Percentage, name string, args ...int
 type noopPercentage struct{}
 
 func (p *noopPercentage) Mark(marked bool)                       { /* noop */ }
-func (p *noopPercentage) Value() float64                         { return 0 }
 func (p *noopPercentage) Update(float64)                         { /* noop */ }
-func (p *noopPercentage) Snapshot() metrics.GaugeFloat64Snapshot { return p }
+func (p *noopPercentage) Snapshot() metrics.GaugeFloat64Snapshot { return percentageSnapshot(0) }
+
+type percentageSnapshot float64
+
+// Value implements the metrics.GaugeFloat64Snapshot interface.
+func (s percentageSnapshot) Value() float64 {
+	return float64(s)
+}
 
 type percentageData struct {
 	total uint64
@@ -53,36 +76,30 @@ func (data *percentageData) update(marked bool) {
 	}
 }
 
-// Value implements the metrics.GaugeFloat64Snapshot interface.
-// 10.19 means 10.19%
-func (data *percentageData) Value() float64 {
+func (data *percentageData) toSnapshot(defaultValue float64) metrics.GaugeFloat64Snapshot {
 	if data.total == 0 {
-		// percentage is 0 when never marked
-		return 0
+		return percentageSnapshot(defaultValue)
 	}
 
-	return float64(data.marks*10000/data.total) / 100
+	// 10.19 means 10.19%
+	val := float64(data.marks*10000/data.total) / 100
+
+	return percentageSnapshot(val)
 }
 
 // standardPercentage is the standard implementation for Percentage interface.
 type standardPercentage struct {
-	data percentageData
-	mu   sync.Mutex
+	data         percentageData
+	defaultValue float64
+	mu           sync.Mutex
 }
 
+// Mark implements the Percentage interface.
 func (p *standardPercentage) Mark(marked bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	p.data.update(marked)
-}
-
-// Value implements the metrics.GaugeFloat64 interface.
-func (p *standardPercentage) Value() float64 {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	return p.data.Value()
 }
 
 // Update implements the metrics.GaugeFloat64 interface.
@@ -95,6 +112,5 @@ func (p *standardPercentage) Snapshot() metrics.GaugeFloat64Snapshot {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	dataCopy := p.data
-	return metrics.GaugeFloat64Snapshot(&dataCopy)
+	return p.data.toSnapshot(p.defaultValue)
 }

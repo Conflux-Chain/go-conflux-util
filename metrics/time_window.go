@@ -6,85 +6,115 @@ import (
 	"time"
 )
 
-// SlotData aggregatable slot data for time window
-type SlotData interface {
-	Add(SlotData) SlotData // accumulate
-	Sub(SlotData) SlotData // dissipate
-	SnapShot() SlotData    // snapshot copy
+// SlotAggregator defines operators for slot data.
+type SlotAggregator[T any] interface {
+	// Add returns the sum x+y. Note, x may be nil if T is pointer type.
+	Add(x, y T) T
+
+	// Sub returns the difference x-y.
+	Sub(x, y T) T
+}
+
+type SimpleSlotData interface {
+	int | int64 | uint | uint64 | float32 | float64
+}
+
+type simpleSlotAggregator[T SimpleSlotData] struct{}
+
+// Add implements the SlotAggregator[T] interface.
+func (simpleSlotAggregator[T]) Add(x, y T) T {
+	return x + y
+}
+
+// Sub implements the SlotAggregator[T] interface.
+func (simpleSlotAggregator[T]) Sub(x, y T) T {
+	return x - y
 }
 
 // time window slot
-type slot struct {
-	data     SlotData  // slot data
+type slot[T any] struct {
+	data     T         // slot data
 	endTime  time.Time // end time for slot update
 	expireAt time.Time // expiry time to remove
 }
 
 // check if slot expired (can be purged)
-func (s slot) expired(now time.Time) bool {
+func (s slot[T]) expired(now time.Time) bool {
 	return s.expireAt.Before(now)
 }
 
 // check if slot outdated (not open for update)
-func (s slot) outdated(now time.Time) bool {
+func (s slot[T]) outdated(now time.Time) bool {
 	return s.endTime.Before(now)
 }
 
 // TimeWindow slices time window into slots and maintains slot expiry and creation
-type TimeWindow struct {
-	mu sync.RWMutex
+type TimeWindow[T any] struct {
+	mu sync.Mutex
 
 	slots          *list.List    // double linked slots chronologically
 	slotInterval   time.Duration // time interval per slot
 	windowInterval time.Duration // time window interval
-	aggData        SlotData      // aggregation data within the time window scope
+
+	aggData    T                 // aggregation data within the time window scope
+	aggregator SlotAggregator[T] // to aggregate slot data
 }
 
-func NewTimeWindow(slotInterval time.Duration, numSlots int) *TimeWindow {
-	return &TimeWindow{
+func NewTimeWindow[T any](slotInterval time.Duration, numSlots int, aggregator SlotAggregator[T], val ...T) *TimeWindow[T] {
+	tw := TimeWindow[T]{
 		slots:          list.New(),
 		slotInterval:   slotInterval,
 		windowInterval: slotInterval * time.Duration(numSlots),
+		aggregator:     aggregator,
 	}
+
+	if len(val) > 0 {
+		tw.aggData = val[0]
+	}
+
+	return &tw
+}
+
+func NewSimpleTimeWindow[T SimpleSlotData](slotInterval time.Duration, numSlots int, val ...T) *TimeWindow[T] {
+	return NewTimeWindow(slotInterval, numSlots, simpleSlotAggregator[T]{}, val...)
 }
 
 // Add adds data sample to time window
-func (tw *TimeWindow) Add(sample SlotData) {
+func (tw *TimeWindow[T]) Add(sample T) {
 	tw.mu.Lock()
 	defer tw.mu.Unlock()
 
 	tw.add(time.Now(), sample)
 }
 
-func (tw *TimeWindow) add(now time.Time, sample SlotData) {
+func (tw *TimeWindow[T]) add(now time.Time, sample T) {
 	// expire outdated slots
 	tw.expire(now)
 
 	// add or update slot data
 	tw.addOrUpdateSlot(now, sample)
+
+	// update agg data
+	tw.aggData = tw.aggregator.Add(tw.aggData, sample)
 }
 
 // Data returns the aggregation data within the time window scope
-func (tw *TimeWindow) Data() SlotData {
-	tw.mu.RLock()
-	defer tw.mu.RUnlock()
+func (tw *TimeWindow[T]) Data() T {
+	tw.mu.Lock()
+	defer tw.mu.Unlock()
 
 	return tw.data(time.Now())
 }
 
-func (tw *TimeWindow) data(now time.Time) SlotData {
+func (tw *TimeWindow[T]) data(now time.Time) T {
 	// expire outdated slots
 	tw.expire(now)
 
-	if tw.aggData != nil {
-		return tw.aggData.SnapShot()
-	}
-
-	return nil
+	return tw.aggData
 }
 
 // expire removes expired slots.
-func (tw *TimeWindow) expire(now time.Time) (res []*slot) {
+func (tw *TimeWindow[T]) expire(now time.Time) (res []*slot[T]) {
 	for {
 		// time window is empty
 		front := tw.slots.Front()
@@ -93,7 +123,7 @@ func (tw *TimeWindow) expire(now time.Time) (res []*slot) {
 		}
 
 		// not expired yet
-		s := front.Value.(*slot)
+		s := front.Value.(*slot[T])
 		if !s.expired(now) {
 			return res
 		}
@@ -103,44 +133,34 @@ func (tw *TimeWindow) expire(now time.Time) (res []*slot) {
 		res = append(res, s)
 
 		// dissipate expired slot data
-		if tw.aggData != nil {
-			tw.aggData = tw.aggData.Sub(s.data)
-		}
+		tw.aggData = tw.aggregator.Sub(tw.aggData, s.data)
 	}
 }
 
 // addOrUpdateSlot adds a new slot with the provided slot data if no one exists or
 // the last one is out of date; otherwise update the last slot with the provided data.
-func (tw *TimeWindow) addOrUpdateSlot(now time.Time, data SlotData) (*slot, bool) {
-	defer func() { // update aggregation data
-		if tw.aggData != nil {
-			tw.aggData = tw.aggData.Add(data)
-		} else {
-			tw.aggData = data.SnapShot()
-		}
-	}()
-
+func (tw *TimeWindow[T]) addOrUpdateSlot(now time.Time, data T) (*slot[T], bool) {
 	// time window is empty
 	if tw.slots.Len() == 0 {
 		return tw.addNewSlot(now, data), true
 	}
 
 	// last slot is out of date
-	lastSlot := tw.slots.Back().Value.(*slot)
+	lastSlot := tw.slots.Back().Value.(*slot[T])
 	if lastSlot.outdated(now) {
 		return tw.addNewSlot(now, data), true
 	}
 
 	// otherwise, update the last slot with new data
-	lastSlot.data = lastSlot.data.Add(data)
+	lastSlot.data = tw.aggregator.Add(lastSlot.data, data)
 	return lastSlot, false
 }
 
 // addNewSlot always appends a new slot to time window.
-func (tw *TimeWindow) addNewSlot(now time.Time, data SlotData) *slot {
+func (tw *TimeWindow[T]) addNewSlot(now time.Time, data T) *slot[T] {
 	slotStartTime := now.Truncate(tw.slotInterval)
 
-	newSlot := &slot{
+	newSlot := &slot[T]{
 		data:     data,
 		endTime:  slotStartTime.Add(tw.slotInterval),
 		expireAt: slotStartTime.Add(tw.windowInterval),
