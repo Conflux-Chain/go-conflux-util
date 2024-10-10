@@ -8,14 +8,13 @@ import (
 )
 
 func TestTimeWindowAddNewSlot(t *testing.T) {
-	timeWin := NewTimeWindow(time.Second, 5)
+	timeWin := NewSimpleTimeWindow[int](time.Second, 5)
 	startT := time.Now()
 
-	sdata := twPercentageData{total: 1}
-	slot := timeWin.addNewSlot(startT, sdata)
+	slot := timeWin.addNewSlot(startT, 3)
 
 	assert.Equal(t, 1, timeWin.slots.Len())
-	assert.Equal(t, sdata, slot.data)
+	assert.Equal(t, 3, slot.data)
 
 	assert.True(t, !slot.expired(startT))
 	assert.True(t, !slot.outdated(startT))
@@ -30,10 +29,10 @@ func TestTimeWindowAddNewSlot(t *testing.T) {
 }
 
 func TestTimeWindowExpire(t *testing.T) {
-	timeWin := NewTimeWindow(time.Second, 5)
+	timeWin := NewSimpleTimeWindow[int](time.Second, 5)
 
 	startT := time.Now()
-	slot := timeWin.addNewSlot(startT, twPercentageData{})
+	slot := timeWin.addNewSlot(startT, 3)
 
 	testT := startT.Add(time.Second * 5)
 	expSlots := timeWin.expire(testT)
@@ -45,39 +44,36 @@ func TestTimeWindowExpire(t *testing.T) {
 }
 
 func TestTimeWindowAddOrUpdateSlot(t *testing.T) {
-	timeWin := NewTimeWindow(time.Second, 5)
+	timeWin := NewSimpleTimeWindow[int](time.Second, 5)
 	startT := time.Now()
 
-	sdata := twPercentageData{total: 1}
-	slot1, added := timeWin.addOrUpdateSlot(startT, sdata)
+	slot1, added := timeWin.addOrUpdateSlot(startT, 3)
 
 	assert.True(t, added)
-	assert.Equal(t, slot1.data, sdata)
+	assert.Equal(t, slot1.data, 3)
 
-	slot1, added = timeWin.addOrUpdateSlot(startT, sdata)
+	slot1, added = timeWin.addOrUpdateSlot(startT, 4)
 	assert.False(t, added)
-	assert.Equal(t, slot1.data, sdata.Add(sdata))
+	assert.Equal(t, slot1.data, 7)
 
 	testT := startT.Add(time.Second)
-	slot2, added := timeWin.addOrUpdateSlot(testT, sdata)
+	slot2, added := timeWin.addOrUpdateSlot(testT, 3)
 	assert.True(t, added)
 	assert.NotEqual(t, slot1, slot2)
 }
 
 func TestTimeWindowAdd(t *testing.T) {
-	timeWin := NewTimeWindow(time.Second, 5)
+	timeWin := NewSimpleTimeWindow[int](time.Second, 5)
 	startT := time.Now()
 
-	sdata := twPercentageData{total: 1}
-	timeWin.add(startT, sdata)
-	assert.Equal(t, sdata, timeWin.data(startT))
+	timeWin.add(startT, 3)
+	assert.Equal(t, 3, timeWin.data(startT))
 
 	testT := startT.Add(time.Second * 2)
 
-	sdata = twPercentageData{total: 1, marks: 1}
-	timeWin.add(testT, sdata)
-	assert.Equal(t, twPercentageData{total: 2, marks: 1}, timeWin.data(testT))
+	timeWin.add(testT, 4)
+	assert.Equal(t, 7, timeWin.data(testT))
 
 	testT = startT.Add(time.Second * 6)
-	assert.Equal(t, twPercentageData{total: 1, marks: 1}, timeWin.data(testT))
+	assert.Equal(t, 4, timeWin.data(testT))
 }
