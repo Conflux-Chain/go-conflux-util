@@ -39,14 +39,14 @@ type SlotAggregator[T any] interface {
 	Sub(acc, v T) T
 }
 
-// Clone is used by time window to return cloned value of pointer type for thread safe.
-type Clone[T any] interface {
+// Cloneable is used by time window to return cloned value of pointer type for thread safe.
+type Cloneable[T any] interface {
 	Clone(v T) T
 }
 
 type SlotAggregatorCloneable[T any] interface {
 	SlotAggregator[T]
-	Clone[T]
+	Cloneable[T]
 }
 
 type SimpleSlotData interface {
@@ -93,7 +93,7 @@ type TimeWindow[T any] struct {
 	aggData    T                 // aggregation data within the time window scope
 	aggregator SlotAggregator[T] // to aggregate slot data
 
-	dataCloner Clone[T] // deep copy for thread safe
+	dataCloneable Cloneable[T] // deep copy for thread safe
 }
 
 // NewTimeWindow creates a new time window.
@@ -120,7 +120,7 @@ func NewSimpleTimeWindow[T SimpleSlotData](slotInterval time.Duration, numSlots 
 // NewTimeWindowCloneable create a new time window that supports to return cloned data.
 func NewTimeWindowCloneable[T any](slotInterval time.Duration, numSlots int, aggregator SlotAggregatorCloneable[T], val ...T) *TimeWindow[T] {
 	tw := NewTimeWindow(slotInterval, numSlots, aggregator, val...)
-	tw.dataCloner = aggregator
+	tw.dataCloneable = aggregator
 	return tw
 }
 
@@ -150,12 +150,12 @@ func (tw *TimeWindow[T]) Data() T {
 
 	data := tw.data(time.Now())
 
-	if tw.dataCloner == nil {
+	if tw.dataCloneable == nil {
 		return data
 	}
 
 	// return cloned data if specified
-	return tw.dataCloner.Clone(data)
+	return tw.dataCloneable.Clone(data)
 }
 
 func (tw *TimeWindow[T]) data(now time.Time) T {
