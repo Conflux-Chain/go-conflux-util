@@ -6,13 +6,37 @@ import (
 	"time"
 )
 
-// SlotAggregator defines operators for slot data.
+// SlotAggregator defines operators for slot data aggregation.
 type SlotAggregator[T any] interface {
-	// Add returns the sum x+y. Note, x may be nil if T is pointer type.
-	Add(x, y T) T
+	// Add returns the sum acc+v. The init value of acc is the default value of type T.
+	// See examples below:
+	//
+	//   type FooData struct { x, y int }
+	//
+	//   func (FooDataAggregator) Add(acc, v FooData) FooData {
+	//       return FooData {
+	//           x: acc.x + v.x,
+	//           y: acc.y + v.y,
+	//       }
+	//   }
+	//
+	// Note, the acc may nil if T is pointer type, e.g. map[string]int, and requires to initialize:
+	//
+	//   func (MapAggregator) Add(acc, v map[string]int) map[string]int {
+	//       if (acc == nil) {
+	//           acc = make(map[string]int)
+	//       }
+	//
+	//       for name, count := range v {
+	//           acc[name] += count
+	//       }
+	//
+	//       return acc
+	//   }
+	Add(acc, v T) T
 
-	// Sub returns the difference x-y.
-	Sub(x, y T) T
+	// Sub returns the difference acc-v, please refer to examples of Add method.
+	Sub(acc, v T) T
 }
 
 type SimpleSlotData interface {
@@ -22,13 +46,13 @@ type SimpleSlotData interface {
 type simpleSlotAggregator[T SimpleSlotData] struct{}
 
 // Add implements the SlotAggregator[T] interface.
-func (simpleSlotAggregator[T]) Add(x, y T) T {
-	return x + y
+func (simpleSlotAggregator[T]) Add(acc, v T) T {
+	return acc + v
 }
 
 // Sub implements the SlotAggregator[T] interface.
-func (simpleSlotAggregator[T]) Sub(x, y T) T {
-	return x - y
+func (simpleSlotAggregator[T]) Sub(acc, v T) T {
+	return acc - v
 }
 
 // time window slot
