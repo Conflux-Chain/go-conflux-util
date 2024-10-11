@@ -60,18 +60,18 @@ func GetOrRegisterTimeWindowPercentage(
 type percentageDataAggregator struct{}
 
 // Add implements the SlotAggregator[percentageData] interface.
-func (percentageDataAggregator) Add(x, y percentageData) percentageData {
+func (percentageDataAggregator) Add(acc, v percentageData) percentageData {
 	return percentageData{
-		total: x.total + y.total,
-		marks: x.marks + y.marks,
+		total: acc.total + v.total,
+		marks: acc.marks + v.marks,
 	}
 }
 
 // Sub implements the SlotAggregator[percentageData] interface.
-func (percentageDataAggregator) Sub(x, y percentageData) percentageData {
+func (percentageDataAggregator) Sub(acc, v percentageData) percentageData {
 	return percentageData{
-		total: x.total - y.total,
-		marks: x.marks - y.marks,
+		total: acc.total - v.total,
+		marks: acc.marks - v.marks,
 	}
 }
 
