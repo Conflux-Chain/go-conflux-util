@@ -25,8 +25,6 @@ var DefaultRegistry = metrics.NewRegistry()
 type MetricsConfig struct {
 	// switch to turn on or off metrics
 	Enabled bool
-	// namespace for metrics reporting
-	Namespace string
 	// interval to report metrics to influxdb
 	ReportInterval time.Duration `default:"10s"`
 	// settings for influxdb to be reported to
@@ -43,6 +41,10 @@ type InfluxDbConfig struct {
 	Username string
 	// authenticated password
 	Password string
+	// namespace for metrics reporting
+	Namespace string
+	// tags for metrics reporting
+	Tags map[string]string
 }
 
 // MustInitFromViper inits metrics from viper settings.
@@ -72,14 +74,15 @@ func Init(config MetricsConfig) {
 
 	if config.InfluxDb != nil {
 		// starts a InfluxDB reporter
-		go influxdb.InfluxDB(
+		go influxdb.InfluxDBWithTags(
 			DefaultRegistry,
 			config.ReportInterval,
 			config.InfluxDb.Host,
 			config.InfluxDb.Db,
 			config.InfluxDb.Username,
 			config.InfluxDb.Password,
-			config.Namespace,
+			config.InfluxDb.Namespace,
+			config.InfluxDb.Tags,
 		)
 	}
 
