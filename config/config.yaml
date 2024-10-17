@@ -91,13 +91,16 @@
 # Metrics configurations
 # metrics:
 #   enabled: false
-#   namespace:
 #   reportInterval: 10s
 #   influxdb:
 #     host: http://127.0.0.1:8086
 #     db: metrics_db
 #     username:
 #     password:
+#     namespace:
+#     tags:
+#       name1: value1
+#       name2: value2
 
 # Store Configurations
 # store:
