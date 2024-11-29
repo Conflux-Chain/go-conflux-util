@@ -19,7 +19,7 @@ var (
 // `TEST_TELEGRAM_API_TOKEN`: Telegram API token;
 // `TEST_TELEGRAM_CHAT_ID`: Telegram chat ID.
 func TestMain(m *testing.M) {
-	fmtter, err := alert.NewSimpleTextFormatter([]string{"log", "hook", "test"})
+	fmtter, err := alert.NewSimpleTextFormatter([]string{"log", "hook", "test"}, nil)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to new simple text formatter")
 	}
