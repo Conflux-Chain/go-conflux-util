@@ -167,8 +167,11 @@ type DingTalkMarkdownFormatter struct {
 	*markdownFormatter
 }
 
-func NewDingtalkMarkdownFormatter(tags []string) (*DingTalkMarkdownFormatter, error) {
-	funcMap := template.FuncMap{"formatRFC3339": formatRFC3339}
+func NewDingtalkMarkdownFormatter(tags, mentions []string) (*DingTalkMarkdownFormatter, error) {
+	funcMap := template.FuncMap{
+		"formatRFC3339": formatRFC3339,
+		"mentions":      func() []string { return mentions },
+	}
 	mf, err := newMarkdownFormatter(
 		tags, funcMap, dingTalkMarkdownTemplates[0], dingTalkMarkdownTemplates[1],
 	)
@@ -286,9 +289,12 @@ type SimpleTextFormatter struct {
 	tags []string
 }
 
-func NewSimpleTextFormatter(tags []string) (fmt *SimpleTextFormatter, err error) {
+func NewSimpleTextFormatter(tags, mentions []string) (fmt *SimpleTextFormatter, err error) {
 	strTemplates := [2]string{simpleTextTemplates[0], simpleTextTemplates[1]}
-	funcMap := template.FuncMap{"formatRFC3339": formatRFC3339}
+	funcMap := template.FuncMap{
+		"formatRFC3339": formatRFC3339,
+		"mentions":      func() []string { return mentions },
+	}
 
 	var tpls [2]*template.Template
 	for i := range strTemplates {
@@ -318,12 +324,12 @@ func (f *SimpleTextFormatter) Format(note *Notification) (string, error) {
 	return msg, nil
 }
 
-func newDingtalkMsgFormatter(msgType string, tags []string) (Formatter, error) {
+func newDingtalkMsgFormatter(msgType string, tags []string, mentions []string) (Formatter, error) {
 	switch {
 	case strings.EqualFold(msgType, dingtalk.MsgTypeText):
-		return NewSimpleTextFormatter(tags)
+		return NewSimpleTextFormatter(tags, mentions)
 	case strings.EqualFold(msgType, dingtalk.MsgTypeMarkdown):
-		return NewDingtalkMarkdownFormatter(tags)
+		return NewDingtalkMarkdownFormatter(tags, mentions)
 	default:
 		return nil, dingtalk.ErrMsgTypeNotSupported(msgType)
 	}

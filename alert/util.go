@@ -28,12 +28,17 @@ func parseAlertChannel(chID string, chmap map[string]interface{}, tags []string)
 
 	switch ChannelType(cht) {
 	case ChannelTypeDingTalk:
+		if toStr, ok := chmap["atmobiles"].(string); ok {
+			atMobiles := strings.Split(toStr, ",")
+			chmap["atmobiles"] = atMobiles
+		}
+
 		var dtconf DingTalkConfig
 		if err := decodeChannelConfig(chmap, &dtconf); err != nil {
 			return nil, err
 		}
 
-		fmt, err := newDingtalkMsgFormatter(dtconf.MsgType, tags)
+		fmt, err := newDingtalkMsgFormatter(dtconf.MsgType, tags, dtconf.AtMobiles)
 		if err != nil {
 			return nil, err
 		}

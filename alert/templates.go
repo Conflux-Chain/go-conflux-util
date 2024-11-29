@@ -25,6 +25,7 @@ Reason
 
 {{ if .CtxFields }}Context Fields{{ range $Key, $Val := .CtxFields }}
 {{$Key}}: {{$Val}}{{ end }}{{ end }}
+{{ range mentions }}@{{ . }} {{ end }}
 `,
 	}
 
@@ -65,6 +66,7 @@ Reason
 - **{{$Key}}**: {{$Val}}
 {{ end }}
 {{ end }}
+{{ range mentions }}@{{ . }} {{ end }}
 `,
 	}
 
