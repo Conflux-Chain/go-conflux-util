@@ -17,10 +17,12 @@ import (
 
 // LoggingConfig logging configuration such as log level etc.,
 type LoggingConfig struct {
-	Level        string      `default:"info"` // logging level
-	ForceColor   bool        // helpful on windows
-	DisableColor bool        // helpful to output logs in file
-	AlertHook    hook.Config // alert hooking configurations
+	Level        string           `default:"info"` // logging level
+	ForceColor   bool             // helpful on windows
+	DisableColor bool             // helpful to output logs in file
+	ReportCaller bool             // helpful to output caller
+	AlertHook    hook.AlertConfig // alert hooking configurations
+	FileHook     hook.FileConfig  // file hooking configuration
 }
 
 // MustInitFromViper initializes the logging system using configurations from viper.
@@ -75,11 +77,6 @@ func mustInit(conf LoggingConfig, ctx context.Context, wg *sync.WaitGroup) {
 	}
 	logrus.SetLevel(level) // Set the parsed log level.
 
-	// Attempt to add an alert hook as configured.
-	if err := hook.AddAlertHook(ctx, wg, conf.AlertHook); err != nil {
-		logrus.WithError(err).Fatal("Failed to add alert hook")
-	}
-
 	// Configure the log formatter to use a text format with a full timestamp.
 	formatter := &logrus.TextFormatter{
 		FullTimestamp: true,
@@ -92,11 +89,23 @@ func mustInit(conf LoggingConfig, ctx context.Context, wg *sync.WaitGroup) {
 		formatter.ForceColors = true
 	}
 
+	if conf.ReportCaller {
+		logrus.SetReportCaller(true)
+	}
+
 	// Apply the configured formatter to the logger.
 	logrus.SetFormatter(formatter)
 
 	// Adapt the logger for use with Geth that uses a custom logging mechanism.
 	adaptGethLogger()
+
+	// Attempt to add logrus hooks as configured.
+	if err := hook.AddAlertHook(ctx, wg, conf.AlertHook); err != nil {
+		logrus.WithError(err).Fatal("Failed to add alert hook")
+	}
+	if err := hook.AddFileHook(ctx, wg, formatter, conf.FileHook); err != nil {
+		logrus.WithError(err).Fatal("Failed to add file hook")
+	}
 
 	// Log a debug message indicating successful initialization along with the effective configuration.
 	logrus.WithField("config", fmt.Sprintf("%+v", conf)).Debug("Log initialized")

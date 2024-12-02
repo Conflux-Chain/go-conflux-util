@@ -1,9 +1,11 @@
-# Log Configurations
+# # Log Configurations
 # log:
 #   level: info
 #   forceColor: false
 #   disableColor: false
-#   alertHook: # Alert hooking settings
+#   reportCaller: false
+#   # Alert hooking settings
+#   alertHook:
 #     # Hooked logrus level for alert notification
 #     level: warn
 #     # Default notification channels
@@ -12,6 +14,37 @@
 #     SendTimeout: 3s
 
 #     # Async worker options for sending alert
+#     async:
+#       # The number of worker goroutines (Set to 0 to disable async mode).
+#       numWorkers: 0
+#       # The maximum number of queued jobs.
+#       queueSize: 60
+#       # Maximum timeout allowed to gracefully stop.
+#       StopTimeout: 5s
+
+#   # File Hooking Configuration
+#   fileHook:
+#     # Groups define logging configurations for different log levels and outputs.
+#     # Each group is identified by a unique, case-insensitive key.
+#     groups:
+#       # Default log group configuration
+#       default:
+#         # Enabled log levels: trace, debug, info, warn, error
+#         levels: []
+#         # Log file path
+#         location: ${your_log_path}
+#         # File rotation settings
+#         rotation:
+#           # Maximum file size (in MB) before rotation
+#           maxSize: 100
+#           # Number of backup files to retain (0 to retain all)
+#           maxBackups: 0
+#           # Maximum age (in days) before log files are deleted
+#           maxAge: 30
+#           # Enable compression for rotated log files
+#           compress: true
+
+#     # Async worker options for logging to file
 #     async:
 #       # The number of worker goroutines (Set to 0 to disable async mode).
 #       numWorkers: 0
