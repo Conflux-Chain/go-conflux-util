@@ -3,24 +3,44 @@ package log
 import (
 	"context"
 	"fmt"
+	"os"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/Conflux-Chain/go-conflux-util/log/hook"
 	viperUtil "github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/pkg/errors"
 	slogrus "github.com/samber/slog-logrus/v2"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // LoggingConfig logging configuration such as log level etc.,
 type LoggingConfig struct {
-	Level        string      `default:"info"` // logging level
-	ForceColor   bool        // helpful on windows
-	DisableColor bool        // helpful to output logs in file
-	AlertHook    hook.Config // alert hooking configurations
+	Level        string       `default:"info"` // logging level
+	ForceColor   bool         // helpful on windows
+	DisableColor bool         // helpful to output logs in file
+	AlertHook    hook.Config  // alert hooking configurations
+	Output       OutputConfig // output configurations
+}
+
+// OutputConfig represents the output configuration.
+type OutputConfig struct {
+	Type     string         `default:"stderr"` // Available output types are: stdout, stderr, file
+	FilePath string         // Optional: File path for "file" type
+	Rotation RotationConfig // Optional: Rotation settings for "file" type
+}
+
+// RotationConfig defines the rotation settings for log files.
+type RotationConfig struct {
+	MaxSize    int  `default:"100"` // Maximum size of the log file in MB before rotation
+	MaxBackups int  // Maximum number of backup files to retain (0 to keep all)
+	MaxAge     int  `default:"30"`   // Maximum age of log files before deletion (e.g., 30 days)
+	Compress   bool `default:"true"` // Whether to compress rotated log files
 }
 
 // MustInitFromViper initializes the logging system using configurations from viper.
@@ -75,6 +95,11 @@ func mustInit(conf LoggingConfig, ctx context.Context, wg *sync.WaitGroup) {
 	}
 	logrus.SetLevel(level) // Set the parsed log level.
 
+	// Set up the output.
+	if err := setupOutput(conf.Output); err != nil {
+		logrus.WithError(err).Fatal("Failed to set up output")
+	}
+
 	// Attempt to add an alert hook as configured.
 	if err := hook.AddAlertHook(ctx, wg, conf.AlertHook); err != nil {
 		logrus.WithError(err).Fatal("Failed to add alert hook")
@@ -100,6 +125,30 @@ func mustInit(conf LoggingConfig, ctx context.Context, wg *sync.WaitGroup) {
 
 	// Log a debug message indicating successful initialization along with the effective configuration.
 	logrus.WithField("config", fmt.Sprintf("%+v", conf)).Debug("Log initialized")
+}
+
+// setupOutput configures the logrus output based on the provided configurations.
+func setupOutput(conf OutputConfig) error {
+	switch strings.ToLower(conf.Type) {
+	case "stdout":
+		logrus.SetOutput(os.Stdout)
+	case "stderr":
+		logrus.SetOutput(os.Stderr)
+	case "file":
+		if conf.FilePath == "" {
+			return errors.New("file path must be set for file output")
+		}
+		logrus.SetOutput(&lumberjack.Logger{
+			Filename:   conf.FilePath,
+			MaxSize:    conf.Rotation.MaxSize,
+			MaxBackups: conf.Rotation.MaxBackups,
+			MaxAge:     conf.Rotation.MaxAge,
+			Compress:   conf.Rotation.Compress,
+		})
+	default:
+		return errors.Errorf("unsupported output type: %s", conf.Type)
+	}
+	return nil
 }
 
 // adaptGethLogger adapt geth logger to work with logrus.

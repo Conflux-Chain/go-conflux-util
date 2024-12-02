@@ -3,7 +3,24 @@
 #   level: info
 #   forceColor: false
 #   disableColor: false
-#   alertHook: # Alert hooking settings
+#   output:
+#     # Output type options: stdout, stderr, file
+#     type: stderr
+#     # Log file path (required if type is "file")
+#     filePath: ""
+#     # File rotation settings (applies only when type is "file")
+#     rotation:
+#       # Maximum size of a log file (in MB) before rotation
+#       maxSize: 100
+#       # Maximum number of backup files to retain (0 to keep all backups)
+#       maxBackups: 0
+#       # Maximum age (in days) before old log files are deleted
+#       maxAge: 30
+#       # Compress old log files to save disk space
+#       compress: true
+
+#   # Alert hooking settings
+#   alertHook:
 #     # Hooked logrus level for alert notification
 #     level: warn
 #     # Default notification channels
