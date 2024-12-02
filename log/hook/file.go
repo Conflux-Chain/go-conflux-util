@@ -14,7 +14,7 @@ type FileConfig struct {
 	// Groups defines the log groups and their associated logging file configuration.
 	Groups map[string]FileGroup
 
-	// Async configures the behavior of the asynchronous worker for handling log alerts.
+	// Async configures the behavior of the asynchronous worker for file logging.
 	Async AsyncOption
 }
 
