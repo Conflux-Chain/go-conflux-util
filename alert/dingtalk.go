@@ -42,17 +42,17 @@ func (dtc *DingTalkChannel) Type() ChannelType {
 	return ChannelTypeDingTalk
 }
 
-// Send sends a notification to the DingTalk channel with default at mobiles which configured in the channel.
+// Send sends a notification to the DingTalk channel with at default members which configured in the channel.
 func (dtc *DingTalkChannel) Send(ctx context.Context, note *Notification) error {
 	return dtc.sendNotification(ctx, note, dtc.Config.AtMobiles, dtc.Config.IsAtAll)
 }
 
-// SendWithAtAll sends a notification to the DingTalk channel with all members.
+// SendWithAtAll sends a notification to the DingTalk channel with at all members.
 func (dtc *DingTalkChannel) SendWithAtAll(ctx context.Context, note *Notification) error {
 	return dtc.sendNotification(ctx, note, nil, true)
 }
 
-// SendWithAtSpecial sends a notification to the DingTalk channel with special members.
+// SendWithAtSpecial sends a notification to the DingTalk channel with at special members.
 func (dtc *DingTalkChannel) SendWithAtSpecial(ctx context.Context, note *Notification, atMobiles []string) error {
 	return dtc.sendNotification(ctx, note, atMobiles, false)
 }
