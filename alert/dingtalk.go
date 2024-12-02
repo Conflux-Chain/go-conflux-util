@@ -12,8 +12,8 @@ var (
 )
 
 type DingTalkConfig struct {
-	AtMobiles []string // mobiles for @ members
-	IsAtAll   bool     // whether to @ all members
+	AtMobiles []string // mobiles for @ default members
+	IsAtAll   bool     // whether default to @ all members
 	Webhook   string   // webhook url
 	Secret    string   // secret token
 	MsgType   string   `default:"markdown"` // message type: `text` or `markdown`
@@ -42,11 +42,26 @@ func (dtc *DingTalkChannel) Type() ChannelType {
 	return ChannelTypeDingTalk
 }
 
+// Send sends a notification to the DingTalk channel with default at mobiles which configured in the channel.
 func (dtc *DingTalkChannel) Send(ctx context.Context, note *Notification) error {
+	return dtc.sendNotification(ctx, note, dtc.Config.AtMobiles, dtc.Config.IsAtAll)
+}
+
+// SendWithAtAll sends a notification to the DingTalk channel with all members.
+func (dtc *DingTalkChannel) SendWithAtAll(ctx context.Context, note *Notification) error {
+	return dtc.sendNotification(ctx, note, nil, true)
+}
+
+// SendWithAtSpecial sends a notification to the DingTalk channel with special members.
+func (dtc *DingTalkChannel) SendWithAtSpecial(ctx context.Context, note *Notification, atMobiles []string) error {
+	return dtc.sendNotification(ctx, note, atMobiles, false)
+}
+
+func (dtc *DingTalkChannel) sendNotification(ctx context.Context, note *Notification, atMobiles []string, isAtAll bool) error {
 	msg, err := dtc.Formatter.Format(note)
 	if err != nil {
 		return errors.WithMessage(err, "failed to format alert msg")
 	}
 
-	return dtc.Robot.Send(ctx, dtc.Config.MsgType, note.Title, msg, dtc.Config.AtMobiles, dtc.Config.IsAtAll)
+	return dtc.Robot.Send(ctx, dtc.Config.MsgType, note.Title, msg, atMobiles, isAtAll)
 }
