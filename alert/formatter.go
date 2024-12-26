@@ -192,6 +192,7 @@ type TelegramMarkdownFormatter struct {
 
 func NewTelegramMarkdownFormatter(tags, atUsers []string) (f *TelegramMarkdownFormatter, err error) {
 	funcMap := template.FuncMap{
+		"toString":               toString,
 		"escapeMarkdown":         escapeMarkdown,
 		"formatRFC3339":          formatRFC3339,
 		"truncateStringWithTail": truncateStringWithTail,
@@ -205,6 +206,13 @@ func NewTelegramMarkdownFormatter(tags, atUsers []string) (f *TelegramMarkdownFo
 	}
 
 	return &TelegramMarkdownFormatter{markdownFormatter: mf}, nil
+}
+
+func toString(val interface{}) string {
+	if str, ok := val.(string); ok {
+		return str
+	}
+	return fmt.Sprintf("%v", val)
 }
 
 func escapeMarkdown(v interface{}) string {
