@@ -91,7 +91,7 @@ Reason
 {{.Error | escapeMarkdown}}
 
 {{else}}{{ end }}{{ if .CtxFields }}*Context Fields*:{{ range $Key, $Val := .CtxFields }}
-    *{{$Key | escapeMarkdown}}*: {{$Val | truncateStringWithTail | escapeMarkdown}}{{ end }}{{ end }}
+    *{{$Key | escapeMarkdown}}*: {{$Val | toString | truncateStringWithTail | escapeMarkdown}}{{ end }}{{ end }}
 {{ range mentions }}@{{ . }} {{ end }}
 `,
 	}
