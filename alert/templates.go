@@ -10,6 +10,7 @@ Severity: {{.Severity}}
 Time: {{.Time | formatRFC3339}}
 
 {{.Content}}
+{{ range mentions }}@{{ . }} {{ end }}
 `,
 		`{{- /* logrus entry text template */ -}}
 {{.Level}}
@@ -38,6 +39,7 @@ Reason
 - **Time**: {{.Time | formatRFC3339}}
 
 **{{.Content}}**
+{{ range mentions }}@{{ . }} {{ end }}
 `,
 		`{{- /* logrus entry markdown template */ -}}
 # {{.Level}}

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/Conflux-Chain/go-conflux-util/alert/dingtalk"
+	"github.com/mcuadros/go-defaults"
 	"github.com/pkg/errors"
 )
 
@@ -28,6 +29,7 @@ type DingTalkChannel struct {
 }
 
 func NewDingTalkChannel(chID string, fmt Formatter, conf DingTalkConfig) *DingTalkChannel {
+	defaults.SetDefaults(&conf)
 	return &DingTalkChannel{
 		ID: chID, Formatter: fmt, Config: conf,
 		Robot: dingtalk.NewRobot(conf.Webhook, conf.Secret),
