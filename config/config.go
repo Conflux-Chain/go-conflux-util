@@ -7,6 +7,7 @@ import (
 	"github.com/Conflux-Chain/go-conflux-util/alert"
 	"github.com/Conflux-Chain/go-conflux-util/log"
 	"github.com/Conflux-Chain/go-conflux-util/metrics"
+	"github.com/Conflux-Chain/go-conflux-util/pprof"
 	"github.com/Conflux-Chain/go-conflux-util/viper"
 )
 
@@ -76,4 +77,6 @@ func mustInit(
 	} else {
 		log.MustInitFromViper()
 	}
+
+	pprof.MustInitFromViper()
 }
