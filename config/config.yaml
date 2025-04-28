@@ -131,3 +131,8 @@
 #     maxIdleConns: 10
 #     logLevel: warn
 #     slowThreshold: 200ms
+
+# Go performance profiling
+# pprof:
+#   enabled: false
+#   endpoint: ":6060"
