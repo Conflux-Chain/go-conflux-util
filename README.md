@@ -5,12 +5,16 @@ Utilities for golang developments on Conflux blockchain, especially for backend 
 |------|-------|
 |[Alert](#alert)|Send notification messages to DingTalk, Telegram, SMTP email or PagerDuty.|
 |[API](#api)|REST API utilities based on [gin](https://github.com/gin-gonic/gin).|
+|[Chain](./chain)|Utilities for blockchain.|
+|[Cmd](./cmd)|Utilities for CLI tools.|
 |[Config](#config)|Initialize all modules.|
 |[DLock](#distributed-lock)|Utilities for distributed lock.|
 |[Health](#health)|Utilities for health management.|
 |[HTTP](#http)|Provides common used middlewares.|
 |[Log](#log)|Based on [logrus](https://github.com/sirupsen/logrus) and integrated with [Alert](#alert).|
 |[Metrics](#metrics)|To monitor system runtime.|
+|[Parallel](./parallel)|Utilities for parallel execution.|
+|[Pprof](./pprof)|To enable pprof server based on configuration.|
 |[Rate Limit](#rate-limit)|Utilities to limit request rate.|
 |[Store](#store)|Provides utilities to initialize database.|
 |[Viper](#viper)|To fix some issues of original [viper](https://github.com/spf13/viper).|
@@ -89,10 +93,12 @@ go api.MustServeFromViper(factory)
 ```
 
 ## Config
-Initialize all modules at the entry point of program, including [viper](#viper), [log](#log), [metrics](#metrics) and [alert](#alert).
+Initialize all modules at the entry point of program, including [viper](#viper), [log](#log), [metrics](#metrics), [alert](#alert) and [pprof](./pprof).
 
 ```go
-config.MustInit(viperEnvPrefix string)
+cobra.OnInitialize(func() {
+    config.MustInit(viperEnvPrefix string)
+})
 ```
 
 The `viperEnvPrefix` is used to overwrite configurations from environment. E.g. if the `viperEnvPrefix` is `FOO`, then client could set environment as below to overwrite config `alert.dingTalk.secret`:
