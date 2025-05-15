@@ -28,7 +28,7 @@ func (counter *Counter) OnSuccess(config CounterConfig) (recovered bool, failure
 	}
 
 	// report health now after a long time
-	if failures = counter.failures; failures > config.Threshold {
+	if failures = counter.failures; failures >= config.Threshold {
 		recovered = true
 	}
 
@@ -49,11 +49,11 @@ func (counter *Counter) OnFailure(config CounterConfig) (unhealthy bool, unrecov
 	counter.failures++
 
 	// error tolerant in short time
-	if failures = counter.failures; failures <= config.Threshold {
+	if failures = counter.failures; failures < config.Threshold {
 		return
 	}
 
-	if delta := failures - config.Threshold - 1; delta == 0 {
+	if delta := failures - config.Threshold; delta == 0 {
 		unhealthy = true
 	} else if delta%config.Remind == 0 {
 		unrecovered = true

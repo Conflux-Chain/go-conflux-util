@@ -44,7 +44,7 @@ func TestCounterThreshold(t *testing.T) {
 	var counter Counter
 
 	// continous failure in short time
-	for i := uint64(1); i <= testCounterConfig.Threshold; i++ {
+	for i := uint64(1); i < testCounterConfig.Threshold; i++ {
 		unhealthy, unrecovered, failures := counter.OnFailure(testCounterConfig)
 		assert.False(t, unhealthy)
 		assert.False(t, unrecovered)
@@ -56,25 +56,25 @@ func TestCounterThreshold(t *testing.T) {
 	unhealthy, unrecovered, failures := counter.OnFailure(testCounterConfig)
 	assert.True(t, unhealthy)
 	assert.False(t, unrecovered)
-	assert.Equal(t, testCounterConfig.Threshold+1, failures)
+	assert.Equal(t, testCounterConfig.Threshold, failures)
 
 	// continous failure in long time, but not reached to remind counter
 	unhealthy, unrecovered, failures = counter.OnFailure(testCounterConfig)
 	assert.False(t, unhealthy)
 	assert.False(t, unrecovered)
-	assert.Equal(t, testCounterConfig.Threshold+2, failures)
+	assert.Equal(t, testCounterConfig.Threshold+1, failures)
 
 	// recovered
 	recovered, failures := counter.OnSuccess(testCounterConfig)
 	assert.True(t, recovered)
-	assert.Equal(t, testCounterConfig.Threshold+2, failures)
+	assert.Equal(t, testCounterConfig.Threshold+1, failures)
 }
 
 func TestCounterRemind(t *testing.T) {
 	var counter Counter
 
 	// continous failure in short time
-	for i := uint64(1); i <= testCounterConfig.Threshold+testCounterConfig.Remind; i++ {
+	for i := uint64(1); i < testCounterConfig.Threshold+testCounterConfig.Remind; i++ {
 		_, unrecovered, failures := counter.OnFailure(testCounterConfig)
 		assert.False(t, unrecovered)
 		assert.Equal(t, i, failures)
@@ -84,10 +84,10 @@ func TestCounterRemind(t *testing.T) {
 	unhealthy, unrecovered, failures := counter.OnFailure(testCounterConfig)
 	assert.False(t, unhealthy)
 	assert.True(t, unrecovered)
-	assert.Equal(t, testCounterConfig.Threshold+testCounterConfig.Remind+1, failures)
+	assert.Equal(t, testCounterConfig.Threshold+testCounterConfig.Remind, failures)
 
 	// recovered
 	recovered, failures := counter.OnSuccess(testCounterConfig)
 	assert.True(t, recovered)
-	assert.Equal(t, testCounterConfig.Threshold+testCounterConfig.Remind+1, failures)
+	assert.Equal(t, testCounterConfig.Threshold+testCounterConfig.Remind, failures)
 }

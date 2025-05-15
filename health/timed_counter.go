@@ -35,7 +35,7 @@ func (counter *TimedCounter) onSuccessAt(config TimedCounterConfig, now time.Tim
 	}
 
 	// report health now after a long time
-	if elapsed = now.Sub(counter.failedAt); elapsed > config.Threshold {
+	if elapsed = now.Sub(counter.failedAt); elapsed >= config.Threshold {
 		recovered = true
 	}
 
@@ -64,7 +64,7 @@ func (counter *TimedCounter) onFailureAt(config TimedCounterConfig, now time.Tim
 	}
 
 	// error tolerant in short time
-	if elapsed = now.Sub(counter.failedAt); elapsed <= config.Threshold {
+	if elapsed = now.Sub(counter.failedAt); elapsed < config.Threshold {
 		return
 	}
 
@@ -76,7 +76,7 @@ func (counter *TimedCounter) onFailureAt(config TimedCounterConfig, now time.Tim
 	}
 
 	// remind time not reached
-	if remind := config.Threshold + config.Remind*time.Duration(counter.reports); elapsed <= remind {
+	if remind := config.Threshold + config.Remind*time.Duration(counter.reports); elapsed < remind {
 		return
 	}
 
