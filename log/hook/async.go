@@ -25,12 +25,11 @@ type AsyncOption struct {
 
 // AsyncHook is a logrus hook that processes log entries asynchronously.
 type AsyncHook struct {
-	logrus.Hook                       // Embedded logrus hook.
-	AsyncOption                       // Embedded options.
-	mu           sync.Mutex           // Synchronizes access to `healthStatus`.
-	started      atomic.Bool          // Atomic flag indicating hook startup state.
-	healthStatus health.Counter       // Tracks queue health.
-	HealthConfig health.CounterConfig // Configuration for health tracking.
+	logrus.Hook                  // Embedded logrus hook.
+	AsyncOption                  // Embedded options.
+	mu           sync.Mutex      // Synchronizes access to `healthStatus`.
+	started      atomic.Bool     // Atomic flag indicating hook startup state.
+	healthStatus *health.Counter // Tracks queue health.
 
 	jobQueue chan *logrus.Entry // Buffered channel for enqueuing log entries.
 }
@@ -60,10 +59,13 @@ func NewAsyncHook(hook logrus.Hook, opts AsyncOption) *AsyncHook {
 // It should not be used directly; instead, use `NewAsyncHook` or `NewAsyncHookWithCtx`.
 func newAsyncHook(hook logrus.Hook, opts AsyncOption) *AsyncHook {
 	return &AsyncHook{
-		AsyncOption:  opts,
-		Hook:         hook,
-		jobQueue:     make(chan *logrus.Entry, opts.QueueSize),
-		HealthConfig: health.CounterConfig{Remind: uint64(opts.QueueSize)},
+		AsyncOption: opts,
+		Hook:        hook,
+		jobQueue:    make(chan *logrus.Entry, opts.QueueSize),
+		healthStatus: health.NewCounter(health.CounterConfig{
+			Threshold: 1,
+			Remind:    uint64(opts.QueueSize),
+		}),
 	}
 }
 
@@ -145,7 +147,7 @@ func (h *AsyncHook) onFiredSuccess() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	recovered, failures := h.healthStatus.OnSuccess(h.HealthConfig)
+	recovered, failures := h.healthStatus.OnSuccess()
 	if recovered {
 		h.notify("Async hook queue congestion recovered", logrus.Fields{"failures": failures})
 	}
@@ -156,7 +158,7 @@ func (h *AsyncHook) onFiredFailure(err error, entry *logrus.Entry) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	unhealthy, uncovered, failures := h.healthStatus.OnFailure(h.HealthConfig)
+	unhealthy, uncovered, failures := h.healthStatus.OnFailure()
 	if unhealthy {
 		h.notify("Async hook queue is congested", logrus.Fields{"failures": failures})
 	} else if uncovered {

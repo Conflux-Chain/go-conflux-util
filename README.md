@@ -5,12 +5,16 @@ Utilities for golang developments on Conflux blockchain, especially for backend 
 |------|-------|
 |[Alert](#alert)|Send notification messages to DingTalk, Telegram, SMTP email or PagerDuty.|
 |[API](#api)|REST API utilities based on [gin](https://github.com/gin-gonic/gin).|
+|[Chain](./chain)|Utilities for blockchain.|
+|[Cmd](./cmd)|Utilities for CLI tools.|
 |[Config](#config)|Initialize all modules.|
 |[DLock](#distributed-lock)|Utilities for distributed lock.|
 |[Health](#health)|Utilities for health management.|
 |[HTTP](#http)|Provides common used middlewares.|
 |[Log](#log)|Based on [logrus](https://github.com/sirupsen/logrus) and integrated with [Alert](#alert).|
 |[Metrics](#metrics)|To monitor system runtime.|
+|[Parallel](./parallel)|Utilities for parallel execution.|
+|[Pprof](./pprof)|To enable pprof server based on configuration.|
 |[Rate Limit](#rate-limit)|Utilities to limit request rate.|
 |[Store](#store)|Provides utilities to initialize database.|
 |[Viper](#viper)|To fix some issues of original [viper](https://github.com/spf13/viper).|
@@ -89,10 +93,12 @@ go api.MustServeFromViper(factory)
 ```
 
 ## Config
-Initialize all modules at the entry point of program, including [viper](#viper), [log](#log), [metrics](#metrics) and [alert](#alert).
+Initialize all modules at the entry point of program, including [viper](#viper), [log](#log), [metrics](#metrics), [alert](#alert) and [pprof](./pprof).
 
 ```go
-config.MustInit(viperEnvPrefix string)
+cobra.OnInitialize(func() {
+    config.MustInit(viperEnvPrefix string)
+})
 ```
 
 The `viperEnvPrefix` is used to overwrite configurations from environment. E.g. if the `viperEnvPrefix` is `FOO`, then client could set environment as below to overwrite config `alert.dingTalk.secret`:
@@ -157,31 +163,6 @@ Additionally, you can configure the alert hook to set up default notification ch
 // Send alert to the 'tgrobot' channel instead.
 logrus.WithField("@channel": "tgrobot").Warn("Some warning occurred")
 ```
-
-### ErrorTolerantLogger
-`ErrorTolerantLogger` is a thread-safe logger that incorporates error tolerance behavior based on the continuous error count.
-
-```go
-// Construct an error tolerant logger imperatively
-etlogger := log.NewErrorTolerantLogger(conf)
-```
-
-Alternatively, you can construct an error tolerant logger from configuration files or environment variables.
-
-```go
-// Construct an error tolerant logger from configurations loaded by viper
-etlogger := log.MustNewErrorTolerantLoggerFromViper()
-```
-Then, you can log the error message using the logger, which will mute the error message unless continuous errors happen.
-
-```go
-// Logging without context fields
-etLogger.Log(logrus.StandardLogger(), err, "Some error")
-// Logging with context fields
-etLogger.Log(logrus.WithField("field", val), err, "Some error")
-```
-
-Please note that it is important to always call the logging function, even if the error is nil, in order to reset the continuous timer.
 
 ## Metrics
 We recommend to initialize metrics module from configuration file. Client could also configure influxdb to report metrics periodically. See `MetricsConfig` for more details.
