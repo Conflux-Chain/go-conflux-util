@@ -158,31 +158,6 @@ Additionally, you can configure the alert hook to set up default notification ch
 logrus.WithField("@channel": "tgrobot").Warn("Some warning occurred")
 ```
 
-### ErrorTolerantLogger
-`ErrorTolerantLogger` is a thread-safe logger that incorporates error tolerance behavior based on the continuous error count.
-
-```go
-// Construct an error tolerant logger imperatively
-etlogger := log.NewErrorTolerantLogger(conf)
-```
-
-Alternatively, you can construct an error tolerant logger from configuration files or environment variables.
-
-```go
-// Construct an error tolerant logger from configurations loaded by viper
-etlogger := log.MustNewErrorTolerantLoggerFromViper()
-```
-Then, you can log the error message using the logger, which will mute the error message unless continuous errors happen.
-
-```go
-// Logging without context fields
-etLogger.Log(logrus.StandardLogger(), err, "Some error")
-// Logging with context fields
-etLogger.Log(logrus.WithField("field", val), err, "Some error")
-```
-
-Please note that it is important to always call the logging function, even if the error is nil, in order to reset the continuous timer.
-
 ## Metrics
 We recommend to initialize metrics module from configuration file. Client could also configure influxdb to report metrics periodically. See `MetricsConfig` for more details.
 
