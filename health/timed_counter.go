@@ -7,7 +7,7 @@ type TimedCounterConfig struct {
 	Remind    time.Duration `default:"5m"` // remind unhealthy if unrecovered for a long time
 }
 
-// TimedCounter represents an error tolerant health counter, which allows failures in short time
+// TimedCounter represents an error tolerant health counter, which allows continuous failures in a short time
 // and periodically remind unhealthy if unrecovered in time.
 type TimedCounter struct {
 	failedAt time.Time // first failure time
@@ -21,9 +21,8 @@ func (counter *TimedCounter) IsSuccess() bool {
 
 // OnSuccess erases failure status and return recover information if any.
 //
-// `recovered`: indicates if recovered from unhealthy status.
-//
-// `elapsed`: indicates the duration since the first failure time.
+//   @return recovered bool - indicates whether recovered from unhealthy status.
+//   @return elapsed time.Duration - indicates the duration since the first failure time.
 func (counter *TimedCounter) OnSuccess(config TimedCounterConfig) (recovered bool, elapsed time.Duration) {
 	return counter.onSuccessAt(config, time.Now())
 }
@@ -48,11 +47,9 @@ func (counter *TimedCounter) onSuccessAt(config TimedCounterConfig, now time.Tim
 
 // OnFailure marks failure status and return unhealthy information.
 //
-// `unhealthy`: indicates continous failures in a long time.
-//
-// `unrecovered`: indicates continous failures and unrecovered in a long time.
-//
-// `elapsed`: indicates the duration since the first failure time.
+//   @return unhealthy bool - indicates whether continuous failures occurred in a long time.
+//   @return unrecovered bool - indicates whether continuous failures occurred and unrecovered in a long time.
+//   @return elapsed time.Duration - indicates the duration since the first failure time.
 func (counter *TimedCounter) OnFailure(config TimedCounterConfig) (unhealthy bool, unrecovered bool, elapsed time.Duration) {
 	return counter.onFailureAt(config, time.Now())
 }
@@ -83,6 +80,22 @@ func (counter *TimedCounter) onFailureAt(config TimedCounterConfig, now time.Tim
 	// remind unhealthy
 	unrecovered = true
 	counter.reports++
+
+	return
+}
+
+// OnError updates health status for the given `err` and returns health information.
+//
+//   @return recovered bool - indicates whether recovered from unhealthy status when `err` is nil.
+//   @return unhealthy bool - indicates whether continuous failures occurred in a long time when `err` is not nil.
+//   @return unrecovered bool - indicates whether continuous failures occurred and unrecovered in a long time when `err` is not nil.
+//   @return elapsed time.Duration - indicates the duration since the first failure time.
+func (counter *TimedCounter) OnError(config TimedCounterConfig, err error) (recovered bool, unhealthy bool, unrecovered bool, elapsed time.Duration) {
+	if isErrorNil(err) {
+		recovered, elapsed = counter.OnSuccess(config)
+	} else {
+		unhealthy, unrecovered, elapsed = counter.OnFailure(config)
+	}
 
 	return
 }
