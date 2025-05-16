@@ -1,10 +1,20 @@
 package health
 
-import "time"
+import (
+	"time"
+
+	"github.com/mcuadros/go-defaults"
+)
 
 type TimedCounterConfig struct {
 	Threshold time.Duration `default:"1m"` // report unhealthy if threshold reached
 	Remind    time.Duration `default:"5m"` // remind unhealthy if unrecovered for a long time
+}
+
+func DefaultTimedCounterConfig() TimedCounterConfig {
+	var config TimedCounterConfig
+	defaults.SetDefaults(&config)
+	return config
 }
 
 // TimedCounter represents an error tolerant health counter, which allows continuous failures in a short time
@@ -15,9 +25,17 @@ type TimedCounter struct {
 	reports  int       // number of times to report unhealthy
 }
 
-func NewTimedCounter(config TimedCounterConfig) *TimedCounter {
+func NewTimedCounter(config ...TimedCounterConfig) *TimedCounter {
+	var tcc TimedCounterConfig
+
+	if len(config) > 0 {
+		tcc = config[0]
+	} else {
+		tcc = DefaultTimedCounterConfig()
+	}
+
 	return &TimedCounter{
-		config: config,
+		config: tcc,
 	}
 }
 
