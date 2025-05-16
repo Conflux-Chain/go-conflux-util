@@ -1,10 +1,20 @@
 package health
 
-import "reflect"
+import (
+	"reflect"
+
+	"github.com/mcuadros/go-defaults"
+)
 
 type CounterConfig struct {
 	Threshold uint64 `default:"60"` // report unhealthy if threshold reached
 	Remind    uint64 `default:"60"` // remind unhealthy if unrecovered for a long time
+}
+
+func DefaultCounterConfig() CounterConfig {
+	var config CounterConfig
+	defaults.SetDefaults(&config)
+	return config
 }
 
 // Counter represents an error tolerant health counter, which allows continuous failures in a short time
@@ -14,9 +24,17 @@ type Counter struct {
 	failures uint64
 }
 
-func NewCounter(config CounterConfig) *Counter {
+func NewCounter(config ...CounterConfig) *Counter {
+	var cc CounterConfig
+
+	if len(config) > 0 {
+		cc = config[0]
+	} else {
+		cc = DefaultCounterConfig()
+	}
+
 	return &Counter{
-		config: config,
+		config: cc,
 	}
 }
 
