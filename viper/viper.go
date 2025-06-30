@@ -42,5 +42,5 @@ func MustInit(envPrefix string, configPath ...string) {
 		logger.WithError(err).Fatal("Failed to read config to initialize viper")
 	}
 
-	logger.Info("Viper initialized")
+	logger.Debug("Viper initialized")
 }
