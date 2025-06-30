@@ -10,9 +10,7 @@ import (
 
 	"github.com/Conflux-Chain/go-conflux-util/log/hook"
 	viperUtil "github.com/Conflux-Chain/go-conflux-util/viper"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/pkg/errors"
-	slogrus "github.com/samber/slog-logrus/v2"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -120,9 +118,6 @@ func mustInit(conf LoggingConfig, ctx context.Context, wg *sync.WaitGroup) {
 	// Apply the configured formatter to the logger.
 	logrus.SetFormatter(formatter)
 
-	// Adapt the logger for use with Geth that uses a custom logging mechanism.
-	adaptGethLogger()
-
 	// Log a debug message indicating successful initialization along with the effective configuration.
 	logrus.WithField("config", fmt.Sprintf("%+v", conf)).Debug("Log initialized")
 }
@@ -149,18 +144,6 @@ func setupOutput(conf OutputConfig) error {
 		return errors.Errorf("unsupported output type: %s", conf.Type)
 	}
 	return nil
-}
-
-// adaptGethLogger adapt geth logger to work with logrus.
-func adaptGethLogger() {
-	// Map extra slogrus log levels from geth to logrus log levels.
-	slogrus.LogLevels[log.LevelCrit] = logrus.FatalLevel
-	slogrus.LogLevels[log.LevelTrace] = logrus.TraceLevel
-	// Geth warn logging is little bit verbose, adapt it to logrus info level.
-	slogrus.LogLevels[log.LevelWarn] = logrus.InfoLevel
-
-	slogrusHandler := slogrus.Option{}.NewLogrusHandler()
-	log.SetDefault(log.NewLogger(slogrusHandler.WithGroup("geth")))
 }
 
 // BindFlags binds logging relevant flags for specified command.

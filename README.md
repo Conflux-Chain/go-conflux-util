@@ -5,7 +5,6 @@ Utilities for golang developments on Conflux blockchain, especially for backend 
 |------|-------|
 |[Alert](#alert)|Send notification messages to DingTalk, Telegram, SMTP email or PagerDuty.|
 |[API](#api)|REST API utilities based on [gin](https://github.com/gin-gonic/gin).|
-|[Chain](./chain)|Utilities for blockchain.|
 |[Cmd](./cmd)|Utilities for CLI tools.|
 |[Config](#config)|Initialize all modules.|
 |[DLock](#distributed-lock)|Utilities for distributed lock.|
