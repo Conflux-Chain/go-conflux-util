@@ -3,7 +3,7 @@ package metrics
 import (
 	"strings"
 
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/rcrowley/go-metrics"
 )
 
 const DefaultAPIName = "metrics"
@@ -15,7 +15,7 @@ type API struct {
 
 func NewAPI(reg metrics.Registry) *API { return &API{reg} }
 
-func NewDefaultAPI() *API { return &API{DefaultRegistry} }
+func NewDefaultAPI() *API { return &API{metrics.DefaultRegistry} }
 
 // GetMetrics returns all metrics of specified prefix. Empty prefix indicates all metrics.
 func (api *API) GetMetrics(prefix ...string) (map[string]map[string]any, error) {

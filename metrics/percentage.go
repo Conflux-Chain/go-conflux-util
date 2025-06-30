@@ -1,68 +1,55 @@
 package metrics
 
 import (
-	"fmt"
+	"math"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/rcrowley/go-metrics"
 )
 
 // Percentage implements the GaugeFloat64 interface for percentage statistic.
 // The value will be in range [0, 100], e.g. 99.38 means 99.38%.
 type Percentage interface {
-	metrics.GaugeFloat64
-
 	Mark(marked bool)
+
+	HasValue[float64]
 }
 
-// NewPercentage constructs a new standard percentage metric with optional default value in range [0, 100].
-func NewPercentage(defaultValue ...float64) Percentage {
-	if !metrics.Enabled {
+// NewPercentage constructs a new standard percentage metric.
+func NewPercentage() Percentage {
+	if metrics.UseNilMetrics {
 		return &noopPercentage{}
 	}
 
-	var val float64
-	if len(defaultValue) > 0 {
-		val = defaultValue[0]
-	}
+	return &standardPercentage{}
+}
 
-	if val < 0 || val > 100 {
-		panic("default value should be in range [0, 100]")
-	}
+var _ metrics.GaugeFloat64 = (*percentageGauge)(nil)
 
-	return &standardPercentage{
-		defaultValue: val,
-	}
+type percentageGauge struct {
+	Percentage
+	gaugeFloat64Wrapper[Percentage]
 }
 
 // GetOrRegisterPercentage returns an existing Percentage or constructs and registers a new standard Percentage.
-func GetOrRegisterPercentage(defaultValue float64, name string, args ...interface{}) Percentage {
-	factory := func() Percentage {
-		return NewPercentage(defaultValue)
-	}
+func GetOrRegisterPercentage(name string, args ...interface{}) Percentage {
+	return getOrRegister(func() Percentage {
+		percentage := NewPercentage()
 
-	return getOrRegisterPercentage(factory, name, args...)
-}
-
-// getOrRegisterPercentage gets or constructs Percentage with specified factory.
-func getOrRegisterPercentage(factory func() Percentage, name string, args ...interface{}) Percentage {
-	metricName := fmt.Sprintf(name, args...)
-	return DefaultRegistry.GetOrRegister(metricName, factory).(Percentage)
+		return &percentageGauge{
+			Percentage: percentage,
+			gaugeFloat64Wrapper: gaugeFloat64Wrapper[Percentage]{
+				inner: percentage,
+			},
+		}
+	}, name, args...)
 }
 
 // noopPercentage is no-op implementation for Percentage interface.
 type noopPercentage struct{}
 
-func (p *noopPercentage) Mark(marked bool)                       { /* noop */ }
-func (p *noopPercentage) Update(float64)                         { /* noop */ }
-func (p *noopPercentage) Snapshot() metrics.GaugeFloat64Snapshot { return percentageSnapshot(0) }
-
-type percentageSnapshot float64
-
-// Value implements the metrics.GaugeFloat64Snapshot interface.
-func (s percentageSnapshot) Value() float64 {
-	return float64(s)
-}
+func (p *noopPercentage) Mark(marked bool) { /* noop */ }
+func (p *noopPercentage) Value() float64   { return 0 }
 
 type percentageData struct {
 	total uint64
@@ -76,22 +63,19 @@ func (data *percentageData) update(marked bool) {
 	}
 }
 
-func (data *percentageData) toSnapshot(defaultValue float64) metrics.GaugeFloat64Snapshot {
+func (data *percentageData) value() float64 {
 	if data.total == 0 {
-		return percentageSnapshot(defaultValue)
+		return math.NaN()
 	}
 
-	// 10.19 means 10.19%
-	val := float64(data.marks*10000/data.total) / 100
-
-	return percentageSnapshot(val)
+	return float64(data.marks*10000/data.total) / 100
 }
 
 // standardPercentage is the standard implementation for Percentage interface.
 type standardPercentage struct {
-	data         percentageData
-	defaultValue float64
-	mu           sync.Mutex
+	data percentageData
+
+	mu sync.Mutex
 }
 
 // Mark implements the Percentage interface.
@@ -102,15 +86,10 @@ func (p *standardPercentage) Mark(marked bool) {
 	p.data.update(marked)
 }
 
-// Update implements the metrics.GaugeFloat64 interface.
-func (p *standardPercentage) Update(float64) {
-	panic("Update called on a standardPercentage")
-}
-
-// Snapshot implements the metrics.GaugeFloat64 interface.
-func (p *standardPercentage) Snapshot() metrics.GaugeFloat64Snapshot {
+// Value implements the Percentage interface.
+func (p *standardPercentage) Value() float64 {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	return p.data.toSnapshot(p.defaultValue)
+	return p.data.value()
 }
