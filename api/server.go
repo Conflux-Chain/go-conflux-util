@@ -67,14 +67,3 @@ func newCorsMiddleware(origins []string) gin.HandlerFunc {
 
 	return cors.New(conf)
 }
-
-func Wrap(controller func(c *gin.Context) (interface{}, error)) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		result, err := controller(c)
-		if err != nil {
-			ResponseError(c, err)
-		} else {
-			ResponseSuccess(c, result)
-		}
-	}
-}
