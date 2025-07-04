@@ -12,8 +12,12 @@ import (
 
 const httpStatusInternalError = 600
 
-func ResponseSuccess(c *gin.Context, data interface{}) {
-	c.JSON(http.StatusOK, Success(data))
+func ResponseSuccess(c *gin.Context, data any) {
+	if data == nil {
+		c.JSON(http.StatusOK, ErrNil)
+	} else {
+		c.JSON(http.StatusOK, ErrNil.WithData(data))
+	}
 }
 
 func ResponseError(c *gin.Context, err error) {

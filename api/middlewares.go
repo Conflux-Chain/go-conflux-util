@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func Wrap(controller func(c *gin.Context) (interface{}, error)) gin.HandlerFunc {
+func Wrap(controller func(c *gin.Context) (any, error)) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		result, err := controller(c)
 		if err != nil {

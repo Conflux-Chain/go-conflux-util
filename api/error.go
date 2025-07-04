@@ -7,30 +7,20 @@ const (
 	ErrCodeTooManyRequests = 3
 )
 
-var (
-	errNil = &BusinessError{ErrCodeSuccess, "Success", nil}
-)
+var ErrNil = &BusinessError{ErrCodeSuccess, "Success", nil}
 
 type BusinessError struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    any    `json:"data"`
 }
 
-func NewBusinessError(code int, message string, data ...interface{}) *BusinessError {
+func NewBusinessError(code int, message string, data ...any) *BusinessError {
 	if len(data) > 0 {
 		return &BusinessError{code, message, data[0]}
 	}
 
 	return &BusinessError{code, message, nil}
-}
-
-func Success(data interface{}) *BusinessError {
-	if data == nil {
-		return errNil
-	}
-
-	return NewBusinessError(errNil.Code, errNil.Message, data)
 }
 
 func ErrValidation(err error) *BusinessError {
@@ -43,6 +33,10 @@ func ErrInternal(err error) *BusinessError {
 
 func ErrTooManyRequests(err error) *BusinessError {
 	return NewBusinessError(ErrCodeTooManyRequests, "Too many requests", err.Error())
+}
+
+func (err *BusinessError) WithData(data any) *BusinessError {
+	return &BusinessError{err.Code, err.Message, data}
 }
 
 func (err *BusinessError) Error() string {
