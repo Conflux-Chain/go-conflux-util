@@ -1,4 +1,4 @@
-package mysql
+package store
 
 import (
 	"errors"
@@ -23,7 +23,7 @@ func (store *Store) Close() error {
 	}
 }
 
-func (store *Store) Exists(modelPtr interface{}, whereQuery string, args ...interface{}) (bool, error) {
+func (store *Store) Get(modelPtr interface{}, whereQuery string, args ...interface{}) (bool, error) {
 	err := store.DB.Where(whereQuery, args...).First(modelPtr).Error
 	if err == nil {
 		return true, nil
@@ -37,7 +37,7 @@ func (store *Store) Exists(modelPtr interface{}, whereQuery string, args ...inte
 }
 
 func (store *Store) GetById(modelPtr interface{}, id uint64) (bool, error) {
-	return store.Exists(modelPtr, "id = ?", id)
+	return store.Get(modelPtr, "id = ?", id)
 }
 
 func (store *Store) List(db *gorm.DB, idDesc bool, offset, limit int, slicePtr interface{}) (total int64, err error) {

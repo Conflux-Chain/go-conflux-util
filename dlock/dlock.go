@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/Conflux-Chain/go-conflux-util/store/mysql"
+	"github.com/Conflux-Chain/go-conflux-util/store"
 	"github.com/pkg/errors"
 )
 
@@ -47,7 +47,7 @@ func NewLockManager(be Backend) *LockManager {
 }
 
 func NewLockManagerFromViper() *LockManager {
-	conf := mysql.MustNewConfigFromViper()
+	conf := store.MustNewConfigFromViper()
 	db := conf.MustOpenOrCreate(&Dlock{})
 	return NewLockManager(NewMySQLBackend(db))
 }
