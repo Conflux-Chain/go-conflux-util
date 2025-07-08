@@ -52,30 +52,30 @@ func (config *Config) MustOpenOrCreate(tables ...any) *gorm.DB {
 }
 
 func (config *Config) OpenOrCreate(tables ...any) (*gorm.DB, error) {
-	// mysql enabled
+	var dialector gorm.Dialector
+
+	// mysql > sqlite > fallback to memory
 	if config.Mysql != nil {
 		if err := config.createDatabaseIfAbsent(*config.Mysql); err != nil {
 			return nil, errors.WithMessage(err, "Failed to create mysql database if absent")
 		}
 
-		return config.openOrCreate(config.Mysql.Open, tables...)
+		dialector = config.Mysql.Open()
+	} else if config.Sqlite != nil {
+		dialector = config.Sqlite.Open()
+	} else {
+		logrus.Warn("Neither mysql nor sqlite specified, fallback to memory database")
+
+		var memoryConfig SqliteConfig
+		defaults.SetDefaults(&memoryConfig)
+		dialector = memoryConfig.Open()
 	}
 
-	// sqlite enabled
-	if config.Sqlite != nil {
-		return config.openOrCreate(config.Sqlite.Open, tables...)
-	}
-
-	logrus.Warn("Neither mysql nor sqlite specified, fallback to memory database")
-
-	var memoryConfig SqliteConfig
-	defaults.SetDefaults(&memoryConfig)
-
-	return config.openOrCreate(memoryConfig.Open, tables...)
+	return config.openOrCreate(dialector, tables...)
 }
 
-func (config *Config) openOrCreate(dialectorFactory func() gorm.Dialector, tables ...any) (*gorm.DB, error) {
-	db, err := config.createSession(dialectorFactory())
+func (config *Config) openOrCreate(dialector gorm.Dialector, tables ...any) (*gorm.DB, error) {
+	db, err := config.createSession(dialector)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to create db session")
 	}
