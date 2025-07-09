@@ -172,10 +172,10 @@ Provides basic rate limit algorithms, including fixed window, token bucket, alon
 Note, rate limit middleware depends on the HTTP middleware `RealIP`.
 
 ## Store
-We recommend to initialize store module from configuration file.
+We recommend to initialize store module from configuration file, which supports **mysql**, **sqlite** and **in-memory** database.
 
 ```go
-config := mysql.MustNewConfigFromViper()
+config := store.MustNewConfigFromViper()
 db := config.MustOpenOrCreate(tables ...interface{})
 ```
 

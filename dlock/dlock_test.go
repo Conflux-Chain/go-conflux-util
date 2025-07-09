@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Conflux-Chain/go-conflux-util/store/mysql"
+	"github.com/Conflux-Chain/go-conflux-util/store"
 	"github.com/mcuadros/go-defaults"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -42,11 +42,13 @@ func setup() error {
 		return nil
 	}
 
-	conf := mysql.Config{
-		Host:     host,
-		Database: database,
-		Username: os.Getenv("TEST_MYSQL_USER"),
-		Password: os.Getenv("TEST_MYSQL_PWD"),
+	conf := store.Config{
+		Mysql: &store.MysqlConfig{
+			Host:     host,
+			Database: database,
+			Username: os.Getenv("TEST_MYSQL_USER"),
+			Password: os.Getenv("TEST_MYSQL_PWD"),
+		},
 	}
 
 	defaults.SetDefaults(&conf)

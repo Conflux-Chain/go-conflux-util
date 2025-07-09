@@ -121,16 +121,19 @@
 
 # Store Configurations
 # store:
+#   connMaxLifeTime: 3m
+#   maxOpenConns: 10
+#   maxIdleConns: 10
+#   logLevel: warn
+#   slowThreshold: 200ms
 #   mysql:
 #     host: 127.0.0.1:3306
 #     username: root
 #     password:
-#     database: yourdbname
-#     connMaxLifeTime: 3m
-#     maxOpenConns: 10
-#     maxIdleConns: 10
-#     logLevel: warn
-#     slowThreshold: 200ms
+#     database: test_db
+#     autoCreate: false
+#   sqlite:
+#     path: ":memory:"
 
 # Go performance profiling
 # pprof:
