@@ -1,6 +1,10 @@
 package api
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/pkg/errors"
+)
 
 const (
 	ErrCodeSuccess         = 0
@@ -37,7 +41,11 @@ func ErrValidation(err error) *BusinessError {
 	return NewBusinessError(ErrCodeValidation, "Invalid parameter", err.Error())
 }
 
-func ErrValidationStr(err string, args ...any) *BusinessError {
+func ErrValidationStr(err string) *BusinessError {
+	return NewBusinessError(ErrCodeValidation, "Invalid parameter", err)
+}
+
+func ErrValidationStrf(err string, args ...any) *BusinessError {
 	return NewBusinessError(ErrCodeValidation, "Invalid parameter", fmt.Sprintf(err, args...))
 }
 
@@ -51,6 +59,14 @@ func ErrTooManyRequests(err error) *BusinessError {
 
 func ErrDatabase(err error) *BusinessError {
 	return NewBusinessError(ErrCodeDatabase, "Database error", err.Error())
+}
+
+func ErrDatabaseCause(err error, cause string) *BusinessError {
+	return NewBusinessError(ErrCodeDatabase, "Database error", errors.WithMessage(err, cause).Error())
+}
+
+func ErrDatabaseCausef(err error, cause string, args ...any) *BusinessError {
+	return NewBusinessError(ErrCodeDatabase, "Database error", errors.WithMessagef(err, cause, args...).Error())
 }
 
 func (err *BusinessError) WithData(data any) *BusinessError {
