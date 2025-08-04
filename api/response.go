@@ -12,11 +12,21 @@ import (
 
 const httpStatusInternalError = 600
 
+type CsvData struct {
+	Filename string
+	Data     [][]string
+}
+
 func ResponseSuccess(c *gin.Context, data any) {
 	if data == nil {
 		c.JSON(http.StatusOK, ErrNil)
 	} else {
-		c.JSON(http.StatusOK, ErrNil.WithData(data))
+		csvData, ok := data.(CsvData)
+		if ok {
+			ResponseCsv(c, csvData.Filename, csvData.Data)
+		} else {
+			c.JSON(http.StatusOK, ErrNil.WithData(data))
+		}
 	}
 }
 
