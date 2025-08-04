@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -44,7 +45,12 @@ func ResponseError(c *gin.Context, err error) {
 }
 
 func ResponseCsv(c *gin.Context, data CsvData) {
-	c.Writer.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%v.csv", data.Filename))
+	filename := data.Filename
+	if !strings.HasSuffix(filename, ".csv") {
+		filename = filename + ".csv"
+	}
+
+	c.Writer.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%v", data.Filename))
 	c.Writer.Header().Set("Content-Type", "text/csv")
 
 	writer := csv.NewWriter(c.Writer)
