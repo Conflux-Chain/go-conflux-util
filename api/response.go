@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"encoding/csv"
 	"fmt"
 	"net/http"
@@ -13,8 +12,9 @@ import (
 const httpStatusInternalError = 600
 
 type CsvData struct {
-	Filename string
-	Data     [][]string
+	Filename      string
+	Data          [][]string
+	WithBOMHeader bool
 }
 
 func ResponseSuccess(c *gin.Context, data any) {
@@ -23,7 +23,7 @@ func ResponseSuccess(c *gin.Context, data any) {
 	} else {
 		csvData, ok := data.(CsvData)
 		if ok {
-			ResponseCsv(c, csvData.Filename, csvData.Data)
+			ResponseCsvWithBOMHeader(c, csvData.Filename, csvData.Data, csvData.WithBOMHeader)
 		} else {
 			c.JSON(http.StatusOK, ErrNil.WithData(data))
 		}
@@ -43,11 +43,20 @@ func ResponseError(c *gin.Context, err error) {
 }
 
 func ResponseCsv(c *gin.Context, filename string, content [][]string) {
-	buf := new(bytes.Buffer)
-	writer := csv.NewWriter(buf)
-	writer.WriteAll(content)
+	ResponseCsvWithBOMHeader(c, filename, content, false)
+}
 
+func ResponseCsvWithBOMHeader(c *gin.Context, filename string, content [][]string, withBOMHeader bool) {
 	c.Writer.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%v.csv", filename))
 	c.Writer.Header().Set("Content-Type", "text/csv")
-	c.Writer.Write(buf.Bytes())
+
+	writer := csv.NewWriter(c.Writer)
+	defer writer.Flush()
+
+	if withBOMHeader {
+		//Write UTF-8 BOM header for Excel compatibility
+		_ = writer.Write([]string{"\xEF\xBB\xBF"})
+	}
+
+	_ = writer.WriteAll(content)
 }
