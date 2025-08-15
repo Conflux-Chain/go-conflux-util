@@ -3,6 +3,7 @@ package report
 import (
 	"time"
 
+	"github.com/Conflux-Chain/go-conflux-util/health"
 	client "github.com/influxdata/influxdb1-client/v2"
 	"github.com/pkg/errors"
 	"github.com/rcrowley/go-metrics"
@@ -53,7 +54,7 @@ func InfluxDB(config InfluxDBConfig, reg metrics.Registry, d time.Duration) {
 	}
 
 	if err := reporter.makeClient(); err != nil {
-		logrus.WithError(err).Fatal("Failed to create InfluxDB client")
+		logrus.WithError(err).Error("Failed to create InfluxDB client")
 		return
 	}
 
@@ -87,20 +88,36 @@ func (r *influxdbReporter) run(d time.Duration) {
 	pingTicker := time.NewTicker(time.Second * 5)
 	defer pingTicker.Stop()
 
+	health := health.NewCounter()
+
 	for {
+		var err error
+
 		select {
 		case <-intervalTicker.C:
-			if err := r.send(0); err != nil {
-				logrus.WithError(err).Warn("Failed to send metrics to InfluxDB")
+			err = r.send(0)
+			if err != nil {
+				logrus.WithError(err).Info("Failed to send metrics to InfluxDB")
 			}
 		case <-pingTicker.C:
-			if _, _, err := r.client.Ping(0); err != nil {
-				logrus.WithError(err).Warn("Failed to ping InfluxDB, trying to recreate client")
+			_, _, err = r.client.Ping(0)
+			if err != nil {
+				logrus.WithError(err).Info("Failed to ping InfluxDB, trying to recreate client")
 
-				if err = r.makeClient(); err != nil {
-					logrus.WithError(err).Warn("Failed to recreate InfluxDB client")
+				if err := r.makeClient(); err != nil {
+					logrus.WithError(err).Info("Failed to recreate InfluxDB client")
 				}
 			}
+		}
+
+		recovered, unhealthy, unrecovered, failures := health.OnError(err)
+		switch {
+		case unhealthy:
+			logrus.Error("InfluxDB reporter becomes unhealthy")
+		case unrecovered:
+			logrus.WithField("failures", failures).Warn("InfluxDB reporter is still unhealthy")
+		case recovered:
+			logrus.WithField("failures", failures).Warn("InfluxDB reporter recovered from unhealthy")
 		}
 	}
 }
