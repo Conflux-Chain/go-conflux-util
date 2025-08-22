@@ -10,7 +10,7 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-const httpStatusInternalError = 600
+const HttpStatusInternalError = 600
 
 type CsvData struct {
 	Filename string
@@ -40,7 +40,7 @@ func ResponseError(c *gin.Context, err error) {
 		c.JSON(http.StatusOK, ErrValidation(e))
 	default:
 		// internal server error
-		c.JSON(httpStatusInternalError, ErrInternal(e))
+		c.JSON(HttpStatusInternalError, ErrInternal(e))
 	}
 }
 
@@ -50,7 +50,7 @@ func ResponseCsv(c *gin.Context, data CsvData) {
 		filename = filename + ".csv"
 	}
 
-	c.Writer.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%v", data.Filename))
+	c.Writer.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%v", filename))
 	c.Writer.Header().Set("Content-Type", "text/csv")
 
 	writer := csv.NewWriter(c.Writer)
