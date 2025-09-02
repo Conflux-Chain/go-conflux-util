@@ -2,6 +2,7 @@ package alert
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"text/template"
@@ -341,4 +342,58 @@ func newDingtalkMsgFormatter(msgType string, tags []string, mentions []string) (
 	default:
 		return nil, dingtalk.ErrMsgTypeNotSupported(msgType)
 	}
+}
+
+type jsonFormatter struct {
+}
+
+func newJsonFormatter() *jsonFormatter {
+	return &jsonFormatter{}
+}
+
+func (f *jsonFormatter) Format(note *Notification) (string, error) {
+	if _, ok := note.Content.(*logrus.Entry); ok {
+		return f.formatLogrusEntry(note)
+	}
+
+	return f.formatDefault(note)
+}
+func (f *jsonFormatter) formatLogrusEntry(note *Notification) (string, error) {
+	entry := note.Content.(*logrus.Entry)
+	entryError, _ := entry.Data[logrus.ErrorKey].(error)
+
+	ctxFields := make(map[string]interface{})
+	for k, v := range entry.Data {
+		if k == logrus.ErrorKey {
+			continue
+		}
+		ctxFields[k] = v
+	}
+
+	ctxFields["level"] = entry.Level
+	ctxFields["time"] = entry.Time
+	ctxFields["msg"] = entry.Message
+	ctxFields["error"] = entryError
+
+	b, err := json.Marshal(ctxFields)
+	if err != nil {
+		return "", errors.WithMessage(err, "marshal ctxFields error")
+	}
+
+	return string(b), nil
+}
+
+func (f *jsonFormatter) formatDefault(note *Notification) (string, error) {
+	ctxFields := make(map[string]interface{})
+	ctxFields["title"] = note.Title
+	ctxFields["severity"] = note.Severity
+	ctxFields["time"] = time.Now()
+	ctxFields["content"] = note.Content
+
+	b, err := json.Marshal(ctxFields)
+	if err != nil {
+		return "", errors.WithMessage(err, "marshal ctxFields error")
+	}
+
+	return string(b), nil
 }

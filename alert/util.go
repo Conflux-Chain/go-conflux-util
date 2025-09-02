@@ -85,7 +85,15 @@ func parseAlertChannel(chID string, chmap map[string]interface{}, tags []string)
 		}
 
 		return NewPagerDutyChannel(chID, tags, pdconf), nil
+	case ChannelTypeFlashDuty:
+		var fdconf FlashDutyConfig
+		if err := decodeChannelConfig(chmap, &fdconf); err != nil {
+			return nil, err
+		}
 
+		fmt := newJsonFormatter()
+
+		return NewFlashDutyChannel(chID, fmt, fdconf), nil
 	// NOTE: add more channel types support here if needed
 	default:
 		return nil, ErrChannelTypeNotSupported(cht)
