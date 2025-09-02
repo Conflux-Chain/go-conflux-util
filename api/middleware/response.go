@@ -1,4 +1,4 @@
-package api
+package middleware
 
 import (
 	"encoding/csv"
@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Conflux-Chain/go-conflux-util/api"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 )
@@ -21,26 +22,23 @@ type CsvData struct {
 
 func ResponseSuccess(c *gin.Context, data any) {
 	if data == nil {
-		c.JSON(http.StatusOK, ErrNil)
+		c.JSON(http.StatusOK, api.ErrNil)
+	} else if csvData, ok := data.(CsvData); ok {
+		ResponseCsv(c, csvData)
 	} else {
-		csvData, ok := data.(CsvData)
-		if ok {
-			ResponseCsv(c, csvData)
-		} else {
-			c.JSON(http.StatusOK, ErrNil.WithData(data))
-		}
+		c.JSON(http.StatusOK, api.ErrNil.WithData(data))
 	}
 }
 
 func ResponseError(c *gin.Context, err error) {
 	switch e := err.(type) {
-	case *BusinessError:
+	case *api.BusinessError:
 		c.JSON(http.StatusOK, e)
 	case validator.ValidationErrors: // binding error
-		c.JSON(http.StatusOK, ErrValidation(e))
+		c.JSON(http.StatusOK, api.ErrValidation(e))
 	default:
 		// internal server error
-		c.JSON(HttpStatusInternalError, ErrInternal(e))
+		c.JSON(HttpStatusInternalError, api.ErrInternal(e))
 	}
 }
 

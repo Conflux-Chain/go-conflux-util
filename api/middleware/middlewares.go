@@ -1,4 +1,4 @@
-package api
+package middleware
 
 import (
 	"time"
@@ -18,7 +18,7 @@ func Wrap(controller func(c *gin.Context) (any, error)) gin.HandlerFunc {
 	}
 }
 
-func MiddlewareMetrics(name string, args ...any) gin.HandlerFunc {
+func Metrics(name string, args ...any) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 		c.Next()
