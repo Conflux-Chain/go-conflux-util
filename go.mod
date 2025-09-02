@@ -8,6 +8,7 @@ require (
 	github.com/gin-gonic/gin v1.8.1
 	github.com/go-playground/validator/v10 v10.11.1
 	github.com/go-telegram/bot v1.2.2
+	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
 	github.com/mcuadros/go-defaults v1.2.0
 	github.com/mitchellh/mapstructure v1.4.3

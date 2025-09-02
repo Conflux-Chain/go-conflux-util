@@ -12,6 +12,7 @@ const (
 	ErrCodeInternal        = 2
 	ErrCodeTooManyRequests = 3
 	ErrCodeDatabase        = 4
+	ErrCodeJwt             = 5
 )
 
 // ErrNil is used for success response.
@@ -69,10 +70,14 @@ func ErrDatabaseCausef(err error, cause string, args ...any) *BusinessError {
 	return NewBusinessError(ErrCodeDatabase, "Database error", errors.WithMessagef(err, cause, args...).Error())
 }
 
+func ErrJwt(cause string) *BusinessError {
+	return NewBusinessError(ErrCodeJwt, "JWT error", cause)
+}
+
 func (err *BusinessError) WithData(data any) *BusinessError {
 	return &BusinessError{err.Code, err.Message, data}
 }
 
 func (err *BusinessError) Error() string {
-	return err.Message
+	return fmt.Sprintf("%v: %v (%+v)", err.Code, err.Message, err.Data)
 }
