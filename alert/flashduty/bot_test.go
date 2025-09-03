@@ -28,7 +28,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestSendMarkdown(t *testing.T) {
+func TestSend(t *testing.T) {
 	if robot == nil {
 		t.SkipNow()
 		return
@@ -37,7 +37,6 @@ func TestSendMarkdown(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	// Please manually check if message sent to dingtalk group chat
 	err := robot.Send(ctx, "test", MsgLevelInfo, "# Hello, test!", "description", map[string]string{"service": "engine", "resourcetype": "cpu"})
 	assert.NoError(t, err)
 }

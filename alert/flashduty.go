@@ -7,6 +7,7 @@ import (
 
 	"github.com/Conflux-Chain/go-conflux-util/alert/flashduty"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -21,18 +22,16 @@ type FlashDutyConfig struct {
 // FlashDutyChannel represents a FlashDuty notification channel.
 type FlashDutyChannel struct {
 	*flashduty.Robot
-	ID        string          // the identifier of the channel
-	Config    FlashDutyConfig // the configuration for the FlashDuty channel
-	Formatter Formatter       // message formatter
+	ID     string          // the identifier of the channel
+	Config FlashDutyConfig // the configuration for the FlashDuty channel
 }
 
 // NewFlashDutyChannel creates a new FlashDuty channel with the given ID and configuration
-func NewFlashDutyChannel(chID string, fmt Formatter, conf FlashDutyConfig) *FlashDutyChannel {
+func NewFlashDutyChannel(chID string, conf FlashDutyConfig) *FlashDutyChannel {
 	return &FlashDutyChannel{
-		ID:        chID,
-		Config:    conf,
-		Formatter: fmt,
-		Robot:     flashduty.NewRobot(conf.Webhook, conf.Secret),
+		ID:     chID,
+		Config: conf,
+		Robot:  flashduty.NewRobot(conf.Webhook, conf.Secret),
 	}
 }
 
@@ -48,37 +47,19 @@ func (c *FlashDutyChannel) Type() ChannelType {
 
 // Send sends notification using the FlashDuty channel.
 func (c *FlashDutyChannel) Send(ctx context.Context, note *Notification) error {
-	jsonMsgText, err := c.Formatter.Format(note)
+	var data map[string]string
+	var err error
+	if _, ok := note.Content.(*logrus.Entry); ok {
+		data, err = formatLogrusEntry(note)
+	} else {
+		data, err = formatDefault(note)
+	}
+
 	if err != nil {
-		return errors.WithMessage(err, "failed to format alert msg from notification")
+		return errors.WithMessage(err, "failed to format notification content")
 	}
 
-	var raw map[string]interface{}
-	err = json.Unmarshal([]byte(jsonMsgText), &raw)
-	if err != nil {
-		return errors.WithMessage(err, "failed to format alert msg from json")
-	}
-
-	m := make(map[string]string)
-	for k, v := range raw {
-		switch vv := v.(type) {
-		case string:
-			m[k] = vv
-		case float64:
-			if vv == float64(int64(vv)) {
-				m[k] = strconv.FormatInt(int64(vv), 10)
-			} else {
-				m[k] = strconv.FormatFloat(vv, 'f', -1, 64)
-			}
-		case bool:
-			m[k] = strconv.FormatBool(vv)
-		default:
-			b, _ := json.Marshal(vv)
-			m[k] = string(b)
-		}
-	}
-
-	return c.Robot.Send(ctx, note.Title, c.adaptSeverity(note.Severity), "", "", m)
+	return c.Robot.Send(ctx, note.Title, c.adaptSeverity(note.Severity), "", "", data)
 }
 
 // adaptSeverity adapts notification severity level to FlashDuty severity level.
@@ -91,4 +72,67 @@ func (c *FlashDutyChannel) adaptSeverity(severity Severity) string {
 	default:
 		return flashduty.MsgLevelInfo
 	}
+}
+
+func formatLogrusEntry(note *Notification) (map[string]string, error) {
+	entry := note.Content.(*logrus.Entry)
+	entryError, _ := entry.Data[logrus.ErrorKey].(error)
+
+	ctxFields := make(map[string]string)
+	for k, v := range entry.Data {
+		if k == logrus.ErrorKey {
+			continue
+		}
+		switch vv := v.(type) {
+		case string:
+			ctxFields[k] = vv
+		case float64:
+			if vv == float64(int64(vv)) {
+				ctxFields[k] = strconv.FormatInt(int64(vv), 10)
+			} else {
+				ctxFields[k] = strconv.FormatFloat(vv, 'f', -1, 64)
+			}
+		case bool:
+			ctxFields[k] = strconv.FormatBool(vv)
+		default:
+			b, err := json.Marshal(vv)
+			if err != nil {
+				return nil, errors.WithMessagef(err, "failed to format field %s", vv)
+			}
+			ctxFields[k] = string(b)
+		}
+	}
+
+	ctxFields["level"] = entry.Level.String()
+	ctxFields["time"] = entry.Time.String()
+	ctxFields["msg"] = entry.Message
+	if entryError != nil {
+		ctxFields["error"] = entryError.Error()
+	}
+
+	return ctxFields, nil
+}
+
+func formatDefault(note *Notification) (map[string]string, error) {
+	ctxFields := make(map[string]string)
+	switch vv := note.Content.(type) {
+	case string:
+		ctxFields["content"] = vv
+	case float64:
+		if vv == float64(int64(vv)) {
+			ctxFields["content"] = strconv.FormatInt(int64(vv), 10)
+		} else {
+			ctxFields["content"] = strconv.FormatFloat(vv, 'f', -1, 64)
+		}
+	case bool:
+		ctxFields["content"] = strconv.FormatBool(vv)
+	default:
+		b, err := json.Marshal(vv)
+		if err != nil {
+			return nil, errors.WithMessagef(err, "failed to format field %s", vv)
+		}
+		ctxFields["content"] = string(b)
+	}
+
+	return ctxFields, nil
 }
