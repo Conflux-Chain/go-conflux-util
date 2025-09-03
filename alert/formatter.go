@@ -344,21 +344,21 @@ func newDingtalkMsgFormatter(msgType string, tags []string, mentions []string) (
 	}
 }
 
-type jsonFormatter struct {
+type flashDutyFormatter struct {
 }
 
-func newJsonFormatter() *jsonFormatter {
-	return &jsonFormatter{}
+func newFlashDutyFormatter() *flashDutyFormatter {
+	return &flashDutyFormatter{}
 }
 
-func (f *jsonFormatter) Format(note *Notification) (string, error) {
+func (f *flashDutyFormatter) Format(note *Notification) (string, error) {
 	if _, ok := note.Content.(*logrus.Entry); ok {
 		return f.formatLogrusEntry(note)
 	}
 
 	return f.formatDefault(note)
 }
-func (f *jsonFormatter) formatLogrusEntry(note *Notification) (string, error) {
+func (f *flashDutyFormatter) formatLogrusEntry(note *Notification) (string, error) {
 	entry := note.Content.(*logrus.Entry)
 	entryError, _ := entry.Data[logrus.ErrorKey].(error)
 
@@ -383,7 +383,7 @@ func (f *jsonFormatter) formatLogrusEntry(note *Notification) (string, error) {
 	return string(b), nil
 }
 
-func (f *jsonFormatter) formatDefault(note *Notification) (string, error) {
+func (f *flashDutyFormatter) formatDefault(note *Notification) (string, error) {
 	ctxFields := make(map[string]interface{})
 	ctxFields["title"] = note.Title
 	ctxFields["severity"] = note.Severity

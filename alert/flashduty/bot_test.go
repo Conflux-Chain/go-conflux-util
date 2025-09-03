@@ -14,8 +14,8 @@ var (
 )
 
 // Please set the following enviroments before running tests:
-// `TEST_FLASHDUTY_WEBHOOK`: DingTalk webhook;
-// `TEST_FLASHDUTY_SECRET`: DingTalk secret.
+// `TEST_FLASHDUTY_WEBHOOK`: FlashDuty webhook;
+// `TEST_FLASHDUTY_SECRET`: FlashDuty secret.
 
 func TestMain(m *testing.M) {
 	webhook := os.Getenv("TEST_FLASHDUTY_WEBHOOK")

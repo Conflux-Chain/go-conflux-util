@@ -11,18 +11,17 @@ import (
 	"github.com/pkg/errors"
 )
 
-func ErrMsgTypeNotSupported(msgType string) error {
-	return errors.Errorf("message type %s not supported", msgType)
-}
-
 // Robot represents a flashduty custom robot that can send messages to groups.
 type Robot struct {
 	pushUri string
-	secret  string
 }
 
 func NewRobot(pushUri, secret string) *Robot {
-	return &Robot{pushUri: pushUri, secret: secret}
+	webURL := pushUri
+	if len(secret) != 0 {
+		webURL += fmt.Sprintf("?integration_key=%s", secret)
+	}
+	return &Robot{pushUri: webURL}
 }
 
 // Send send a flashduty message.
@@ -65,12 +64,7 @@ func (r Robot) send(ctx context.Context, msg interface{}) error {
 		return errors.WithMessage(err, "failed to marshal message")
 	}
 
-	webURL := r.pushUri
-	if len(r.secret) != 0 {
-		webURL += fmt.Sprintf("?integration_key=%s", r.secret)
-	}
-
-	req, errRequest := http.NewRequestWithContext(ctx, http.MethodPost, webURL, bytes.NewReader(jm))
+	req, errRequest := http.NewRequestWithContext(ctx, http.MethodPost, r.pushUri, bytes.NewReader(jm))
 	if errRequest != nil {
 		return errors.WithMessage(errRequest, "failed to create request")
 	}
@@ -90,10 +84,10 @@ func (r Robot) send(ctx context.Context, msg interface{}) error {
 	var fdr response
 	err = json.Unmarshal(body, &fdr)
 	if err != nil {
-		return err
+		return errors.WithMessagef(err, "failed to unmarshal response: %s", string(body))
 	}
 	if len(fdr.Error.Code) > 0 {
-		return fmt.Errorf("flashDutyRobot send failed: %v", fdr.Error.Error())
+		return errors.WithMessage(err, "flashDutyRobot send failed")
 	}
 
 	return nil

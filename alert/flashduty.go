@@ -3,7 +3,7 @@ package alert
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"strconv"
 
 	"github.com/Conflux-Chain/go-conflux-util/alert/flashduty"
 	"github.com/pkg/errors"
@@ -50,25 +50,30 @@ func (c *FlashDutyChannel) Type() ChannelType {
 func (c *FlashDutyChannel) Send(ctx context.Context, note *Notification) error {
 	jsonMsgText, err := c.Formatter.Format(note)
 	if err != nil {
-		return errors.WithMessage(err, "failed to format alert msg")
+		return errors.WithMessage(err, "failed to format alert msg from notification")
 	}
 
 	var raw map[string]interface{}
 	err = json.Unmarshal([]byte(jsonMsgText), &raw)
 	if err != nil {
-		return errors.WithMessage(err, "failed to format alert msg")
+		return errors.WithMessage(err, "failed to format alert msg from json")
 	}
 
 	m := make(map[string]string)
 	for k, v := range raw {
 		switch vv := v.(type) {
-		case string, float64, bool:
-			m[k] = fmt.Sprint(vv)
-		default:
-			b, err := json.Marshal(vv)
-			if err != nil {
-				return errors.WithMessage(err, "failed to format alert msg")
+		case string:
+			m[k] = vv
+		case float64:
+			if vv == float64(int64(vv)) {
+				m[k] = strconv.FormatInt(int64(vv), 10)
+			} else {
+				m[k] = strconv.FormatFloat(vv, 'f', -1, 64)
 			}
+		case bool:
+			m[k] = strconv.FormatBool(vv)
+		default:
+			b, _ := json.Marshal(vv)
 			m[k] = string(b)
 		}
 	}
@@ -79,8 +84,6 @@ func (c *FlashDutyChannel) Send(ctx context.Context, note *Notification) error {
 // adaptSeverity adapts notification severity level to FlashDuty severity level.
 func (c *FlashDutyChannel) adaptSeverity(severity Severity) string {
 	switch severity {
-	case SeverityLow:
-		return flashduty.MsgLevelInfo
 	case SeverityMedium:
 		return flashduty.MsgLevelWarning
 	case SeverityCritical:

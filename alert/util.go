@@ -91,7 +91,7 @@ func parseAlertChannel(chID string, chmap map[string]interface{}, tags []string)
 			return nil, err
 		}
 
-		fmt := newJsonFormatter()
+		fmt := newFlashDutyFormatter()
 
 		return NewFlashDutyChannel(chID, fmt, fdconf), nil
 	// NOTE: add more channel types support here if needed
