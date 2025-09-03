@@ -40,6 +40,7 @@ const (
 	ChannelTypeTelegram  ChannelType = "telegram"
 	ChannelTypeSMTP      ChannelType = "smtp"
 	ChannelTypePagerDuty ChannelType = "pagerduty"
+	ChannelTypeFlashDuty ChannelType = "flashduty"
 )
 
 // Notification channel interface.
