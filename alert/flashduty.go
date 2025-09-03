@@ -83,24 +83,12 @@ func formatLogrusEntry(note *Notification) (map[string]string, error) {
 		if k == logrus.ErrorKey {
 			continue
 		}
-		switch vv := v.(type) {
-		case string:
-			ctxFields[k] = vv
-		case float64:
-			if vv == float64(int64(vv)) {
-				ctxFields[k] = strconv.FormatInt(int64(vv), 10)
-			} else {
-				ctxFields[k] = strconv.FormatFloat(vv, 'f', -1, 64)
-			}
-		case bool:
-			ctxFields[k] = strconv.FormatBool(vv)
-		default:
-			b, err := json.Marshal(vv)
-			if err != nil {
-				return nil, errors.WithMessagef(err, "failed to format field %s", vv)
-			}
-			ctxFields[k] = string(b)
+
+		vvStr, err := formatToString(v)
+		if err != nil {
+			return nil, errors.WithMessage(err, "failed to format field to string")
 		}
+		ctxFields[k] = vvStr
 	}
 
 	ctxFields["level"] = entry.Level.String()
@@ -115,24 +103,33 @@ func formatLogrusEntry(note *Notification) (map[string]string, error) {
 
 func formatDefault(note *Notification) (map[string]string, error) {
 	ctxFields := make(map[string]string)
-	switch vv := note.Content.(type) {
+	contentStr, err := formatToString(note.Content)
+	if err != nil {
+		return nil, errors.WithMessage(err, "failed to format notification content to string")
+	}
+
+	ctxFields["content"] = contentStr
+
+	return ctxFields, nil
+}
+
+func formatToString(v interface{}) (string, error) {
+	switch vv := v.(type) {
 	case string:
-		ctxFields["content"] = vv
+		return vv, nil
 	case float64:
 		if vv == float64(int64(vv)) {
-			ctxFields["content"] = strconv.FormatInt(int64(vv), 10)
+			return strconv.FormatInt(int64(vv), 10), nil
 		} else {
-			ctxFields["content"] = strconv.FormatFloat(vv, 'f', -1, 64)
+			return strconv.FormatFloat(vv, 'f', -1, 64), nil
 		}
 	case bool:
-		ctxFields["content"] = strconv.FormatBool(vv)
+		return strconv.FormatBool(vv), nil
 	default:
 		b, err := json.Marshal(vv)
 		if err != nil {
-			return nil, errors.WithMessagef(err, "failed to format field %s", vv)
+			return "", errors.WithMessagef(err, "failed to format field %s", vv)
 		}
-		ctxFields["content"] = string(b)
+		return string(b), nil
 	}
-
-	return ctxFields, nil
 }
