@@ -162,7 +162,17 @@ func (j *Jwt[T, KEY]) validateFromHeader(authHeader string) (*JwtClaims[T], erro
 }
 
 // ClaimsFromContext returns JWT claims that injected via middleware.
-func (j *Jwt[T, KEY]) ClaimsFromContext(c *gin.Context) (*JwtClaims[T], error) {
+func (j *Jwt[T, KEY]) ClaimsFromContext(c *gin.Context) (data T, err error) {
+	claims, err := j.RawClaimsFromContext(c)
+	if err != nil {
+		return data, err
+	}
+
+	return claims.Data, nil
+}
+
+// ClaimsFromContext returns JWT claims that injected via middleware.
+func (j *Jwt[T, KEY]) RawClaimsFromContext(c *gin.Context) (*JwtClaims[T], error) {
 	val, ok := c.Get("JWTClaims")
 	if !ok {
 		return nil, api.ErrJwt("JWT claims not found")
