@@ -79,5 +79,9 @@ func (err *BusinessError) WithData(data any) *BusinessError {
 }
 
 func (err *BusinessError) Error() string {
+	if err.Data == nil {
+		return fmt.Sprintf("%v: %v", err.Code, err.Message)
+	}
+
 	return fmt.Sprintf("%v: %v (%+v)", err.Code, err.Message, err.Data)
 }
