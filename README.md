@@ -15,7 +15,7 @@ Utilities for golang developments on Conflux blockchain, especially for backend 
 |[Parallel](./parallel)|Utilities for parallel execution.|
 |[Pprof](./pprof)|To enable pprof server based on configuration.|
 |[Rate Limit](#rate-limit)|Utilities to limit request rate.|
-|[Store](#store)|Provides utilities to initialize database.|
+|[Store](./store/README.md)|Provides utilities to initialize database.|
 |[Viper](./viper/README.md)| Initialize the original [viper](https://github.com/spf13/viper) in common and fix some issues.|
 
 ## Alert
@@ -167,11 +167,3 @@ logrus.WithField("@channel": "tgrobot").Warn("Some warning occurred")
 Provides basic rate limit algorithms, including fixed window, token bucket, along with utilities for HTTP middleware.
 
 Note, rate limit middleware depends on the HTTP middleware `RealIP`.
-
-## Store
-We recommend to initialize store module from configuration file, which supports **mysql**, **sqlite** and **in-memory** database.
-
-```go
-config := store.MustNewConfigFromViper()
-db := config.MustOpenOrCreate(tables ...interface{})
-```
