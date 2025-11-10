@@ -16,7 +16,7 @@ Utilities for golang developments on Conflux blockchain, especially for backend 
 |[Pprof](./pprof)|To enable pprof server based on configuration.|
 |[Rate Limit](#rate-limit)|Utilities to limit request rate.|
 |[Store](#store)|Provides utilities to initialize database.|
-|[Viper](#viper)|To fix some issues of original [viper](https://github.com/spf13/viper).|
+|[Viper](./viper/README.md)| Initialize the original [viper](https://github.com/spf13/viper) in common and fix some issues|
 
 ## Alert
 Before sending any message to notification channels, the client should create a channel robot. To construct a channel robot programmatically:
@@ -177,15 +177,4 @@ We recommend to initialize store module from configuration file, which supports 
 ```go
 config := store.MustNewConfigFromViper()
 db := config.MustOpenOrCreate(tables ...interface{})
-```
-
-## Viper
-Fixes issues when unmarshal configurations from environment. A simple way to load configuration from file is as below:
-
-```go
-viper.MustUnmarshalKey(key string, valPtr interface{}, resolver ...ValueResolver)
-
-// E.g. load `foo` config from file.
-var config FooConfig
-viper.MustUnmarshalKey("foo", &config)
 ```
