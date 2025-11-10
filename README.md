@@ -11,12 +11,12 @@ Utilities for golang developments on Conflux blockchain, especially for backend 
 |[Health](#health)|Utilities for health management.|
 |[HTTP](#http)|Provides common used middlewares.|
 |[Log](#log)|Based on [logrus](https://github.com/sirupsen/logrus) and integrated with [Alert](#alert).|
-|[Metrics](#metrics)|To monitor system runtime.|
+|[Metrics](./metrics/README.md)|To monitor system runtime.|
 |[Parallel](./parallel)|Utilities for parallel execution.|
 |[Pprof](./pprof)|To enable pprof server based on configuration.|
 |[Rate Limit](#rate-limit)|Utilities to limit request rate.|
 |[Store](#store)|Provides utilities to initialize database.|
-|[Viper](./viper/README.md)| Initialize the original [viper](https://github.com/spf13/viper) in common and fix some issues|
+|[Viper](./viper/README.md)| Initialize the original [viper](https://github.com/spf13/viper) in common and fix some issues.|
 
 ## Alert
 Before sending any message to notification channels, the client should create a channel robot. To construct a channel robot programmatically:
@@ -162,9 +162,6 @@ Additionally, you can configure the alert hook to set up default notification ch
 // Send alert to the 'tgrobot' channel instead.
 logrus.WithField("@channel": "tgrobot").Warn("Some warning occurred")
 ```
-
-## Metrics
-We recommend to initialize metrics module from configuration file. Client could also configure influxdb to report metrics periodically. See `MetricsConfig` for more details.
 
 ## Rate Limit
 Provides basic rate limit algorithms, including fixed window, token bucket, along with utilities for HTTP middleware.
