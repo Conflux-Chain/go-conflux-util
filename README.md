@@ -9,12 +9,12 @@ Utilities for golang developments on Conflux blockchain, especially for backend 
 |[Config](./config/README.md)|Initialize all modules.|
 |[DLock](./dlock/README.md)|Utilities for distributed lock.|
 |[Health](#health)|Utilities for health management.|
-|[HTTP](#http)|Provides common used middlewares.|
+|[HTTP](./http)|Provides common used middlewares，e.g. remote address, API key and rate limit.|
 |[Log](./log/README.md)|Based on [logrus](https://github.com/sirupsen/logrus) and integrated with [Alert](./alert/README.md).|
 |[Metrics](./metrics/README.md)|To monitor system runtime.|
 |[Parallel](./parallel)|Utilities for parallel execution.|
 |[Pprof](./pprof)|To enable pprof server based on configuration.|
-|[Rate Limit](#rate-limit)|Utilities to limit request rate.|
+|[Rate Limit](./rate)|Utilities to limit request rate, along with HTTP handler middlewares|
 |[Store](./store/README.md)|Provides utilities to initialize database.|
 |[Viper](./viper/README.md)| Initialize the original [viper](https://github.com/spf13/viper) in common and fix some issues.|
 
@@ -60,11 +60,3 @@ Generally, system shall not report failure if auto resolved in a short time. How
 
 - [Counter](./health/counter.go): manage health status based on the number of continous failures.
 - [TimedCounter](./health/timed_counter.go): manage health status based on duration since the first failure.
-
-## HTTP
-Provides utilities to hook middlewares to HTTP handler, e.g. remote address, API key and rate limit.
-
-## Rate Limit
-Provides basic rate limit algorithms, including fixed window, token bucket, along with utilities for HTTP middleware.
-
-Note, rate limit middleware depends on the HTTP middleware `RealIP`.
