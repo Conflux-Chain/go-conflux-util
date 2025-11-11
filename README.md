@@ -6,7 +6,7 @@ Utilities for golang developments on Conflux blockchain, especially for backend 
 |[Alert](./alert/README.md)|Send notification messages to DingTalk, Telegram, SMTP email or PagerDuty.|
 |[API](#api)|REST API utilities based on [gin](https://github.com/gin-gonic/gin).|
 |[Cmd](./cmd)|Utilities for CLI tools.|
-|[Config](#config)|Initialize all modules.|
+|[Config](./config/README.md)|Initialize all modules.|
 |[DLock](#distributed-lock)|Utilities for distributed lock.|
 |[Health](#health)|Utilities for health management.|
 |[HTTP](#http)|Provides common used middlewares.|
@@ -52,23 +52,6 @@ factory := func(router *gin.Engine) {
 // Start REST API server in a separate goroutine.
 go api.MustServeFromViper(factory)
 ```
-
-## Config
-Initialize all modules at the entry point of program, including [viper](#viper), [log](#log), [metrics](#metrics), [alert](#alert) and [pprof](./pprof).
-
-```go
-cobra.OnInitialize(func() {
-    config.MustInit(viperEnvPrefix string)
-})
-```
-
-The `viperEnvPrefix` is used to overwrite configurations from environment. E.g. if the `viperEnvPrefix` is `FOO`, then client could set environment as below to overwrite config `alert.dingTalk.secret`:
-
-```sh
-FOO_ALERT_DINGTALK_SECRET='dsafsadf'
-```
-
-You could follow the example [config.yaml](./config/config.yaml) under config folder to setup your own configuration file. Generally, you could only overwrite configurations if the default value not suitable.
 
 ## Distributed Lock
 The distributed lock ensures atomicity in a distributed environment, such as leader election for achieving high availability.
