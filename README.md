@@ -8,7 +8,7 @@ Utilities for golang developments on Conflux blockchain, especially for backend 
 |[Cmd](./cmd)|Utilities for CLI tools.|
 |[Config](./config/README.md)|Initialize all modules.|
 |[DLock](./dlock/README.md)|Utilities for distributed lock.|
-|[Health](#health)|Utilities for health management.|
+|[Health](./health/README.go)|Utilities for health management.|
 |[HTTP](./http)|Provides common used middlewares，e.g. remote address, API key and rate limit.|
 |[Log](./log/README.md)|Based on [logrus](https://github.com/sirupsen/logrus) and integrated with [Alert](./alert/README.md).|
 |[Metrics](./metrics/README.md)|To monitor system runtime.|
@@ -52,11 +52,3 @@ factory := func(router *gin.Engine) {
 // Start REST API server in a separate goroutine.
 go api.MustServeFromViper(factory)
 ```
-
-## Health
-Provides utilities for error tolerant health monitoring to avoid massive duplicated alerts.
-
-Generally, system shall not report failure if auto resolved in a short time. However, system should report failure if not solved in a short time, and periodically remind failure if unrecovered for a long time.
-
-- [Counter](./health/counter.go): manage health status based on the number of continous failures.
-- [TimedCounter](./health/timed_counter.go): manage health status based on duration since the first failure.
