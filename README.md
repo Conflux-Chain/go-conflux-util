@@ -3,58 +3,20 @@ Utilities for golang developments on Conflux blockchain, especially for backend 
 
 |Module|Description|
 |------|-------|
-|[Alert](#alert)|Send notification messages to DingTalk, Telegram, SMTP email or PagerDuty.|
+|[Alert](./alert/README.md)|Send notification messages to DingTalk, Telegram, SMTP email or PagerDuty.|
 |[API](#api)|REST API utilities based on [gin](https://github.com/gin-gonic/gin).|
 |[Cmd](./cmd)|Utilities for CLI tools.|
 |[Config](#config)|Initialize all modules.|
 |[DLock](#distributed-lock)|Utilities for distributed lock.|
 |[Health](#health)|Utilities for health management.|
 |[HTTP](#http)|Provides common used middlewares.|
-|[Log](#log)|Based on [logrus](https://github.com/sirupsen/logrus) and integrated with [Alert](#alert).|
+|[Log](./log/README.md)|Based on [logrus](https://github.com/sirupsen/logrus) and integrated with [Alert](./alert/README.md).|
 |[Metrics](./metrics/README.md)|To monitor system runtime.|
 |[Parallel](./parallel)|Utilities for parallel execution.|
 |[Pprof](./pprof)|To enable pprof server based on configuration.|
 |[Rate Limit](#rate-limit)|Utilities to limit request rate.|
 |[Store](./store/README.md)|Provides utilities to initialize database.|
 |[Viper](./viper/README.md)| Initialize the original [viper](https://github.com/spf13/viper) in common and fix some issues.|
-
-## Alert
-Before sending any message to notification channels, the client should create a channel robot. To construct a channel robot programmatically:
-
-```go
-// Construct a notification channel imperatively
-var notifyCh alert.Channel
-
-// DingTalk Channel
-notifyCh = alert.NewDingTalkChannel(...)
-// or PagerDuty Channel
-notifyCh = alert.NewPagerDutyChannel(...)
-// or Smtp email Channel
-notifyCh = alert.NewSmtpChannel(...)
-// or Telegram Channel
-notifyCh = alert.NewTelegramChannel(...)
-```
-
-Alternatively, you can initialize the alert channels from configuration file or environment variables, which is recommended.
-
-```go
-// Initialize the alert channels from configurations loaded by viper
-alert.MustInitFromViper()
-// After initialization, you can retrieve the notification channel using a unique channel ID
-notifyCh := alert.DefaultManager().Channel(chID)
-```
-
-Once the channel is initialized, you can send a notification message through the channel:
-
-```go
-notifyCh.Send(context.Background(), &alert.Notification{
-    Title:    "Alert testing",
-    Severity: alert.SeverityLow,
-    Content: `This is a test notification message`,
-})
-```
-
-Moreover, alert can be integrated with [log](#log) module, so as to send alerting message when `warning` or `error` logs occurred.
 
 ## API
 This module provides common HTTP responses along with standard errors in JSON format.
@@ -145,23 +107,6 @@ Generally, system shall not report failure if auto resolved in a short time. How
 
 ## HTTP
 Provides utilities to hook middlewares to HTTP handler, e.g. remote address, API key and rate limit.
-
-## Log
-We recommend initializing the log module from a configuration file or environment variables.
-
-```go
-// Initialize logging by specifying configurations
-log.MustInit(conf)
-// or Initialize logging from configurations loaded by viper
-log.MustInitFromViper()
-```
-
-Additionally, you can configure the alert hook to set up default notification channels for sending alert messages when `warning` or `error` logs occur. You can also customize notifications by specifying the target channel(s) through the `@channel` field in a Logrus entry.
-
-```go
-// Send alert to the 'tgrobot' channel instead.
-logrus.WithField("@channel": "tgrobot").Warn("Some warning occurred")
-```
 
 ## Rate Limit
 Provides basic rate limit algorithms, including fixed window, token bucket, along with utilities for HTTP middleware.
