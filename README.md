@@ -7,7 +7,7 @@ Utilities for golang developments on Conflux blockchain, especially for backend 
 |[API](#api)|REST API utilities based on [gin](https://github.com/gin-gonic/gin).|
 |[Cmd](./cmd)|Utilities for CLI tools.|
 |[Config](./config/README.md)|Initialize all modules.|
-|[DLock](#distributed-lock)|Utilities for distributed lock.|
+|[DLock](./dlock/README.md)|Utilities for distributed lock.|
 |[Health](#health)|Utilities for health management.|
 |[HTTP](#http)|Provides common used middlewares.|
 |[Log](./log/README.md)|Based on [logrus](https://github.com/sirupsen/logrus) and integrated with [Alert](./alert/README.md).|
@@ -51,33 +51,6 @@ factory := func(router *gin.Engine) {
 
 // Start REST API server in a separate goroutine.
 go api.MustServeFromViper(factory)
-```
-
-## Distributed Lock
-The distributed lock ensures atomicity in a distributed environment, such as leader election for achieving high availability.
-
-To create a distributed lock, you need to specify a storage backend. We provide the `MySQLBackend` which handles reading and writing lock information in a MySQL table. Alternatively, you can implement your own storage backend using Redis, etcd, ZooKeeper, or other options.
-
-```go
-// Construct a lock manager with customized storage backend.
-lockMan := dlock.NewLockManager(backend)
-```
-
-Alternatively, you can construct a lock manager with a convenient MySQL backend by using configuration files or environment variables.
-
-```go
-// Construct a lock manager with a MySQL backend from configurations loaded by viper
-lockMan = dlock.NewLockManagerFromViper()
-```
-
-To acquire and release a lock, you can use:
-
-```go
-intent := NewLockIntent("dlock_key", 15 * time.Second)
-// Acquire a lock with key name "dlock_key" for 15 seconds
-lockMan.Acquire(context.Background(), intent)
-// Release the lock immediately
-lockMan.Release(context.Background(), intent)
 ```
 
 ## Health
