@@ -7,17 +7,27 @@ This package provides utilities to initialize [viper](https://github.com/spf13/v
 Please use below method to initialize `viper` in common:
 
 ```go
-func MustInit(envPrefix string, configPath ...string)
+package main
+
+import "github.com/Conflux-Chain/go-conflux-util/viper"
+
+func main() {
+	// initialize viper with environment variable prefix "FOO"
+	viper.MustInit("FOO")
+
+	// initialize viper with environment variable prefix "FOO" and config file "config-prod.yaml"
+	viper.MustInit("FOO", "config-prod.yaml")
+}
 ```
 
-The parameter `envPrefix` is used to overwrite configurations via environment variables, e.g.
+The 1st parameter `envPrefix` is used to overwrite configurations via environment variables, e.g.
 
 ```shell
-# evnPrefix is FOOAPP
-export FOOAPP_API_ENDPOINT="http://localhost:12345"
+# evnPrefix is FOO
+export FOO_API_ENDPOINT="http://localhost:12345"
 ```
 
-The optional parameter `configPath` indicates the configuration file path to load (e.g. `./config-prod.yaml`). If not specified, the program will search for `config.xxx` (e.g. `config.yaml`, `config.json` or `config.toml`) file under current folder and `./config` folder.
+The 2nd optional parameter `configPath` indicates the configuration file path to load (e.g. `./config-prod.yaml`). If not specified, the program will search for `config.xxx` (e.g. `config.yaml`, `config.json` or `config.toml`) file under current folder and `./config` folder.
 
 As a best practice, we recommend to initialize `viper` via [config](../config/README.md).
 
