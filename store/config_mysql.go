@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -10,24 +11,30 @@ import (
 )
 
 type MysqlConfig struct {
-	Host     string `default:"127.0.0.1:3306"`
-	Username string `default:"root"`
-	Password string
-
+	Host       string `default:"127.0.0.1:3306"`
+	Username   string `default:"root"`
+	Password   string
 	Database   string
-	AutoCreate bool // creates database if absent
+	AutoCreate bool   // indicates whether to create database if absent
+	Location   string // time.Location name, e.g. "UTC (default)", "Local" or "Asia/Shanghai"
 }
 
-func (config *MysqlConfig) OpenWithoutDB() gorm.Dialector {
-	// refer to https://github.com/go-sql-driver/mysql#dsn-data-source-name
-	dsn := fmt.Sprintf("%v:%v@tcp(%v)/?parseTime=true", config.Username, config.Password, config.Host)
+// Open opens a mysql gorm dialector. If the `dbName` not specified, `config.Database` will be used.
+//
+// If you do not want to preselect a database, use empty string for `dbName`.
+func (config *MysqlConfig) Open(dbName ...string) gorm.Dialector {
+	database := config.Database
+	if len(dbName) > 0 {
+		database = dbName[0]
+	}
 
-	return mysql.Open(dsn)
-}
-
-func (config *MysqlConfig) Open() gorm.Dialector {
 	// refer to https://github.com/go-sql-driver/mysql#dsn-data-source-name
-	dsn := fmt.Sprintf("%v:%v@tcp(%v)/%v?parseTime=true", config.Username, config.Password, config.Host, config.Database)
+	dsn := fmt.Sprintf("%v:%v@tcp(%v)/%v?parseTime=true", config.Username, config.Password, config.Host, database)
+
+	if len(config.Location) > 0 {
+		// escape "/" as "%2F"
+		dsn += fmt.Sprintf("&loc=%v", strings.ReplaceAll(config.Location, "/", "%2F"))
+	}
 
 	return mysql.Open(dsn)
 }
