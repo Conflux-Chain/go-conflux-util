@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -15,7 +16,7 @@ type MysqlConfig struct {
 	Password   string
 	Database   string
 	AutoCreate bool   // indicates whether to create database if absent
-	Location   string // time.Location name, e.g. "UTC (default)", "Local" or "Asia%2FShanghai", where "%2F" escapes "/"
+	Location   string // time.Location name, e.g. "UTC (default)", "Local" or "Asia/Shanghai"
 }
 
 // Open opens a mysql gorm dialector. If the `dbName` not specified, `config.Database` will be used.
@@ -31,7 +32,8 @@ func (config *MysqlConfig) Open(dbName ...string) gorm.Dialector {
 	dsn := fmt.Sprintf("%v:%v@tcp(%v)/%v?parseTime=true", config.Username, config.Password, config.Host, database)
 
 	if len(config.Location) > 0 {
-		dsn += fmt.Sprintf("&loc=%v", config.Location)
+		// escape "/" as "%2F"
+		dsn += fmt.Sprintf("&loc=%v", strings.ReplaceAll(config.Location, "/", "%2F"))
 	}
 
 	return mysql.Open(dsn)
