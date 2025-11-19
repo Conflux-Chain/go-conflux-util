@@ -130,7 +130,7 @@ func (config *Config) getGormLogLevel() logger.LogLevel {
 }
 
 func (config *Config) createDatabaseIfAbsent(mysqlConfig MysqlConfig) error {
-	db, err := config.createSession(mysqlConfig.OpenWithoutDB())
+	db, err := config.createSession(mysqlConfig.Open(""))
 	if err != nil {
 		return errors.WithMessage(err, "Failed to create mysql db session")
 	}
