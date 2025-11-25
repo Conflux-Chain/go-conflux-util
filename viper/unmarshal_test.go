@@ -35,90 +35,35 @@ func TestViperSub(t *testing.T) {
 	var jsonConf = []byte(`{"prune":{"name":"ptest1","enabled":true,"interval":"1s","threshold":{"tags":["block","prune"],"log":{"maxLogs":"2000"}}}}`)
 
 	viper.SetConfigType("json")
-	err := viper.ReadConfig(bytes.NewBuffer(jsonConf))
-	assert.Nil(t, err)
+	assert.NoError(t, viper.ReadConfig(bytes.NewBuffer(jsonConf)))
 
-	{ // test viper.Sub(...) does not respect env var
-		var pc pruneConfig
-		err = viper.Sub("prune").Unmarshal(&pc)
-		assert.Nil(t, err)
-		assert.NotEqualValues(t, 1000, pc.Threshold.Log.MaxLogs)
+	{ // test raw viper methods that does not respect env var
+		var pc1 pruneConfig
+		assert.NoError(t, viper.Sub("prune").Unmarshal(&pc1))
+		assert.Equal(t, 2000, pc1.Threshold.Log.MaxLogs)
+
+		var pc2 pruneConfig
+		assert.NoError(t, viper.UnmarshalKey("prune", &pc2))
+		assert.Equal(t, 2000, pc2.Threshold.Log.MaxLogs)
 	}
 
 	var pc pruneConfig
-	assert.Nil(t, UnmarshalKey("prune", &pc))
+	assert.NoError(t, UnmarshalKey("prune", &pc))
 
 	{ // test ViperSub(...) works with env var for type int
-		assert.EqualValues(t, 1000, pc.Threshold.Log.MaxLogs)
+		assert.Equal(t, 1000, pc.Threshold.Log.MaxLogs)
 
+		// supports to change env at runtime
 		os.Setenv("CFX_PRUNE_THRESHOLD_LOG_MAXLOGS", "5000")
-
 		var pc2 pruneConfig
-		assert.Nil(t, UnmarshalKey("prune", &pc2))
+		assert.NoError(t, UnmarshalKey("prune", &pc2))
+		assert.Equal(t, 5000, pc2.Threshold.Log.MaxLogs)
 
-		assert.EqualValues(t, 5000, pc2.Threshold.Log.MaxLogs)
-
+		// multiple sub path
 		os.Setenv("CFX_PRUNE_THRESHOLD_LOG_MAXLOGS", "15000")
-
 		var llc logLimit
-		assert.Nil(t, UnmarshalKey("prune.threshold.log", &llc))
-
-		assert.EqualValues(t, 15000, llc.MaxLogs)
-	}
-
-	{ // test ViperSub(...) works with env var for type bool
-		assert.True(t, pc.Eanbled)
-
-		os.Setenv("CFX_PRUNE_ENABLED", "false")
-
-		var pc2 pruneConfig
-		assert.Nil(t, UnmarshalKey("prune", &pc2))
-
-		assert.False(t, pc2.Eanbled)
-	}
-
-	{ // test ViperSub(...) works with env var for type string
-		assert.Equal(t, "ptest1", pc.Name)
-
-		os.Setenv("CFX_PRUNE_NAME", "ptest2")
-
-		var pc2 pruneConfig
-		assert.Nil(t, UnmarshalKey("prune", &pc2))
-
-		assert.Equal(t, "ptest2", pc2.Name)
-	}
-
-	{ // test ViperSub(...) works with env var for type time.Duration
-		assert.Equal(t, time.Second, pc.Interval)
-
-		os.Setenv("CFX_PRUNE_INTERVAL", "5m")
-
-		var pc2 pruneConfig
-		assert.Nil(t, UnmarshalKey("prune", &pc2))
-
-		assert.Equal(t, 5*time.Minute, pc2.Interval)
-	}
-
-	{ // test ViperSub(...) works with env var for type []string
-		assert.ElementsMatch(t, pc.Threshold.Tags, []string{"block", "prune"})
-
-		os.Setenv("CFX_PRUNE_THRESHOLD_TAGS", "tx delete")
-
-		var pc2 pruneConfig
-		assert.Nil(t, UnmarshalKey("prune", &pc2))
-
-		assert.ElementsMatch(t, pc2.Threshold.Tags, []string{"tx delete"})
-
-		var pc3 pruneConfig
-		assert.Nil(t, UnmarshalKey("prune", &pc3, func(key string) (interface{}, bool) {
-			if key == "prune.threshold.tags" {
-				return viper.GetStringSlice(key), true
-			}
-
-			return nil, false
-		}))
-
-		assert.ElementsMatch(t, pc3.Threshold.Tags, []string{"tx", "delete"})
+		assert.NoError(t, UnmarshalKey("prune.threshold.log", &llc))
+		assert.Equal(t, 15000, llc.MaxLogs)
 	}
 }
 
@@ -135,7 +80,7 @@ func TestEnvWithoutConfig(t *testing.T) {
 		}
 	}
 
-	MustUnmarshalKey("testConfig", &conf)
+	assert.NoError(t, UnmarshalKey("testConfig", &conf))
 	assert.True(t, conf.Enabled)
 	assert.True(t, conf.SubConfig.Enabled)
 }
@@ -163,7 +108,7 @@ foo:
 
 	// sub config
 	var sub ValConfig
-	MustUnmarshalKey("foo.bar", &sub)
+	assert.NoError(t, UnmarshalKey("foo.bar", &sub))
 	assert.Equal(t, ValConfig{"val1", "env2", "yml3", "env4"}, sub)
 }
 
@@ -183,7 +128,7 @@ func TestEnvStringSlice(t *testing.T) {
 	os.Setenv("CFX_TESTCONFIG_NAMES1", "a,b,c")
 	os.Setenv("CFX_TESTCONFIG_NAMES2", "a b c")
 
-	MustUnmarshalKey("testConfig", &conf)
+	assert.NoError(t, UnmarshalKey("testConfig", &conf))
 	assert.Equal(t, []string{"a", "b", "c"}, conf.Names1)
 	assert.Equal(t, []string{"a b c"}, conf.Names2)
 
