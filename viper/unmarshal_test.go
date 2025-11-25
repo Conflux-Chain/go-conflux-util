@@ -156,6 +156,11 @@ foo:
     val4: yml4
 `))))
 
+	// global config
+	var config TestConfig
+	assert.NoError(t, Unmarshal(&config))
+	assert.Equal(t, ValConfig{"val1", "env2", "yml3", "env4"}, config.Foo.Bar)
+
 	// sub config
 	var sub ValConfig
 	MustUnmarshalKey("foo.bar", &sub)
@@ -184,4 +189,54 @@ func TestEnvStringSlice(t *testing.T) {
 
 	assert.Equal(t, []string{"a,b,c"}, viper.GetStringSlice("testConfig.names1"))
 	assert.Equal(t, []string{"a", "b", "c"}, viper.GetStringSlice("testConfig.names2"))
+}
+
+func TestUnmarshalEnvDateTypes(t *testing.T) {
+	reset()
+
+	type DataTypes struct {
+		Int         int
+		Bool        bool
+		String      string
+		Duration    time.Duration
+		StringSlice []string
+		Map         map[int]ValConfig
+	}
+
+	// init env
+	os.Setenv("CFX_FOO_BAR_INT", "777")
+	os.Setenv("CFX_FOO_BAR_BOOL", "true")
+	os.Setenv("CFX_FOO_BAR_STRING", "teststring")
+	os.Setenv("CFX_FOO_BAR_DURATION", "30m")
+	os.Setenv("CFX_FOO_BAR_STRINGSLICE", "a,b,c")
+	os.Setenv("CFX_FOO_BAR_MAP_1030_VAL1", "vvv1")
+	os.Setenv("CFX_FOO_BAR_MAP_1030_VAL2", "vvv2")
+	os.Setenv("CFX_FOO_BAR_MAP_1_VAL3", "vvv3")
+	os.Setenv("CFX_FOO_BAR_MAP_1_VAL4", "vvv4")
+
+	expected := DataTypes{
+		Int:         777,
+		Bool:        true,
+		String:      "teststring",
+		Duration:    30 * time.Minute,
+		StringSlice: []string{"a", "b", "c"},
+		Map: map[int]ValConfig{
+			1030: {"vvv1", "vvv2", "", ""},
+			1:    {"", "", "vvv3", "vvv4"},
+		},
+	}
+
+	// global config
+	var config struct {
+		Foo struct {
+			Bar DataTypes
+		}
+	}
+	assert.NoError(t, Unmarshal(&config))
+	assert.Equal(t, expected, config.Foo.Bar)
+
+	// sub config
+	var sub DataTypes
+	assert.NoError(t, UnmarshalKey("foo.bar", &sub))
+	assert.Equal(t, expected, sub)
 }

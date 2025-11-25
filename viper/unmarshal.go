@@ -13,6 +13,27 @@ import (
 // ValueResolver defines custom method to get value by key from viper settings.
 type ValueResolver func(key string) (interface{}, bool)
 
+// allEnv loads all environment variables of specified `envKeyPrefix` in kv format.
+func allEnv() map[string]string {
+	result := make(map[string]string)
+
+	for _, v := range os.Environ() {
+		if !strings.HasPrefix(v, envKeyPrefix) {
+			continue
+		}
+
+		fields := strings.SplitN(v, "=", 2)
+
+		key := strings.TrimPrefix(fields[0], envKeyPrefix)
+		key = strings.ReplaceAll(key, "_", ".")
+		key = strings.ToLower(key)
+
+		result[key] = fields[1]
+	}
+
+	return result
+}
+
 // keys load all viper keys both from config file and env vars.
 func keys(prefix string) map[string]bool {
 	prefix = strings.ToLower(prefix)
@@ -26,16 +47,7 @@ func keys(prefix string) map[string]bool {
 	}
 
 	// load keys from environments
-	for _, v := range os.Environ() {
-		if !strings.HasPrefix(v, envKeyPrefix) {
-			continue
-		}
-
-		fields := strings.SplitN(v, "=", 2)
-		key := strings.TrimPrefix(fields[0], envKeyPrefix)
-		key = strings.ReplaceAll(key, "_", ".")
-		key = strings.ToLower(key)
-
+	for key := range allEnv() {
 		if strings.HasPrefix(key, prefix) {
 			result[key] = true
 		}
@@ -89,4 +101,25 @@ func UnmarshalKey(key string, valPtr interface{}, resolver ...ValueResolver) err
 	defaults.SetDefaults(valPtr)
 	subViper := sub(key, resolver...)
 	return subViper.Unmarshal(valPtr)
+}
+
+// Unmarshal unmarshals the config into a Struct.
+func Unmarshal(valPtr any, opts ...viper.DecoderConfigOption) error {
+	copy := viper.New()
+
+	for k, v := range viper.AllSettings() {
+		copy.Set(k, v)
+	}
+
+	for k, v := range allEnv() {
+		copy.Set(k, v)
+	}
+
+	if err := copy.Unmarshal(valPtr, opts...); err != nil {
+		return err
+	}
+
+	defaults.SetDefaults(valPtr)
+
+	return nil
 }

@@ -98,6 +98,4 @@ foo:
 	assert.NoError(t, viper.UnmarshalKey("foo.bar", &sub))
 	// assert.Equal(t, ValConfig{"", "", "yml3", "env4"}, foo)
 	assert.Equal(t, ValConfig{"", "", "yml3", "yml4"}, sub)
-
-	viper.Debug()
 }
