@@ -27,11 +27,9 @@ type pruneConfig struct {
 	Threshold threshold     `mapstructure:"threshold"`
 }
 
-func init() {
-	initEnv("cfx")
-}
-
 func TestViperSub(t *testing.T) {
+	reset()
+
 	os.Setenv("CFX_PRUNE_THRESHOLD_LOG_MAXLOGS", "1000")
 
 	var jsonConf = []byte(`{"prune":{"name":"ptest1","enabled":true,"interval":"1s","threshold":{"tags":["block","prune"],"log":{"maxLogs":"2000"}}}}`)
@@ -125,6 +123,8 @@ func TestViperSub(t *testing.T) {
 }
 
 func TestEnvWithoutConfig(t *testing.T) {
+	reset()
+
 	os.Setenv("CFX_TESTCONFIG_ENABLED", "true")
 	os.Setenv("CFX_TESTCONFIG_SUBCONFIG_ENABLED", "true")
 
@@ -141,31 +141,25 @@ func TestEnvWithoutConfig(t *testing.T) {
 }
 
 func TestEnvConfigMixed(t *testing.T) {
-	var conf struct {
-		Val0 string
-		Val1 string `default:"v1"`
-		Val2 string `default:"v2"` // env
-		Val3 string `default:"v3"` // yml
-		Val4 string `default:"v4"` // yml + env: env will overwrite yml
-	}
+	reset()
 
-	os.Setenv("CFX_TESTCONFIG_VAL2", "env2")
-	os.Setenv("CFX_TESTCONFIG_VAL4", "env4")
+	// init env
+	os.Setenv("CFX_FOO_BAR_VAL2", "env2")
+	os.Setenv("CFX_FOO_BAR_VAL4", "env4")
 
-	var jsonConf = []byte(`
-testConfig:
-  val3: yml3
-  val4: yml4
-`)
-	viper.SetConfigType("yaml")
-	assert.NoError(t, viper.ReadConfig(bytes.NewBuffer(jsonConf)))
+	// init config
+	viper.SetConfigType("yml")
+	assert.NoError(t, viper.ReadConfig(bytes.NewBuffer([]byte(`
+foo:
+  bar:
+    val3: yml3
+    val4: yml4
+`))))
 
-	MustUnmarshalKey("testConfig", &conf)
-	assert.Equal(t, "", conf.Val0)
-	assert.Equal(t, "v1", conf.Val1)
-	assert.Equal(t, "env2", conf.Val2)
-	assert.Equal(t, "yml3", conf.Val3)
-	assert.Equal(t, "env4", conf.Val4)
+	// sub config
+	var sub ValConfig
+	MustUnmarshalKey("foo.bar", &sub)
+	assert.Equal(t, ValConfig{"val1", "env2", "yml3", "env4"}, sub)
 }
 
 /*
@@ -174,6 +168,8 @@ testConfig:
  * - `GetStringSlice` requires space separated value, e.g. "a b c"
  */
 func TestEnvStringSlice(t *testing.T) {
+	reset()
+
 	var conf struct {
 		Names1 []string
 		Names2 []string
