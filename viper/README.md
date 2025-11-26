@@ -37,6 +37,15 @@ There is bug when unmarshaling configurations that overwritten by environment va
 
 ```go
 // E.g. load `foo` config from file.
-var config FooConfig
-viper.MustUnmarshalKey("foo", &config)
+var fooConfig FooConfig
+viper.MustUnmarshalKey("foo", &fooConfig)
+
+// or load global config at a time.
+var config Config
+err := viper.Unmarshal(&config)
 ```
+
+Note, above 2 methods support:
+
+- Set default value based on `default` tag.
+- Custom data type that implements the `encoding.TextUnmarshaler` interface.

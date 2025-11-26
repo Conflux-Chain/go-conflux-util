@@ -6,8 +6,15 @@ import (
 	"strings"
 
 	"github.com/mcuadros/go-defaults"
+	"github.com/mitchellh/mapstructure"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+)
+
+var defaultDecodeHook = mapstructure.ComposeDecodeHookFunc(
+	mapstructure.StringToTimeDurationHookFunc(),
+	mapstructure.StringToSliceHookFunc(","),
+	mapstructure.TextUnmarshallerHookFunc(),
 )
 
 // ValueResolver defines custom method to get value by key from viper settings.
@@ -100,7 +107,7 @@ func MustUnmarshalKey(key string, valPtr interface{}, resolver ...ValueResolver)
 func UnmarshalKey(key string, valPtr interface{}, resolver ...ValueResolver) error {
 	defaults.SetDefaults(valPtr)
 	subViper := sub(key, resolver...)
-	return subViper.Unmarshal(valPtr)
+	return subViper.Unmarshal(valPtr, viper.DecodeHook(defaultDecodeHook))
 }
 
 // Unmarshal unmarshals the config into a Struct.
@@ -114,6 +121,8 @@ func Unmarshal(valPtr any, opts ...viper.DecoderConfigOption) error {
 	for k, v := range allEnv() {
 		copy.Set(k, v)
 	}
+
+	opts = append([]viper.DecoderConfigOption{viper.DecodeHook(defaultDecodeHook)}, opts...)
 
 	if err := copy.Unmarshal(valPtr, opts...); err != nil {
 		return err
