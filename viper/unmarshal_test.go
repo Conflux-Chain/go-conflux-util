@@ -141,13 +141,14 @@ func TestUnmarshalEnvDateTypes(t *testing.T) {
 	reset()
 
 	type DataTypes struct {
-		Int         int
-		Bool        bool
-		String      string
-		Duration    time.Duration
-		StringSlice []string
-		Map         map[int]ValConfig
-		Address     testutil.HexAddress // Custom type implements the encoding.TextUnmarshaler interface
+		Int          int
+		Bool         bool
+		String       string
+		Duration     time.Duration
+		StringSlice  []string
+		Map          map[int]ValConfig
+		Address      testutil.HexAddress // Custom type implements the encoding.TextUnmarshaler interface
+		AddressSlice []testutil.HexAddress
 	}
 
 	// init env
@@ -161,6 +162,7 @@ func TestUnmarshalEnvDateTypes(t *testing.T) {
 	os.Setenv("CFX_FOO_BAR_MAP_1_VAL3", "vvv3")
 	os.Setenv("CFX_FOO_BAR_MAP_1_VAL4", "vvv4")
 	os.Setenv("CFX_FOO_BAR_ADDRESS", "0x86E7e8a956c781cc7385cBc29fdE0e737dE48b73")
+	os.Setenv("CFX_FOO_BAR_ADDRESSSLICE", "0xdde37114971423be2497D190346AE57d82c5EbB7,0xE3bd412550FA07F1A3eBD1Fab285616016C38b96")
 
 	expected := DataTypes{
 		Int:         777,
@@ -173,6 +175,10 @@ func TestUnmarshalEnvDateTypes(t *testing.T) {
 			1:    {"", "", "vvv3", "vvv4"},
 		},
 		Address: testutil.MustParseHexAddress("0x86E7e8a956c781cc7385cBc29fdE0e737dE48b73"),
+		AddressSlice: []testutil.HexAddress{
+			testutil.MustParseHexAddress("0xdde37114971423be2497D190346AE57d82c5EbB7"),
+			testutil.MustParseHexAddress("0xE3bd412550FA07F1A3eBD1Fab285616016C38b96"),
+		},
 	}
 
 	// global config
