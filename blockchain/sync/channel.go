@@ -10,6 +10,11 @@ type Sizable interface {
 	Size() int // Memory size in bytes
 }
 
+type Sized[T any] struct {
+	Data T
+	Size int
+}
+
 // MemoryBoundedChannel is a channel-like structure that bounds both the number of items and
 // the total memory size of the items in the channel.
 type MemoryBoundedChannel[T Sizable] struct {
@@ -106,12 +111,17 @@ func (ch *MemoryBoundedChannel[T]) loopEnqueue(stopCh chan<- struct{}) {
 }
 
 func (ch *MemoryBoundedChannel[T]) enqueue(item T) {
+	data := Sized[T]{
+		Data: item,
+		Size: item.Size(),
+	}
+
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
 
 	// add item to buffer
-	ch.buffer.PushBack(item)
-	ch.curBytes += item.Size()
+	ch.buffer.PushBack(data)
+	ch.curBytes += data.Size
 
 	// broadcast to waiting receivers
 	ch.notEmptyCond.Broadcast()
@@ -130,7 +140,7 @@ func (ch *MemoryBoundedChannel[T]) loopDequeue(stopCh chan<- struct{}) {
 			break
 		}
 
-		ch.recvCh <- val
+		ch.recvCh <- val.Data
 
 		ch.dequeue()
 	}
@@ -142,7 +152,7 @@ func (ch *MemoryBoundedChannel[T]) loopDequeue(stopCh chan<- struct{}) {
 	}
 }
 
-func (ch *MemoryBoundedChannel[T]) peek() (val T, ok bool) {
+func (ch *MemoryBoundedChannel[T]) peek() (val Sized[T], ok bool) {
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
 
@@ -158,7 +168,7 @@ func (ch *MemoryBoundedChannel[T]) peek() (val T, ok bool) {
 		return
 	}
 
-	return front.Value.(T), true
+	return front.Value.(Sized[T]), true
 }
 
 func (ch *MemoryBoundedChannel[T]) dequeue() {
@@ -168,7 +178,7 @@ func (ch *MemoryBoundedChannel[T]) dequeue() {
 	// remove the front element, which must be exist
 	front := ch.buffer.Front()
 	ch.buffer.Remove(front)
-	ch.curBytes -= front.Value.(T).Size()
+	ch.curBytes -= front.Value.(Sized[T]).Size
 
 	// broadcast to waiting senders
 	ch.notFullCond.Broadcast()
