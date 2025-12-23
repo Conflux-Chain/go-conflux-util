@@ -10,7 +10,7 @@ This is a built-in channel alike structure that bounds both the number of items 
 func Run(ctx context.Context) {
     var wg sync.WaitGroup
 
-    dataCh := dataCh := channel.NewMemoryBoundedChannel[Foo](1024, 256_000_000)
+    dataCh := channel.NewMemoryBoundedChannel[Foo](1024, 256_000_000)
     defer dataCh.Close()
 
     wg.Add(1)
