@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/mcuadros/go-defaults"
+	"github.com/sirupsen/logrus"
 )
 
 type TimedCounterConfig struct {
@@ -46,8 +47,8 @@ func (counter *TimedCounter) IsSuccess() bool {
 
 // OnSuccess erases failure status and return recover information if any.
 //
-//   @return recovered bool - indicates whether recovered from unhealthy status.
-//   @return elapsed time.Duration - indicates the duration since the first failure time.
+//	@return recovered bool - indicates whether recovered from unhealthy status.
+//	@return elapsed time.Duration - indicates the duration since the first failure time.
 func (counter *TimedCounter) OnSuccess() (recovered bool, elapsed time.Duration) {
 	return counter.onSuccessAt(time.Now())
 }
@@ -72,9 +73,9 @@ func (counter *TimedCounter) onSuccessAt(now time.Time) (recovered bool, elapsed
 
 // OnFailure marks failure status and return unhealthy information.
 //
-//   @return unhealthy bool - indicates whether continuous failures occurred in a long time.
-//   @return unrecovered bool - indicates whether continuous failures occurred and unrecovered in a long time.
-//   @return elapsed time.Duration - indicates the duration since the first failure time.
+//	@return unhealthy bool - indicates whether continuous failures occurred in a long time.
+//	@return unrecovered bool - indicates whether continuous failures occurred and unrecovered in a long time.
+//	@return elapsed time.Duration - indicates the duration since the first failure time.
 func (counter *TimedCounter) OnFailure() (unhealthy bool, unrecovered bool, elapsed time.Duration) {
 	return counter.onFailureAt(time.Now())
 }
@@ -111,10 +112,10 @@ func (counter *TimedCounter) onFailureAt(now time.Time) (unhealthy bool, unrecov
 
 // OnError updates health status for the given `err` and returns health information.
 //
-//   @return recovered bool - indicates whether recovered from unhealthy status when `err` is nil.
-//   @return unhealthy bool - indicates whether continuous failures occurred in a long time when `err` is not nil.
-//   @return unrecovered bool - indicates whether continuous failures occurred and unrecovered in a long time when `err` is not nil.
-//   @return elapsed time.Duration - indicates the duration since the first failure time.
+//	@return recovered bool - indicates whether recovered from unhealthy status when `err` is nil.
+//	@return unhealthy bool - indicates whether continuous failures occurred in a long time when `err` is not nil.
+//	@return unrecovered bool - indicates whether continuous failures occurred and unrecovered in a long time when `err` is not nil.
+//	@return elapsed time.Duration - indicates the duration since the first failure time.
 func (counter *TimedCounter) OnError(err error) (recovered bool, unhealthy bool, unrecovered bool, elapsed time.Duration) {
 	if isErrorNil(err) {
 		recovered, elapsed = counter.OnSuccess()
@@ -123,4 +124,17 @@ func (counter *TimedCounter) OnError(err error) (recovered bool, unhealthy bool,
 	}
 
 	return
+}
+
+// LogOnError updates health status for the given `err` and logs health information.
+func (counter *TimedCounter) LogOnError(err error, task string) {
+	recovered, unhealthy, unrecovered, elapsed := counter.OnError(err)
+
+	if recovered {
+		logrus.WithField("task", task).WithField("elapsed", elapsed).Warn("Task is healthy now")
+	} else if unhealthy {
+		logrus.WithError(err).WithField("task", task).WithField("elapsed", elapsed).Warn("Task became unhealthy")
+	} else if unrecovered {
+		logrus.WithError(err).WithField("task", task).WithField("elapsed", elapsed).Warn("Task is not recovered in a long time")
+	}
 }
