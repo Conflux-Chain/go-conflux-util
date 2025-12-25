@@ -12,9 +12,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-type AdapterConfig struct {
+type AdapterOption struct {
 	// RPC
-	URL            string
 	RequestTimeout time.Duration `default:"3s"`
 
 	// latest block number
@@ -30,26 +29,30 @@ var _ poll.Adapter[BlockData] = (*Adapter)(nil)
 
 // Adapter implements the poll.Adapter[T] interface to poll data from evm RPC.
 type Adapter struct {
-	config AdapterConfig
+	option AdapterOption
 
 	client *web3go.Client
 }
 
-func NewAdapter(config AdapterConfig) (*Adapter, error) {
-	defaults.SetDefaults(&config)
+func NewAdapter(url string, option ...AdapterOption) (*Adapter, error) {
+	var opt AdapterOption
+	if len(option) > 0 {
+		opt = option[0]
+	}
+	defaults.SetDefaults(&opt)
 
-	option := web3go.ClientOption{
+	clientOption := web3go.ClientOption{
 		Option: providers.Option{
-			RequestTimeout: config.RequestTimeout,
+			RequestTimeout: opt.RequestTimeout,
 		},
 	}
 
-	client, err := web3go.NewClientWithOption(config.URL, option)
+	client, err := web3go.NewClientWithOption(url, clientOption)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to create client")
 	}
 
-	return &Adapter{config, client}, nil
+	return &Adapter{opt, client}, nil
 }
 
 // Close closes the underlying RPC client.
@@ -69,12 +72,12 @@ func (adapter *Adapter) GetFinalizedBlockNumber(ctx context.Context) (uint64, er
 
 // GetLatestBlockNumber implements the poll.Adapter[T] interface.
 func (adapter *Adapter) GetLatestBlockNumber(ctx context.Context) (uint64, error) {
-	block, err := adapter.client.WithContext(ctx).Eth.BlockByNumber(types.BlockNumber(adapter.config.LatestBlockNumberTag), false)
+	block, err := adapter.client.WithContext(ctx).Eth.BlockByNumber(types.BlockNumber(adapter.option.LatestBlockNumberTag), false)
 	if err != nil {
 		return 0, err
 	}
 
-	bn := block.Number.Int64() + adapter.config.LatestBlockNumberOffset
+	bn := block.Number.Int64() + adapter.option.LatestBlockNumberOffset
 
 	return uint64(min(bn, 0)), nil
 }
@@ -89,13 +92,13 @@ func (adapter *Adapter) GetBlockData(ctx context.Context, blockNumber uint64) (B
 		return BlockData{}, errors.WithMessage(err, "Failed to query block")
 	}
 
-	if !adapter.config.IgnoreReceipts {
+	if !adapter.option.IgnoreReceipts {
 		if err := data.queryReceipts(adapter.client, bn); err != nil {
 			return BlockData{}, errors.WithMessage(err, "Failed to query receipts")
 		}
 	}
 
-	if !adapter.config.IgnoreTraces {
+	if !adapter.option.IgnoreTraces {
 		if err := data.queryTraces(adapter.client, bn); err != nil {
 			return BlockData{}, errors.WithMessage(err, "Failed to query traces")
 		}
