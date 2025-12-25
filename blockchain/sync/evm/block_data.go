@@ -1,6 +1,7 @@
 package evm
 
 import (
+	"github.com/DmitriyVTitov/size"
 	"github.com/openweb3/web3go"
 	"github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
@@ -10,6 +11,11 @@ type BlockData struct {
 	Block    *types.Block           // always not nil
 	Receipts []*types.Receipt       // nil if ignored, empty slice if no tx in block
 	Traces   []types.LocalizedTrace // nil if ignored, empty slice if no tx in block
+}
+
+// Size implements the channel.Sizable interface.
+func (data BlockData) Size() int {
+	return size.Of(data)
 }
 
 func (data *BlockData) queryBlock(client *web3go.Client, blockNumber types.BlockNumber) error {
@@ -88,6 +94,8 @@ func (data *BlockData) queryTraces(client *web3go.Client, blockNumber types.Bloc
 			return errors.Errorf("Trace block hash mismatch, index = %v", i)
 		}
 	}
+
+	data.Traces = traces
 
 	return nil
 }

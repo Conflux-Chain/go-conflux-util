@@ -3,6 +3,7 @@ module github.com/Conflux-Chain/go-conflux-util
 go 1.23.0
 
 require (
+	github.com/DmitriyVTitov/size v1.5.0
 	github.com/PagerDuty/go-pagerduty v1.8.0
 	github.com/gin-contrib/cors v1.3.1
 	github.com/gin-gonic/gin v1.8.1

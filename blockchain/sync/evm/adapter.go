@@ -17,8 +17,8 @@ type AdapterOption struct {
 	RequestTimeout time.Duration `default:"3s"`
 
 	// latest block number
-	LatestBlockNumberTag    int64 `default:"-1"` // "latest" block
-	LatestBlockNumberOffset int64 `default:"-5"`
+	LatestBlockNumberTag    int64  `default:"-1"` // "latest" block
+	LatestBlockNumberOffset uint64 `default:"5"`
 
 	// allow to ignore receipts and/or traces, only block and transactions are required
 	IgnoreReceipts bool
@@ -77,9 +77,12 @@ func (adapter *Adapter) GetLatestBlockNumber(ctx context.Context) (uint64, error
 		return 0, err
 	}
 
-	bn := block.Number.Int64() + adapter.option.LatestBlockNumberOffset
+	bn := block.Number.Uint64()
+	if bn < adapter.option.LatestBlockNumberOffset {
+		return 0, nil
+	}
 
-	return uint64(min(bn, 0)), nil
+	return bn - adapter.option.LatestBlockNumberOffset, nil
 }
 
 // GetBlockData implements the poll.Adapter[T] interface.
