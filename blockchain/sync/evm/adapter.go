@@ -12,8 +12,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-type AdapterOption struct {
+type AdapterConfig struct {
 	// RPC
+	URL            string
 	RequestTimeout time.Duration `default:"3s"`
 
 	// latest block number
@@ -29,30 +30,26 @@ var _ poll.Adapter[BlockData] = (*Adapter)(nil)
 
 // Adapter implements the poll.Adapter[T] interface to poll data from evm RPC.
 type Adapter struct {
-	option AdapterOption
+	config AdapterConfig
 
 	client *web3go.Client
 }
 
-func NewAdapter(url string, option ...AdapterOption) (*Adapter, error) {
-	var opt AdapterOption
-	if len(option) > 0 {
-		opt = option[0]
-	}
-	defaults.SetDefaults(&opt)
+func NewAdapter(config AdapterConfig) (*Adapter, error) {
+	defaults.SetDefaults(&config)
 
 	clientOption := web3go.ClientOption{
 		Option: providers.Option{
-			RequestTimeout: opt.RequestTimeout,
+			RequestTimeout: config.RequestTimeout,
 		},
 	}
 
-	client, err := web3go.NewClientWithOption(url, clientOption)
+	client, err := web3go.NewClientWithOption(config.URL, clientOption)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to create client")
 	}
 
-	return &Adapter{opt, client}, nil
+	return &Adapter{config, client}, nil
 }
 
 // Close closes the underlying RPC client.
@@ -72,17 +69,17 @@ func (adapter *Adapter) GetFinalizedBlockNumber(ctx context.Context) (uint64, er
 
 // GetLatestBlockNumber implements the poll.Adapter[T] interface.
 func (adapter *Adapter) GetLatestBlockNumber(ctx context.Context) (uint64, error) {
-	block, err := adapter.client.WithContext(ctx).Eth.BlockByNumber(types.BlockNumber(adapter.option.LatestBlockNumberTag), false)
+	block, err := adapter.client.WithContext(ctx).Eth.BlockByNumber(types.BlockNumber(adapter.config.LatestBlockNumberTag), false)
 	if err != nil {
 		return 0, err
 	}
 
 	bn := block.Number.Uint64()
-	if bn < adapter.option.LatestBlockNumberOffset {
+	if bn < adapter.config.LatestBlockNumberOffset {
 		return 0, nil
 	}
 
-	return bn - adapter.option.LatestBlockNumberOffset, nil
+	return bn - adapter.config.LatestBlockNumberOffset, nil
 }
 
 // GetBlockData implements the poll.Adapter[T] interface.
@@ -95,13 +92,13 @@ func (adapter *Adapter) GetBlockData(ctx context.Context, blockNumber uint64) (B
 		return BlockData{}, errors.WithMessage(err, "Failed to query block")
 	}
 
-	if !adapter.option.IgnoreReceipts {
+	if !adapter.config.IgnoreReceipts {
 		if err := data.queryReceipts(adapter.client, bn); err != nil {
 			return BlockData{}, errors.WithMessage(err, "Failed to query receipts")
 		}
 	}
 
-	if !adapter.option.IgnoreTraces {
+	if !adapter.config.IgnoreTraces {
 		if err := data.queryTraces(adapter.client, bn); err != nil {
 			return BlockData{}, errors.WithMessage(err, "Failed to query traces")
 		}
