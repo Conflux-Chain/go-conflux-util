@@ -2,112 +2,97 @@ package db
 
 import (
 	"context"
-	"sync"
 	"time"
 
-	"github.com/Conflux-Chain/go-conflux-util/ctxutil"
 	"github.com/mcuadros/go-defaults"
 	"gorm.io/gorm"
 )
 
+// BatchProcessor is implemented by types that process data in batch.
+//
+// Note, thread-safe is not required in the implementations, since batch
+// related methods are executed in a single thread.
+type BatchProcessor[T any] interface {
+	Processor[T]
+
+	// BatchProcess processes the given data and returns the number of SQLs to be executed in batch.
+	BatchProcess(data T) int
+
+	// BatchExec executes SQLs in batch.
+	BatchExec(tx *gorm.DB, createBatchSize int) error
+
+	// BatchReset reset data for the next batch.
+	BatchReset()
+}
+
 type BatchOption struct {
 	Processor Option
 
-	BatchRows       int           `default:"3000"`
+	BatchSize       int           `default:"3000"`
 	BatchTimeout    time.Duration `default:"3s"`
-	BufferSize      int           `default:"32"`
 	CreateBatchSize int           `default:"1000"`
 }
 
 // BatchProcessor aggregates multiple processor to process blockchain data in batch.
 //
 // Generally, it is used during catch up phase.
-type BatchProcessor[T any] struct {
+type BatchAggregateProcessor[T any] struct {
 	*AggregateProcessor[T]
 
-	option BatchOption
-
-	batch         *batchOperation
+	option        BatchOption
+	processors    []BatchProcessor[T]
 	lastBatchTime time.Time
-	batchCh       chan *batchOperation
-
-	mu sync.Mutex
 }
 
-func NewBatchProcessor[T any](option BatchOption, db *gorm.DB, processors ...Processor[T]) *BatchProcessor[T] {
+func NewBatchAggregateProcessor[T any](option BatchOption, db *gorm.DB, processors ...BatchProcessor[T]) *BatchAggregateProcessor[T] {
 	defaults.SetDefaults(option)
 
-	return &BatchProcessor[T]{
-		AggregateProcessor: NewAggregateProcessor(option.Processor, db, processors...),
+	innerProcessors := make([]Processor[T], 0, len(processors))
+	for _, v := range processors {
+		innerProcessors = append(innerProcessors, v)
+	}
+
+	return &BatchAggregateProcessor[T]{
+		AggregateProcessor: NewAggregateProcessor(option.Processor, db, innerProcessors...),
 		option:             option,
-		batch:              newBatchOperation(option.CreateBatchSize),
 		lastBatchTime:      time.Now(),
-		batchCh:            make(chan *batchOperation, option.BufferSize),
 	}
 }
 
 // Process implements the process.Processor[T] interface.
-func (processor *BatchProcessor[T]) Process(ctx context.Context, data T) {
-	for _, v := range processor.AggregateProcessor.processors {
-		op := v.Process(data)
-		processor.batch.Add(op)
+func (processor *BatchAggregateProcessor[T]) Process(ctx context.Context, data T) {
+	var size int
+
+	for _, v := range processor.processors {
+		size += v.BatchProcess(data)
 	}
 
-	processor.tryWriteOnce(ctx)
-}
-
-func (processor *BatchProcessor[T]) tryWriteOnce(ctx context.Context) {
-	processor.mu.Lock()
-	defer processor.mu.Unlock()
-
-	// check rows and elapsed
-	if rows := processor.batch.Rows(); rows < processor.option.BatchRows &&
-		time.Since(processor.lastBatchTime) < processor.option.BatchTimeout {
+	// Write database only if batch size reached or batch timeout.
+	//
+	// Note, if no more data polled, it will not write database even though batch timeout.
+	// This situation will rarely happen in catch up phase, and the worst case is that
+	// only one batch data not written into database in time.
+	if size < processor.option.BatchSize && time.Since(processor.lastBatchTime) < processor.option.BatchTimeout {
 		return
 	}
 
-	if err := ctxutil.WriteChannel(ctx, processor.batchCh, processor.batch); err != nil {
-		return
-	}
+	processor.blockingWrite(ctx, processor)
 
-	// reset batch
-	processor.batch = newBatchOperation(processor.option.CreateBatchSize)
+	// reset
 	processor.lastBatchTime = time.Now()
+
+	for _, v := range processor.processors {
+		v.BatchReset()
+	}
 }
 
-// Write writes batch operations in a transaction. Generally, this is executed in a
-// separate goroutine, and will terminate when the Poll goroutine completed.
-func (processor *BatchProcessor[T]) Write(ctx context.Context, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	// ticker to check batch timeout
-	ticker := time.NewTicker(processor.option.BatchTimeout / 2)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			processor.tryWriteOnce(ctx)
-		case batch, ok := <-processor.batchCh:
-			if ok {
-				processor.write(ctx, batch)
-			} else {
-				// write the cached batch if channel closed
-				if processor.batch.Rows() > 0 {
-					processor.write(ctx, processor.batch)
-				}
-
-				return
-			}
+// Exec implements the Operation interface.
+func (processor *BatchAggregateProcessor[T]) Exec(tx *gorm.DB) error {
+	for _, v := range processor.processors {
+		if err := v.BatchExec(tx, processor.option.CreateBatchSize); err != nil {
+			return err
 		}
 	}
-}
 
-// Close implements the process.Processor[T] interface.
-//
-// It will close the underlying channel so as to terminate the Write goroutine.
-func (processor *BatchProcessor[T]) Close() {
-	close(processor.batchCh)
+	return nil
 }

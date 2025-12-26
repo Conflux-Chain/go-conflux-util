@@ -46,7 +46,7 @@ func (processor *RevertableAggregateProcessor[T]) Process(ctx context.Context, d
 			ops = append(ops, op)
 		}
 
-		processor.write(ctx, ComposeOperation(ops...))
+		processor.blockingWrite(ctx, ComposeOperation(ops...))
 	}
 
 	processor.AggregateProcessor.Process(ctx, data.Data)

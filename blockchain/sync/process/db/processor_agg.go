@@ -10,6 +10,11 @@ import (
 	"gorm.io/gorm"
 )
 
+// Processor is implemented by types that process data to update database.
+type Processor[T any] interface {
+	Process(data T) Operation
+}
+
 type Option struct {
 	RetryInterval time.Duration `default:"3s"`
 
@@ -44,11 +49,11 @@ func (processor *AggregateProcessor[T]) Process(ctx context.Context, data T) {
 		ops = append(ops, op)
 	}
 
-	processor.write(ctx, ComposeOperation(ops...))
+	processor.blockingWrite(ctx, ComposeOperation(ops...))
 }
 
-// write executes the give op in a transaction.
-func (processor *AggregateProcessor[T]) write(ctx context.Context, op Operation) {
+// blockingWrite executes the given op in a transaction. If failed, it will try again till succeeded.
+func (processor *AggregateProcessor[T]) blockingWrite(ctx context.Context, op Operation) {
 	for {
 		err := processor.db.Transaction(func(tx *gorm.DB) error {
 			return op.Exec(tx)
