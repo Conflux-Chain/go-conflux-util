@@ -27,7 +27,7 @@ type Config struct {
 func CatchUpDB(ctx context.Context, config CatchUpConfig, DB *gorm.DB, nextBlockNumber uint64, processors ...db.BatchProcessor[BlockData]) (uint64, error) {
 	defaults.SetDefaults(&config)
 
-	adapter, err := NewAdapter(config.Adapter)
+	adapter, err := NewAdapterWithConfig(config.Adapter)
 	if err != nil {
 		return 0, errors.WithMessage(err, "Failed to create adapter")
 	}
@@ -50,7 +50,7 @@ func CatchUpDB(ctx context.Context, config CatchUpConfig, DB *gorm.DB, nextBlock
 func StartFinalizedDB(ctx context.Context, wg *sync.WaitGroup, config Config, DB *gorm.DB, nextBlockNumber uint64, processors ...db.Processor[BlockData]) error {
 	defaults.SetDefaults(&config)
 
-	adapter, err := NewAdapter(config.Adapter)
+	adapter, err := NewAdapterWithConfig(config.Adapter)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to create adapter")
 	}
@@ -69,7 +69,7 @@ func StartFinalizedDB(ctx context.Context, wg *sync.WaitGroup, config Config, DB
 func StartLatestDB(ctx context.Context, wg *sync.WaitGroup, config Config, DB *gorm.DB, nextBlockNumber uint64, processors ...db.RevertableProcessor[BlockData]) error {
 	defaults.SetDefaults(&config)
 
-	adapter, err := NewAdapter(config.Adapter)
+	adapter, err := NewAdapterWithConfig(config.Adapter)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to create adapter")
 	}
