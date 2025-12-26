@@ -12,6 +12,12 @@ import (
 	"github.com/pkg/errors"
 )
 
+type AdapterConfig struct {
+	URL string
+
+	Option AdapterOption
+}
+
 type AdapterOption struct {
 	// RPC
 	RequestTimeout time.Duration `default:"3s"`
@@ -34,16 +40,12 @@ type Adapter struct {
 	client *web3go.Client
 }
 
-func NewAdapter(url string, option ...AdapterOption) (*Adapter, error) {
-	var opt AdapterOption
-	if len(option) > 0 {
-		opt = option[0]
-	}
-	defaults.SetDefaults(&opt)
+func NewAdapter(url string, option AdapterOption) (*Adapter, error) {
+	defaults.SetDefaults(&option)
 
 	clientOption := web3go.ClientOption{
 		Option: providers.Option{
-			RequestTimeout: opt.RequestTimeout,
+			RequestTimeout: option.RequestTimeout,
 		},
 	}
 
@@ -52,7 +54,15 @@ func NewAdapter(url string, option ...AdapterOption) (*Adapter, error) {
 		return nil, errors.WithMessage(err, "Failed to create client")
 	}
 
-	return &Adapter{opt, client}, nil
+	return &Adapter{option, client}, nil
+}
+
+func NewAdapterWithConfig(config AdapterConfig) (*Adapter, error) {
+	if len(config.URL) == 0 {
+		return nil, errors.New("URL not specified")
+	}
+
+	return NewAdapter(config.URL, config.Option)
 }
 
 // Close closes the underlying RPC client.
