@@ -62,6 +62,8 @@ func NewBatchAggregateProcessor[T any](option BatchOption, db *gorm.DB, processo
 
 // Process implements the process.Processor[T] interface.
 func (processor *BatchAggregateProcessor[T]) Process(ctx context.Context, data T) {
+	processor.size = 0
+
 	for _, v := range processor.processors {
 		processor.size += v.BatchProcess(data)
 	}
