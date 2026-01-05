@@ -11,7 +11,7 @@ type Processor[T any] interface {
 	Process(ctx context.Context, data T)
 
 	// Close is executed when Process goroutine terminated.
-	Close()
+	Close(ctx context.Context)
 }
 
 // Process retrieves data from the given channel and processes data with given processor.
@@ -20,14 +20,13 @@ type Processor[T any] interface {
 func Process[T any](ctx context.Context, wg *sync.WaitGroup, dataCh <-chan T, processor Processor[T]) {
 	defer wg.Done()
 
-	defer processor.Close()
-
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case data, ok := <-dataCh:
 			if !ok {
+				processor.Close(ctx)
 				return
 			}
 
