@@ -42,6 +42,7 @@ type BatchAggregateProcessor[T any] struct {
 	option        BatchOption
 	processors    []BatchProcessor[T]
 	lastBatchTime time.Time
+	size          int
 }
 
 func NewBatchAggregateProcessor[T any](option BatchOption, db *gorm.DB, processors ...BatchProcessor[T]) *BatchAggregateProcessor[T] {
@@ -61,10 +62,8 @@ func NewBatchAggregateProcessor[T any](option BatchOption, db *gorm.DB, processo
 
 // Process implements the process.Processor[T] interface.
 func (processor *BatchAggregateProcessor[T]) Process(ctx context.Context, data T) {
-	var size int
-
 	for _, v := range processor.processors {
-		size += v.BatchProcess(data)
+		processor.size += v.BatchProcess(data)
 	}
 
 	// Write database only if batch size reached or batch timeout.
@@ -72,14 +71,19 @@ func (processor *BatchAggregateProcessor[T]) Process(ctx context.Context, data T
 	// Note, if no more data polled, it will not write database even though batch timeout.
 	// This situation will rarely happen in catch up phase, and the worst case is that
 	// only one batch data not written into database in time.
-	if size < processor.option.BatchSize && time.Since(processor.lastBatchTime) < processor.option.BatchTimeout {
+	if processor.size < processor.option.BatchSize && time.Since(processor.lastBatchTime) < processor.option.BatchTimeout {
 		return
 	}
 
+	processor.write(ctx)
+}
+
+func (processor *BatchAggregateProcessor[T]) write(ctx context.Context) {
 	processor.blockingWrite(ctx, processor)
 
 	// reset
 	processor.lastBatchTime = time.Now()
+	processor.size = 0
 
 	for _, v := range processor.processors {
 		v.BatchReset()
@@ -95,4 +99,11 @@ func (processor *BatchAggregateProcessor[T]) Exec(tx *gorm.DB) error {
 	}
 
 	return nil
+}
+
+// Close implements the process.Processor[T] interface.
+func (processor *BatchAggregateProcessor[T]) Close(ctx context.Context) {
+	if processor.size > 0 {
+		processor.write(ctx)
+	}
 }
