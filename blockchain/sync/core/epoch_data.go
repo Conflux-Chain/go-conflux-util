@@ -13,8 +13,7 @@ type EpochData struct {
 	Receipts [][]types.TransactionReceipt // nil if ignored
 	Traces   *types.EpochTrace            // nil if ignored
 
-	pivotBlock *types.Block
-	numTxs     int // total number of transactions in epoch, including skipped ones
+	numTxs int // total number of transactions in epoch, including skipped ones
 }
 
 // Size implements the channel.Sizable interface.
