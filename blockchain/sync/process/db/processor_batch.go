@@ -46,7 +46,7 @@ type BatchAggregateProcessor[T any] struct {
 }
 
 func NewBatchAggregateProcessor[T any](option BatchOption, db *gorm.DB, processors ...BatchProcessor[T]) *BatchAggregateProcessor[T] {
-	defaults.SetDefaults(option)
+	defaults.SetDefaults(&option)
 
 	innerProcessors := make([]Processor[T], 0, len(processors))
 	for _, v := range processors {
