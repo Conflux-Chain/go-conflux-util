@@ -66,7 +66,7 @@ func (data *EpochData) queryReceipts(client sdk.ClientOperator) error {
 
 	// query receipts in batch
 	pivotBlock := data.Blocks[numBlocks-1]
-	epoch := types.NewEpochOrBlockHashWithEpoch(types.NewEpochNumber(pivotBlock.EpochNumber))
+	epoch := types.NewEpochOrBlockHashWithBlockHash(pivotBlock.Hash, true)
 
 	epochReceipts, err := client.GetEpochReceipts(*epoch)
 	if err != nil {
