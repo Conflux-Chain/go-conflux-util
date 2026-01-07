@@ -3,6 +3,7 @@ package channel
 import (
 	"container/list"
 	"sync"
+	"sync/atomic"
 )
 
 // Sizable is the interface implemented by types that support to compute memory size.
@@ -31,7 +32,8 @@ type MemoryBoundedChannel[T Sizable] struct {
 	sendCh chan T // channel for sending data
 	recvCh chan T // channel for receiving data
 
-	closed bool // indicates whether the channel is closed
+	sendClosed atomic.Bool // indicates whether the send channel is closed
+	recvClosed atomic.Bool // indicates whether the recv channel is closed
 }
 
 // NewMemoryBoundedChannel creates a new MemoryBoundedChannel with the specified capacity and maximum memory size.
@@ -84,26 +86,26 @@ func (ch *MemoryBoundedChannel[T]) Close() {
 	defer ch.mu.Unlock()
 
 	// already closed
-	if ch.closed {
+	if !ch.sendClosed.CompareAndSwap(false, true) {
 		return
 	}
-
-	ch.closed = true
 
 	// Close sendCh to stop loopEnqueue goroutine.
 	// Note, recvCh cannot be closed here, otherwise loopDequeue
 	// goroutine may panic to write data into recvCh.
 	close(ch.sendCh)
 
-	// wake up all waiting goroutines
+	// wake up loopEnqueue goroutine
 	ch.notFullCond.Broadcast()
-	ch.notEmptyCond.Broadcast()
 }
 
 func (ch *MemoryBoundedChannel[T]) loopEnqueue(stopCh chan<- struct{}) {
 	for item := range ch.sendCh {
 		ch.enqueue(item)
 	}
+
+	ch.recvClosed.Store(true)
+	ch.notEmptyCond.Broadcast()
 
 	if stopCh != nil {
 		stopCh <- struct{}{}
@@ -127,7 +129,7 @@ func (ch *MemoryBoundedChannel[T]) enqueue(item T) {
 	ch.notEmptyCond.Broadcast()
 
 	// blocking sending channel if buffer is full and this channel not closed yet
-	for !ch.closed && (ch.buffer.Len() >= ch.capacity || ch.curBytes >= ch.maxBytes) {
+	for !ch.sendClosed.Load() && (ch.buffer.Len() >= ch.capacity || ch.curBytes >= ch.maxBytes) {
 		ch.notFullCond.Wait()
 	}
 }
@@ -157,7 +159,7 @@ func (ch *MemoryBoundedChannel[T]) peek() (val Sized[T], ok bool) {
 	defer ch.mu.Unlock()
 
 	// wait until there is data
-	for !ch.closed && ch.buffer.Len() == 0 {
+	for !ch.recvClosed.Load() && ch.buffer.Len() == 0 {
 		ch.notEmptyCond.Wait()
 	}
 
