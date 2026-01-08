@@ -25,6 +25,9 @@ type ParamsDB[T any] struct {
 	Processor       db.Option
 	DB              *gorm.DB
 	NextBlockNumber uint64
+
+	// only used to sync latest data, and usually loads from database
+	Reorg poll.ReorgWindowParams
 }
 
 func CatchUpDB[T channel.Sizable](ctx context.Context, params CatchupParamsDB[T], processors ...db.BatchProcessor[T]) uint64 {
@@ -54,7 +57,7 @@ func StartFinalizedDB[T any](ctx context.Context, wg *sync.WaitGroup, params Par
 }
 
 func StartLatestDB[T any](ctx context.Context, wg *sync.WaitGroup, params ParamsDB[T], processors ...db.RevertableProcessor[T]) {
-	poller := poll.NewLatestPoller(params.Adapter, params.NextBlockNumber, params.Poller)
+	poller := poll.NewLatestPoller(params.Adapter, params.NextBlockNumber, params.Reorg, params.Poller)
 	wg.Add(1)
 	go poller.Poll(ctx, wg)
 

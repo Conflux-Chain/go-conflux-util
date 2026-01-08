@@ -1,8 +1,14 @@
 package poll
 
+type ReorgWindowParams struct {
+	FinalizedBlockNumber uint64
+	FinalizedBlockHash   string
+	LatestBlocks         map[uint64]string
+}
+
 // ReorgWindow is used to detect chain reorg.
 type ReorgWindow struct {
-	// no capacity, since latest_finalized is small enough
+	// no capacity, since max(latest_finalized, latest_checkpoint) is small enough
 	blockNumber2Hashes map[uint64]string
 	earlist, latest    uint64
 }
@@ -11,6 +17,33 @@ func NewReorgWindow() *ReorgWindow {
 	return &ReorgWindow{
 		blockNumber2Hashes: make(map[uint64]string),
 	}
+}
+
+// NewReorgWindowWithLatestBlocks initializes with given latest blocks and the last finalized block number.
+//
+// When service restarted, user should load recent blocks and the last finalized block from database,
+// and initialize the reorg window so as to correctly handle chain reorg during the service down time.
+func NewReorgWindowWithLatestBlocks(params ReorgWindowParams) *ReorgWindow {
+	window := NewReorgWindow()
+	if len(params.FinalizedBlockHash) == 0 {
+		return window
+	}
+
+	window.earlist = params.FinalizedBlockNumber
+	window.latest = params.FinalizedBlockNumber
+	window.blockNumber2Hashes[params.FinalizedBlockNumber] = params.FinalizedBlockHash
+
+	for {
+		hash, ok := params.LatestBlocks[window.latest+1]
+		if !ok {
+			break
+		}
+
+		window.latest++
+		window.blockNumber2Hashes[window.latest] = hash
+	}
+
+	return window
 }
 
 func (window *ReorgWindow) Push(blockNumber uint64, blockHash, parentBlockHash string) (appended, popped bool) {
