@@ -62,9 +62,10 @@ func TestSyncFinalizedDB(t *testing.T) {
 
 	processor := newTestDBProcessor()
 
+	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 
-	StartFinalizedDB(context.Background(), &wg, ParamsDB[testutil.Data]{
+	StartFinalizedDB(ctx, &wg, ParamsDB[testutil.Data]{
 		Adapter:         adapter,
 		DB:              DB,
 		NextBlockNumber: 2, // start to sync from block 2
@@ -78,6 +79,9 @@ func TestSyncFinalizedDB(t *testing.T) {
 		[]uint64{2, 3, 4, 5},
 		nil,
 	)
+
+	cancel()
+	wg.Wait()
 }
 
 func TestSyncLatestDB(t *testing.T) {
@@ -105,9 +109,10 @@ func TestSyncLatestDB(t *testing.T) {
 
 	processor := newTestDBProcessor()
 
+	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 
-	StartLatestDB(context.Background(), &wg, ParamsDB[testutil.Data]{
+	StartLatestDB(ctx, &wg, ParamsDB[testutil.Data]{
 		Adapter:         adapter,
 		DB:              DB,
 		NextBlockNumber: 2, // start to sync from block 2
@@ -125,4 +130,7 @@ func TestSyncLatestDB(t *testing.T) {
 			{7, 8},
 		},
 	)
+
+	cancel()
+	wg.Wait()
 }
