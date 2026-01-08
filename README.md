@@ -19,4 +19,4 @@ Utilities for golang developments on Conflux blockchain, especially for backend 
 |[Pprof](./pprof)|To enable pprof server based on configuration.|
 |[Rate Limit](./rate)|Utilities to limit request rate, along with HTTP handler middlewares|
 |[Store](./store/README.md)|Provides utilities to initialize database.|
-|[Viper](./viper/README.md)| Initialize the original [viper](https://github.com/spf13/viper) in common and fix some issues.|
+|[Viper](./viper/README.md)|Initialize the original [viper](https://github.com/spf13/viper) in common and fix some issues.|

@@ -24,7 +24,7 @@ type LatestPoller[T any] struct {
 	health          *health.TimedCounter
 }
 
-func NewLatestPoller[T any](adapter Adapter[T], nextBlockNumber uint64, option ...Option) *LatestPoller[T] {
+func NewLatestPoller[T any](adapter Adapter[T], nextBlockNumber uint64, reorgParams ReorgWindowParams, option ...Option) *LatestPoller[T] {
 	opt := normalizeOpt(option...)
 
 	return &LatestPoller[T]{
@@ -32,7 +32,7 @@ func NewLatestPoller[T any](adapter Adapter[T], nextBlockNumber uint64, option .
 		adapter:         adapter,
 		nextBlockNumber: nextBlockNumber,
 		dataCh:          make(chan Revertable[T], opt.BufferSize),
-		window:          NewReorgWindow(),
+		window:          NewReorgWindowWithLatestBlocks(reorgParams),
 		health:          health.NewTimedCounter(opt.Health),
 	}
 }
