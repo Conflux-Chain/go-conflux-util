@@ -2,7 +2,6 @@ package evm
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/poll"
