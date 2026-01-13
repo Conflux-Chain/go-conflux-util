@@ -77,7 +77,7 @@ func (data *EpochData) queryReceipts(client sdk.ClientOperator) error {
 	epochNumber := pivotBlock.EpochNumber.ToInt().Uint64()
 	for _, blockReceipts := range epochReceipts {
 		for _, receipt := range blockReceipts {
-			if receipt.EpochNumber == nil || uint64(*receipt.EpochNumber) != epochNumber {
+			if uint64(receipt.EpochNumber) != epochNumber {
 				return errors.Errorf("Receipt epoch number mismatch %v", receipt.EpochNumber)
 			}
 		}
@@ -105,7 +105,7 @@ func (data *EpochData) queryTraces(client sdk.ClientOperator) error {
 
 	// try to detect reorg
 	for i, v := range traces.CfxTraces {
-		if v.EpochHash == nil || *v.EpochHash != pivotBlock.Hash {
+		if v.EpochHash != pivotBlock.Hash {
 			return errors.Errorf("Trace epoch hash mismatch with pivot block hash, index = %v", i)
 		}
 	}

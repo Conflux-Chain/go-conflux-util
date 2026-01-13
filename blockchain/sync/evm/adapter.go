@@ -2,6 +2,7 @@ package evm
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/poll"
@@ -102,18 +103,18 @@ func (adapter *Adapter) GetBlockData(ctx context.Context, blockNumber uint64) (B
 	bn := types.BlockNumber(blockNumber)
 
 	if err := data.queryBlock(adapter.client, bn); err != nil {
-		return BlockData{}, errors.WithMessage(err, "Failed to query block")
+		return BlockData{}, errors.WithMessage(err, fmt.Sprintf("Failed to query block at %d", blockNumber))
 	}
 
 	if !adapter.option.IgnoreReceipts {
 		if err := data.queryReceipts(adapter.client, bn); err != nil {
-			return BlockData{}, errors.WithMessage(err, "Failed to query receipts")
+			return BlockData{}, errors.WithMessage(err, fmt.Sprintf("Failed to query receipts at %d", blockNumber))
 		}
 	}
 
 	if !adapter.option.IgnoreTraces {
 		if err := data.queryTraces(adapter.client, bn); err != nil {
-			return BlockData{}, errors.WithMessage(err, "Failed to query traces")
+			return BlockData{}, errors.WithMessage(err, fmt.Sprintf("Failed to query traces at %d", blockNumber))
 		}
 	}
 
