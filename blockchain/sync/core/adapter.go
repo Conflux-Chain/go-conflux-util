@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	sdk "github.com/Conflux-Chain/go-conflux-sdk"
@@ -122,18 +121,18 @@ func (adapter *Adapter) GetBlockData(ctx context.Context, blockNumber uint64) (E
 	var data EpochData
 
 	if err := data.queryBlocks(adapter.client, blockNumber); err != nil {
-		return EpochData{}, errors.WithMessage(err, fmt.Sprintf("Failed to query epoch blocks at %d", blockNumber))
+		return EpochData{}, errors.WithMessage(err, "Failed to query epoch blocks")
 	}
 
 	if !adapter.option.IgnoreReceipts {
 		if err := data.queryReceipts(adapter.client); err != nil {
-			return EpochData{}, errors.WithMessage(err, fmt.Sprintf("Failed to query epoch receipts at %d", blockNumber))
+			return EpochData{}, errors.WithMessage(err, "Failed to query epoch receipts")
 		}
 	}
 
 	if !adapter.option.IgnoreTraces {
 		if err := data.queryTraces(adapter.client); err != nil {
-			return EpochData{}, errors.WithMessage(err, fmt.Sprintf("Failed to query epoch traces at %d", blockNumber))
+			return EpochData{}, errors.WithMessage(err, "Failed to query epoch traces")
 		}
 	}
 

@@ -103,18 +103,18 @@ func (adapter *Adapter) GetBlockData(ctx context.Context, blockNumber uint64) (B
 	bn := types.BlockNumber(blockNumber)
 
 	if err := data.queryBlock(adapter.client, bn); err != nil {
-		return BlockData{}, errors.WithMessage(err, fmt.Sprintf("Failed to query block at %d", blockNumber))
+		return BlockData{}, errors.WithMessage(err, "Failed to query block")
 	}
 
 	if !adapter.option.IgnoreReceipts {
 		if err := data.queryReceipts(adapter.client, bn); err != nil {
-			return BlockData{}, errors.WithMessage(err, fmt.Sprintf("Failed to query receipts at %d", blockNumber))
+			return BlockData{}, errors.WithMessage(err, "Failed to query receipts")
 		}
 	}
 
 	if !adapter.option.IgnoreTraces {
 		if err := data.queryTraces(adapter.client, bn); err != nil {
-			return BlockData{}, errors.WithMessage(err, fmt.Sprintf("Failed to query traces at %d", blockNumber))
+			return BlockData{}, errors.WithMessage(err, "Failed to query traces")
 		}
 	}
 
