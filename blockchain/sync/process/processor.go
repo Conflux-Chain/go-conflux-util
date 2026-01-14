@@ -3,6 +3,8 @@ package process
 import (
 	"context"
 	"sync"
+
+	"github.com/Conflux-Chain/go-conflux-util/ctxutil"
 )
 
 // Processor defines how to process the polled blockchain data.
@@ -31,6 +33,12 @@ func Process[T any](ctx context.Context, wg *sync.WaitGroup, dataCh <-chan T, pr
 			}
 
 			processor.Process(ctx, data)
+
+			// Check if context is done during processing, otherwise the for loop may continue to
+			// process the next data when data channel has more data to process.
+			if ctxutil.IsDone(ctx) {
+				return
+			}
 		}
 	}
 }
