@@ -11,7 +11,7 @@ import (
 )
 
 type ParallelOption struct {
-	parallel.SerialOption
+	parallel.SerialOption `mapstructure:",squash"`
 
 	RetryInterval time.Duration `default:"1s"`
 

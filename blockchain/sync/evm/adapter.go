@@ -13,9 +13,9 @@ import (
 )
 
 type AdapterConfig struct {
-	URL string
+	AdapterOption `mapstructure:",squash"`
 
-	Option AdapterOption
+	URL string
 }
 
 type AdapterOption struct {
@@ -23,8 +23,8 @@ type AdapterOption struct {
 	RequestTimeout time.Duration `default:"3s"`
 
 	// latest block number
-	LatestBlockNumberTag    int64  `default:"-1"` // "latest" block
-	LatestBlockNumberOffset uint64 `default:"5"`
+	LatestBlockNumberTag    int64  `default:"-1"` // -1: "latest", -3: "finalized", -4: "safe"
+	LatestBlockNumberOffset uint64 `default:"5"`  // N blocks behind the `LatestBlockNumberTag`
 
 	// allow to ignore receipts and/or traces, only block and transactions are required
 	IgnoreReceipts bool
@@ -62,7 +62,7 @@ func NewAdapterWithConfig(config AdapterConfig) (*Adapter, error) {
 		return nil, errors.New("URL not specified")
 	}
 
-	return NewAdapter(config.URL, config.Option)
+	return NewAdapter(config.URL, config.AdapterOption)
 }
 
 // Close closes the underlying RPC client.
