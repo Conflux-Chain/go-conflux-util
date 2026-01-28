@@ -26,7 +26,7 @@ type BatchProcessor[T any] interface {
 }
 
 type BatchOption struct {
-	Processor Option
+	Option `mapstructure:",squash"`
 
 	BatchSize       int           `default:"3000"`
 	BatchTimeout    time.Duration `default:"3s"`
@@ -54,7 +54,7 @@ func NewBatchAggregateProcessor[T any](option BatchOption, db *gorm.DB, processo
 	}
 
 	return &BatchAggregateProcessor[T]{
-		AggregateProcessor: NewAggregateProcessor(option.Processor, db, innerProcessors...),
+		AggregateProcessor: NewAggregateProcessor(option.Option, db, innerProcessors...),
 		option:             option,
 		processors:         processors,
 		lastBatchTime:      time.Now(),

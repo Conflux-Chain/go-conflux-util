@@ -18,7 +18,7 @@ type Processor[T any] interface {
 type Option struct {
 	RetryInterval time.Duration `default:"3s"`
 
-	Health health.CounterConfig
+	Health health.TimedCounterConfig
 }
 
 // AggregateProcessor aggregates multiple processor to process blockchain data in batch.
@@ -26,7 +26,7 @@ type AggregateProcessor[T any] struct {
 	option     Option
 	db         *gorm.DB
 	processors []Processor[T]
-	health     *health.Counter
+	health     *health.TimedCounter
 }
 
 func NewAggregateProcessor[T any](option Option, db *gorm.DB, processors ...Processor[T]) *AggregateProcessor[T] {
@@ -36,7 +36,7 @@ func NewAggregateProcessor[T any](option Option, db *gorm.DB, processors ...Proc
 		option:     option,
 		db:         db,
 		processors: processors,
-		health:     health.NewCounter(option.Health),
+		health:     health.NewTimedCounter(option.Health),
 	}
 }
 
