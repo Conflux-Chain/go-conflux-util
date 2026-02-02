@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"slices"
 
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/poll"
 	"gorm.io/gorm"
@@ -24,15 +25,21 @@ type RevertableAggregateProcessor[T any] struct {
 }
 
 func NewRevertableAggregateProcessor[T any](option Option, db *gorm.DB, processors ...RevertableProcessor[T]) *RevertableAggregateProcessor[T] {
-	innerProcessors := make([]Processor[T], 0, len(processors))
+	// push in order, and pop in reversed order
+	pushProcessors := make([]Processor[T], 0, len(processors))
+	popProcessors := make([]RevertableProcessor[T], 0, len(processors))
+
 	for _, v := range processors {
-		innerProcessors = append(innerProcessors, v)
+		pushProcessors = append(pushProcessors, v)
+		popProcessors = append(popProcessors, v)
 	}
 
-	return &RevertableAggregateProcessor[T]{
-		AggregateProcessor: NewAggregateProcessor(option, db, innerProcessors...),
+	slices.Reverse(popProcessors)
 
-		processors: processors,
+	return &RevertableAggregateProcessor[T]{
+		AggregateProcessor: NewAggregateProcessor(option, db, pushProcessors...),
+
+		processors: popProcessors,
 	}
 }
 
