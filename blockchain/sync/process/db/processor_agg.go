@@ -70,8 +70,3 @@ func (processor *AggregateProcessor[T]) blockingWrite(ctx context.Context, op Op
 		}
 	}
 }
-
-// Close implements the process.Processor[T] interface.
-func (processor *AggregateProcessor[T]) Close(ctx context.Context) {
-	// do nothing
-}

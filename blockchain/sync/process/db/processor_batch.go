@@ -61,7 +61,7 @@ func NewBatchAggregateProcessor[T any](option BatchOption, db *gorm.DB, processo
 	}
 }
 
-// Process implements the process.Processor[T] interface.
+// Process implements the process.CatchUpProcessor[T] interface.
 func (processor *BatchAggregateProcessor[T]) Process(ctx context.Context, data T) {
 	processor.size = 0
 
@@ -104,8 +104,8 @@ func (processor *BatchAggregateProcessor[T]) Exec(tx *gorm.DB) error {
 	return nil
 }
 
-// Close implements the process.Processor[T] interface.
-func (processor *BatchAggregateProcessor[T]) Close(ctx context.Context) {
+// Close implements the process.CatchUpProcessor[T] interface.
+func (processor *BatchAggregateProcessor[T]) OnCatchedUp(ctx context.Context) {
 	if processor.size > 0 {
 		processor.write(ctx)
 	}
