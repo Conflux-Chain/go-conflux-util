@@ -11,25 +11,30 @@ import (
 type Processor[T any] interface {
 	// Process processes the given data.
 	Process(ctx context.Context, data T)
+}
 
-	// Close is executed when Process goroutine terminated.
-	Close(ctx context.Context)
+type CatchUpProcessor[T any] interface {
+	Processor[T]
+
+	// OnCatchedUp is executed after the latest finalized block processed.
+	OnCatchedUp(ctx context.Context)
 }
 
 // Process retrieves data from the given channel and processes data with given processor.
 //
 // Generally, it will be executed in a separate goroutine, and terminate if given context done or channel closed.
-func Process[T any](ctx context.Context, wg *sync.WaitGroup, dataCh <-chan T, processor Processor[T]) {
+//
+// It returns true if the given channel closed. Otherwise false, if the given context done.
+func Process[T any](ctx context.Context, wg *sync.WaitGroup, dataCh <-chan T, processor Processor[T]) bool {
 	defer wg.Done()
 
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return false
 		case data, ok := <-dataCh:
 			if !ok {
-				processor.Close(ctx)
-				return
+				return true
 			}
 
 			processor.Process(ctx, data)
@@ -37,8 +42,15 @@ func Process[T any](ctx context.Context, wg *sync.WaitGroup, dataCh <-chan T, pr
 			// Check if context is done during processing, otherwise the for loop may continue to
 			// process the next data when data channel has more data to process.
 			if ctxutil.IsDone(ctx) {
-				return
+				return false
 			}
 		}
+	}
+}
+
+// ProcessCatchUp processes the polled blockchain data from given data channel till the latest finalized block processed.
+func ProcessCatchUp[T any](ctx context.Context, wg *sync.WaitGroup, dataCh <-chan T, processor CatchUpProcessor[T]) {
+	if Process(ctx, wg, dataCh, processor) {
+		processor.OnCatchedUp(ctx)
 	}
 }
