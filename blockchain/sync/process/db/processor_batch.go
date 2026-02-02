@@ -13,8 +13,6 @@ import (
 // Note, thread-safe is not required in the implementations, since batch
 // related methods are executed in a single thread.
 type BatchProcessor[T any] interface {
-	Processor[T]
-
 	// BatchProcess processes the given data and returns the number of SQLs to be executed in batch.
 	BatchProcess(data T) int
 
@@ -37,7 +35,7 @@ type BatchOption struct {
 //
 // Generally, it is used during catch up phase.
 type BatchAggregateProcessor[T any] struct {
-	*AggregateProcessor[T]
+	*RetriableProcessor
 
 	option        BatchOption
 	processors    []BatchProcessor[T]
@@ -48,13 +46,8 @@ type BatchAggregateProcessor[T any] struct {
 func NewBatchAggregateProcessor[T any](option BatchOption, db *gorm.DB, processors ...BatchProcessor[T]) *BatchAggregateProcessor[T] {
 	defaults.SetDefaults(&option)
 
-	innerProcessors := make([]Processor[T], 0, len(processors))
-	for _, v := range processors {
-		innerProcessors = append(innerProcessors, v)
-	}
-
 	return &BatchAggregateProcessor[T]{
-		AggregateProcessor: NewAggregateProcessor(option.Option, db, innerProcessors...),
+		RetriableProcessor: NewRetriableProcessor(db, option.Option),
 		option:             option,
 		processors:         processors,
 		lastBatchTime:      time.Now(),
@@ -82,7 +75,7 @@ func (processor *BatchAggregateProcessor[T]) Process(ctx context.Context, data T
 }
 
 func (processor *BatchAggregateProcessor[T]) write(ctx context.Context) {
-	processor.blockingWrite(ctx, processor)
+	processor.Write(ctx, processor)
 
 	// reset
 	processor.lastBatchTime = time.Now()
