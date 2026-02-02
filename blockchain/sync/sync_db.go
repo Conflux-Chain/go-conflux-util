@@ -39,7 +39,7 @@ func CatchUpDB[T channel.Sizable](ctx context.Context, params CatchupParamsDB[T]
 
 	processor := db.NewBatchAggregateProcessor(params.Processor, params.DB, processors...)
 	wg.Add(1)
-	go process.Process(ctx, &wg, poller.DataCh(), processor)
+	go process.ProcessCatchUp(ctx, &wg, poller.DataCh(), processor)
 
 	wg.Wait()
 
