@@ -24,7 +24,7 @@ type AdapterOption struct {
 
 	// latest block number
 	LatestBlockNumberTag    int64  `default:"-1"` // -1: "latest", -3: "finalized", -4: "safe"
-	LatestBlockNumberOffset uint64 `default:"5"`  // N blocks behind the `LatestBlockNumberTag`
+	LatestBlockNumberOffset uint64 // N blocks behind the `LatestBlockNumberTag`
 
 	// allow to ignore receipts and/or traces, only block and transactions are required
 	IgnoreReceipts bool

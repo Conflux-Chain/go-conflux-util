@@ -25,7 +25,7 @@ type AdapterOption struct {
 
 	// latest block number
 	LatestBlockNumberTag    string `default:"latest_state"` // latest_mined, latest_state, latest_confirmed or latest_finalized
-	LatestBlockNumberOffset uint64 `default:"5"`            // N blocks behind the `LatestBlockNumberTag`
+	LatestBlockNumberOffset uint64 // N blocks behind the `LatestBlockNumberTag`
 	latestEpoch             *types.Epoch
 
 	// allow to ignore receipts and/or traces, only block and transactions are required
