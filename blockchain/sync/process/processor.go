@@ -23,11 +23,13 @@ type CatchUpProcessor[T any] interface {
 // Process retrieves data from the given channel and processes data with given processor.
 //
 // Generally, it will be executed in a separate goroutine, and terminate if given context done or channel closed.
-//
-// It returns true if the given channel closed. Otherwise false, if the given context done.
-func Process[T any](ctx context.Context, wg *sync.WaitGroup, dataCh <-chan T, processor Processor[T]) bool {
+func Process[T any](ctx context.Context, wg *sync.WaitGroup, dataCh <-chan T, processor Processor[T]) {
 	defer wg.Done()
 
+	process(ctx, dataCh, processor)
+}
+
+func process[T any](ctx context.Context, dataCh <-chan T, processor Processor[T]) bool {
 	for {
 		select {
 		case <-ctx.Done():
@@ -50,7 +52,9 @@ func Process[T any](ctx context.Context, wg *sync.WaitGroup, dataCh <-chan T, pr
 
 // ProcessCatchUp processes the polled blockchain data from given data channel till the latest finalized block processed.
 func ProcessCatchUp[T any](ctx context.Context, wg *sync.WaitGroup, dataCh <-chan T, processor CatchUpProcessor[T]) {
-	if Process(ctx, wg, dataCh, processor) {
+	defer wg.Done()
+
+	if process(ctx, dataCh, processor) {
 		processor.OnCatchedUp(ctx)
 	}
 }
