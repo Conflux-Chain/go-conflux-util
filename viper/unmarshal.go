@@ -63,11 +63,11 @@ func keys(prefix string) map[string]bool {
 	return result
 }
 
-// viperSub is used to fix viper.Sub not respect enviroment variables while unmarshal into struct.
+// sub is used to fix viper.Sub not respect environment variables while unmarshal into struct.
 //
 // More info for this fix: https://github.com/spf13/viper/issues/1012#issuecomment-757862260
-// Besides, for enviroment variables set to be used to override some special types like []string,
-// specified key-getter method must be provided to load the envoriment variables correctly.
+// Besides, for environment variables set to be used to override some special types like []string,
+// specified key-getter method must be provided to load the environment variables correctly.
 func sub(name string, resolver ...ValueResolver) *viper.Viper {
 	subViper := viper.New()
 
@@ -105,9 +105,14 @@ func MustUnmarshalKey(key string, valPtr interface{}, resolver ...ValueResolver)
 // Provide custom value resolver if unmarshalling some special types like slice.
 // Note that valPtr must be some value pointer and not be nil.
 func UnmarshalKey(key string, valPtr interface{}, resolver ...ValueResolver) error {
-	defaults.SetDefaults(valPtr)
 	subViper := sub(key, resolver...)
-	return subViper.Unmarshal(valPtr, viper.DecodeHook(defaultDecodeHook))
+	if err := subViper.Unmarshal(valPtr, viper.DecodeHook(defaultDecodeHook)); err != nil {
+		return err
+	}
+
+	defaults.SetDefaults(valPtr)
+
+	return nil
 }
 
 // Unmarshal unmarshals the config into a Struct.

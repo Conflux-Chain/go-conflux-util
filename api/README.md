@@ -4,7 +4,7 @@ This package aims to develop REST API in a standard way, and provides some utili
 
 ## Initialize
 
-It is highly recommended to initialize REST API service from configuration file. Developers only requires to provide a factory to setup routers.
+It is highly recommended to initialize REST API service from a configuration file. Developers only are required to provide a factory to set up routers.
 
 ```go
 package main

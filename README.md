@@ -1,6 +1,6 @@
 # Golang Development Utilities
 
-Utilities for golang developments on Conflux blockchain, especially for backend service.
+Utilities for golang development on Conflux blockchain, especially for backend service.
 
 |Module|Description|
 |------|-------|

@@ -16,7 +16,7 @@ var (
 	testMysqlBe *MySQLBackend
 )
 
-// Please set the following enviroments before running tests:
+// Please set the following environments before running tests:
 // `TEST_MYSQL_HOST`: MySQL database host;
 // `TEST_MYSQL_USER`: MySQL database username;
 // `TEST_MYSQL_PWD`:  MySQL database password;

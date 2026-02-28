@@ -29,5 +29,5 @@ Developers can configure the alert hook to set up default notification channels 
 
 ```go
 // Send alert to the 'tgrobot' channel only.
-logrus.WithField("@channel": "tgrobot").Warn("Some warning occurred")
+logrus.WithField("@channel", "tgrobot").Warn("Some warning occurred")
 ```

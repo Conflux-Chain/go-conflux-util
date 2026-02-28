@@ -68,6 +68,7 @@ func (data *percentageData) value() float64 {
 		return math.NaN()
 	}
 
+	// usually, data.marks * 10000 will not overflow uint64
 	return float64(data.marks*10000/data.total) / 100
 }
 

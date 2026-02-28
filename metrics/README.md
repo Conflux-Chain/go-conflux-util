@@ -4,7 +4,7 @@ This package enhances the original [go-metrics](https://github.com/rcrowley/go-m
 
 ## Initialize
 
-It is highly recommend to initialize metrics via [config](../config/README.md). However, you could still initialize metrics programmatically.
+It is highly recommended to initialize metrics via [config](../config/README.md). However, you could still initialize metrics programmatically.
 
 ```go
 package main

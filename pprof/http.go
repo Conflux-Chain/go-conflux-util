@@ -1,6 +1,7 @@
 package pprof
 
 import (
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 
@@ -17,16 +18,21 @@ type Config struct {
 func MustInitFromViper() {
 	var config Config
 	viper.MustUnmarshalKey("pprof", &config)
-	Init(config)
+	MustInit(config)
 }
 
 // Init initializes pprof for the given config.
-func Init(config Config) {
+func MustInit(config Config) {
 	if !config.Enabled {
 		return
 	}
 
+	listener, err := net.Listen("tcp", config.Endpoint)
+	if err != nil {
+		logrus.WithError(err).WithField("config", config).Fatal("Failed to listen for pprof service")
+	}
+
 	logrus.WithField("config", config).Info("Starting pprof service")
 
-	go http.ListenAndServe(config.Endpoint, nil)
+	go http.Serve(listener, nil)
 }

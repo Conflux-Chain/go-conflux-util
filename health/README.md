@@ -3,7 +3,7 @@ Provides utilities for error tolerant health monitoring to avoid massive duplica
 
 Generally, system shall not report failure if auto resolved in a short time. However, system should report failure if not solved in a short time, and periodically remind failure if unrecovered for a long time.
 
-- [Counter](./counter.go): manage health status based on the number of continous failures.
+- [Counter](./counter.go): manage health status based on the number of continuous failures.
 - [TimedCounter](./timed_counter.go): manage health status based on duration since the first failure.
 
 For example:

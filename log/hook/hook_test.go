@@ -13,7 +13,7 @@ var (
 	channels []alert.Channel
 )
 
-// Please set the following enviroments before running tests:
+// Please set the following environments before running tests:
 // `TEST_DINGTALK_WEBHOOK`: DingTalk webhook;
 // `TEST_DINGTALK_SECRET`: DingTalk secret;
 // `TEST_TELEGRAM_API_TOKEN`: Telegram API token;
@@ -34,7 +34,7 @@ func TestMain(m *testing.M) {
 	}
 
 	tgApiToken := os.Getenv("TEST_TELEGRAM_API_TOKEN")
-	tgChatId := os.Getenv("TEST_TELEGRAM_API_TOKEN")
+	tgChatId := os.Getenv("TEST_TELEGRAM_CHAT_ID")
 	if len(tgApiToken) > 0 && len(tgChatId) > 0 {
 		tgrobot, err := alert.NewTelegramChannel("tgrobot", fmtter, alert.TelegramConfig{
 			ApiToken: tgApiToken, ChatId: tgChatId,

@@ -24,7 +24,7 @@ func NewRobot(pushUri, secret string) *Robot {
 	return &Robot{pushUri: webURL}
 }
 
-// Send send a flashduty message.
+// Send sends a flashduty message.
 func (r Robot) Send(ctx context.Context, title, level, alertKey, description string, data map[string]string) error {
 	return r.send(ctx, &message{
 		Title:       title,

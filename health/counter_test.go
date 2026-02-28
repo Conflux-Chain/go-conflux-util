@@ -11,7 +11,7 @@ var testCounterConfig = CounterConfig{
 	Remind:    10,
 }
 
-func TestCounterContinousSuccess(t *testing.T) {
+func TestCounterContinuousSuccess(t *testing.T) {
 	counter := NewCounter(testCounterConfig)
 
 	recovered, failures := counter.OnSuccess()
@@ -28,7 +28,7 @@ func TestCounterFailedShortTime(t *testing.T) {
 	assert.False(t, unrecovered)
 	assert.Equal(t, uint64(1), failures)
 
-	// continous failure in short time
+	// continuous failure in short time
 	unhealthy, unrecovered, failures = counter.OnFailure()
 	assert.False(t, unhealthy)
 	assert.False(t, unrecovered)
@@ -43,7 +43,7 @@ func TestCounterFailedShortTime(t *testing.T) {
 func TestCounterThreshold(t *testing.T) {
 	counter := NewCounter(testCounterConfig)
 
-	// continous failure in short time
+	// continuous failure in short time
 	for i := uint64(1); i < testCounterConfig.Threshold; i++ {
 		unhealthy, unrecovered, failures := counter.OnFailure()
 		assert.False(t, unhealthy)
@@ -52,13 +52,13 @@ func TestCounterThreshold(t *testing.T) {
 
 	}
 
-	// continous failure in long time
+	// continuous failure in long time
 	unhealthy, unrecovered, failures := counter.OnFailure()
 	assert.True(t, unhealthy)
 	assert.False(t, unrecovered)
 	assert.Equal(t, testCounterConfig.Threshold, failures)
 
-	// continous failure in long time, but not reached to remind counter
+	// continuous failure in long time, but not reached to remind counter
 	unhealthy, unrecovered, failures = counter.OnFailure()
 	assert.False(t, unhealthy)
 	assert.False(t, unrecovered)
@@ -73,14 +73,14 @@ func TestCounterThreshold(t *testing.T) {
 func TestCounterRemind(t *testing.T) {
 	counter := NewCounter(testCounterConfig)
 
-	// continous failure in short time
+	// continuous failure in short time
 	for i := uint64(1); i < testCounterConfig.Threshold+testCounterConfig.Remind; i++ {
 		_, unrecovered, failures := counter.OnFailure()
 		assert.False(t, unrecovered)
 		assert.Equal(t, i, failures)
 	}
 
-	// continous failure and reached remind time
+	// continuous failure and reached remind time
 	unhealthy, unrecovered, failures := counter.OnFailure()
 	assert.False(t, unhealthy)
 	assert.True(t, unrecovered)

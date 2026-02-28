@@ -12,7 +12,7 @@ type SerialOption struct {
 	// By default, runtime.GOMAXPROCS(0) is used.
 	Routines int
 
-	// Window limits the maximum number of cached task execution result to handle in sequence.
+	// Window limits the maximum number of cached task execution results to handle in sequence.
 	//
 	// By default, 0 indicates no limit to execute all tasks as fast as it can.
 	//

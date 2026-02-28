@@ -10,7 +10,7 @@ type ReorgWindowParams struct {
 type ReorgWindow struct {
 	// no capacity, since max(latest_finalized, latest_checkpoint) is small enough
 	blockNumber2Hashes map[uint64]string
-	earlist, latest    uint64
+	earliest, latest   uint64
 }
 
 func NewReorgWindow() *ReorgWindow {
@@ -29,7 +29,7 @@ func NewReorgWindowWithLatestBlocks(params ReorgWindowParams) *ReorgWindow {
 		return window
 	}
 
-	window.earlist = params.FinalizedBlockNumber
+	window.earliest = params.FinalizedBlockNumber
 	window.latest = params.FinalizedBlockNumber
 	window.blockNumber2Hashes[params.FinalizedBlockNumber] = params.FinalizedBlockHash
 
@@ -49,7 +49,7 @@ func NewReorgWindowWithLatestBlocks(params ReorgWindowParams) *ReorgWindow {
 func (window *ReorgWindow) Push(blockNumber uint64, blockHash, parentBlockHash string) (appended, popped bool) {
 	// window is empty
 	if len(window.blockNumber2Hashes) == 0 {
-		window.earlist = blockNumber
+		window.earliest = blockNumber
 		window.latest = blockNumber
 		window.blockNumber2Hashes[blockNumber] = blockHash
 		return true, false
@@ -79,8 +79,8 @@ func (window *ReorgWindow) Evict(blockNumber uint64) {
 		return
 	}
 
-	for i, end := window.earlist, min(blockNumber, window.latest); i <= end; i++ {
+	for i, end := window.earliest, min(blockNumber, window.latest); i <= end; i++ {
 		delete(window.blockNumber2Hashes, i)
-		window.earlist++
+		window.earliest++
 	}
 }

@@ -56,7 +56,7 @@ func (m *Manager) Channel(name string) (Channel, bool) {
 	return ch, ok
 }
 
-func (m *Manager) All(name string) (chs []Channel) {
+func (m *Manager) All() (chs []Channel) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

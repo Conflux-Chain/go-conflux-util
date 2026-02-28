@@ -223,7 +223,7 @@ func escapeMarkdown(v interface{}) string {
 // A tail "..." is then added to the end of the string, if the string was longer than max length.
 func truncateStringWithTail(s string) string {
 	if len(s) > maxAlertMsgLength {
-		// Ttrim the string and add "..."
+		// trim the string and add "..."
 		return s[:maxAlertMsgLength] + "..."
 	}
 

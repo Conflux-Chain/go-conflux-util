@@ -13,16 +13,16 @@ var (
 	robot *Robot
 )
 
-// Please set the following enviroments before running tests:
+// Please set the following environments before running tests:
 // `TEST_DINGTALK_WEBHOOK`: DingTalk webhook;
 // `TEST_DINGTALK_SECRET`: DingTalk secret.
 
 func TestMain(m *testing.M) {
 	webhook := os.Getenv("TEST_DINGTALK_WEBHOOK")
-	secrect := os.Getenv("TEST_DINGTALK_SECRET")
+	secret := os.Getenv("TEST_DINGTALK_SECRET")
 
-	if len(webhook) > 0 && len(secrect) > 0 {
-		robot = NewRobot(webhook, secrect)
+	if len(webhook) > 0 && len(secret) > 0 {
+		robot = NewRobot(webhook, secret)
 	}
 
 	os.Exit(m.Run())

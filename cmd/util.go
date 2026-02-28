@@ -10,7 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// FatalOnErr adds fatal level log and exit program if the given err is not nil.
+// FatalIfErr adds fatal level log and exit program if the given err is not nil.
 func FatalIfErr(err error, msg string, fields ...logrus.Fields) {
 	if err == nil {
 		return

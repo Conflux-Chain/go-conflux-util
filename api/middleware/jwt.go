@@ -180,7 +180,7 @@ func (j *Jwt[T, KEY]) RawClaimsFromContext(c *gin.Context) (*JwtClaims[T], error
 
 	claims, ok := val.(*JwtClaims[T])
 	if !ok {
-		return nil, api.ErrJwt("JWT claims type ivnalid")
+		return nil, api.ErrJwt("JWT claims type invalid")
 	}
 
 	return claims, nil

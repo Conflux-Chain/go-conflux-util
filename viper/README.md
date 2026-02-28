@@ -23,7 +23,7 @@ func main() {
 The 1st parameter `envPrefix` is used to overwrite configurations via environment variables, e.g.
 
 ```shell
-# evnPrefix is FOO
+# envPrefix is FOO
 export FOO_API_ENDPOINT="http://localhost:12345"
 ```
 

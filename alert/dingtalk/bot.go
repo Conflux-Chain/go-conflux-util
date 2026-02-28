@@ -26,11 +26,11 @@ type Robot struct {
 	secret  string
 }
 
-func NewRobot(webhook, secrect string) *Robot {
-	return &Robot{webHook: webhook, secret: secrect}
+func NewRobot(webhook, secret string) *Robot {
+	return &Robot{webHook: webhook, secret: secret}
 }
 
-// Send send a dingtalk message.
+// Send sends a dingtalk message.
 func (r Robot) Send(ctx context.Context, msgType, title, text string, atMobiles []string, isAtAll bool) error {
 	switch msgType {
 	case MsgTypeText:

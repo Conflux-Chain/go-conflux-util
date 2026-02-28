@@ -4,7 +4,7 @@ Many services require to synchronize blockchain data, e.g. blocks, transactions,
 
 - Pipeline: poll blockchain data, transform data and store data in separate goroutines.
 - Concurrency: poll blockchain data in parallel during catch up phase.
-- Batch: allow to store data into databases in batch, stead of block by block during catch up pahse.
+- Batch: allow to store data into databases in batch, stead of block by block during catch up phase.
 - Chain reorg: framework detects chain reorg and defines a common interface for clients to handle chain reorg (e.g. pop data from database).
 - Memory bounded: uses memory bounded channel to cache polled blockchain data to void OOM.
 

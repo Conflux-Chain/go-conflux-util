@@ -45,7 +45,7 @@ func (config *MysqlConfig) CreateDatabaseIfAbsent(db *gorm.DB) (bool, error) {
 	}
 
 	var databases []string
-	if err := db.Raw(fmt.Sprintf("SHOW DATABASES LIKE '%v'", config.Database)).Find(&databases).Error; err != nil {
+	if err := db.Raw("SHOW DATABASES LIKE '%v'", config.Database).Find(&databases).Error; err != nil {
 		return false, errors.WithMessage(err, "Failed to query databases")
 	}
 

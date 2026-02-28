@@ -121,7 +121,7 @@ func (hook *AlertHook) Fire(logEntry *logrus.Entry) (err error) {
 	defer cancel()
 
 	for _, ch := range notifyChans {
-		err = stderr.Join(ch.Send(ctx, note))
+		err = stderr.Join(err, ch.Send(ctx, note))
 	}
 
 	return errors.WithMessage(err, "failed to notify channel message")

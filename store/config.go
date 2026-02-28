@@ -94,7 +94,7 @@ func (config *Config) openOrCreate(dialector gorm.Dialector, tables ...any) (*go
 	sqlDb.SetMaxOpenConns(config.MaxOpenConns)
 	sqlDb.SetMaxIdleConns(config.MaxIdleConns)
 
-	logrus.Debug("MySQL database initialized")
+	logrus.Debug("Database initialized")
 
 	return db, nil
 }
@@ -124,7 +124,7 @@ func (config *Config) getGormLogLevel() logger.LogLevel {
 	case "error":
 		return logger.Error
 	default:
-		logrus.WithField("level", config.LogLevel).Warn("Failed to parse grom log level, fallback to warn")
+		logrus.WithField("level", config.LogLevel).Warn("Failed to parse gorm log level, fallback to warn")
 		return logger.Warn
 	}
 }

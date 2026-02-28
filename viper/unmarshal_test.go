@@ -23,7 +23,7 @@ type threshold struct {
 
 type pruneConfig struct {
 	Name      string        `mapstructure:"name"`
-	Eanbled   bool          `mapstructure:"enabled"`
+	Enabled   bool          `mapstructure:"enabled"`
 	Interval  time.Duration `mapstructure:"interval"`
 	Threshold threshold     `mapstructure:"threshold"`
 }
@@ -114,7 +114,7 @@ foo:
 }
 
 /*
- * For environment value, `UnmarshalKey` and `GetStringSlice` require different format.
+ * For environment value, `UnmarshalKey` and `GetStringSlice` require different formats.
  * - `UnmarshalKey` requires comma separated value, e.g. "a,b,c"
  * - `GetStringSlice` requires space separated value, e.g. "a b c"
  */

@@ -14,7 +14,7 @@ var (
 func initEnv(envPrefix string) {
 	envKeyPrefix = strings.ToUpper(envPrefix + "_")
 
-	// Read system enviroment prefixed variables.
+	// Read system environment prefixed variables.
 	// eg., CFX_LOG_LEVEL will override "log.level" config item from config file.
 	viper.AutomaticEnv()
 	viper.SetEnvPrefix(envPrefix)

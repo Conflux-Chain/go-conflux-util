@@ -12,7 +12,7 @@ var testTimedCounterConfig = TimedCounterConfig{
 	Remind:    5 * time.Minute,
 }
 
-func TestTimedCounterContinousSuccess(t *testing.T) {
+func TestTimedCounterContinuousSuccess(t *testing.T) {
 	counter := NewTimedCounter(testTimedCounterConfig)
 
 	recovered, elapsed := counter.onSuccessAt(time.Now().Add(testTimedCounterConfig.Threshold + 1))
@@ -30,7 +30,7 @@ func TestTimedCounterFailedShortTime(t *testing.T) {
 	assert.False(t, unrecovered)
 	assert.Equal(t, time.Duration(0), elapsed)
 
-	// continous failure in short time
+	// continuous failure in short time
 	unhealthy, unrecovered, elapsed = counter.onFailureAt(now.Add(testTimedCounterConfig.Threshold - 2))
 	assert.False(t, unhealthy)
 	assert.False(t, unrecovered)
@@ -49,10 +49,10 @@ func TestTimedCounterThreshold(t *testing.T) {
 	// first failure
 	counter.onFailureAt(now)
 
-	// continous failure in short time
+	// continuous failure in short time
 	counter.onFailureAt(now.Add(testTimedCounterConfig.Threshold - 1))
 
-	// continous failure in long time
+	// continuous failure in long time
 	unhealthy, unrecovered, elapsed := counter.onFailureAt(now.Add(testTimedCounterConfig.Threshold + 1))
 	assert.True(t, unhealthy)
 	assert.False(t, unrecovered)
@@ -71,19 +71,19 @@ func TestTimedCounterRemind(t *testing.T) {
 	// first failure
 	counter.onFailureAt(now)
 
-	// continous failure in short time
+	// continuous failure in short time
 	counter.onFailureAt(now.Add(testTimedCounterConfig.Threshold - 1))
 
-	// continous failure in long time
+	// continuous failure in long time
 	counter.onFailureAt(now.Add(testTimedCounterConfig.Threshold + 1))
 
-	// continous failure in long time, but not reached remind time
+	// continuous failure in long time, but not reached remind time
 	unhealthy, unrecovered, elapsed := counter.onFailureAt(now.Add(testTimedCounterConfig.Threshold + 2))
 	assert.False(t, unhealthy)
 	assert.False(t, unrecovered)
 	assert.Equal(t, testTimedCounterConfig.Threshold+2, elapsed)
 
-	// continous failure and reached remind time
+	// continuous failure and reached remind time
 	unhealthy, unrecovered, elapsed = counter.onFailureAt(now.Add(testTimedCounterConfig.Threshold + 2 + testTimedCounterConfig.Remind))
 	assert.False(t, unhealthy)
 	assert.True(t, unrecovered)
