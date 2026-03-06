@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/poll/testutil"
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/process/db"
@@ -136,6 +137,18 @@ func (p *testDBProcessor) toNumberSlice2D(data [][]testutil.Data) [][]uint64 {
 	}
 
 	return result
+}
+
+func (p *testDBProcessor) waitFor(t *testing.T, data testutil.Data) {
+	for i := 0; i < 30; i++ {
+		time.Sleep(100 * time.Millisecond)
+
+		if p.prev == data {
+			return
+		}
+	}
+
+	assert.Fail(t, "Timeout to wait for block")
 }
 
 func (p *testDBProcessor) String() string {

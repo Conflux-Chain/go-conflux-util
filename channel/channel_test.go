@@ -54,7 +54,7 @@ func mustWriteChannelBlocked[T any](ch chan<- T, data T) {
 	select {
 	case ch <- data:
 		panic("Unexpected to write data into channel")
-	case <-time.After(300 * time.Millisecond):
+	case <-time.After(100 * time.Millisecond):
 		return
 	}
 }

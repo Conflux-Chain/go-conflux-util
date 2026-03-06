@@ -4,7 +4,6 @@ import (
 	"context"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/poll"
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/poll/testutil"
@@ -72,7 +71,11 @@ func TestSyncFinalizedDB(t *testing.T) {
 	}, processor)
 
 	// wait for poll-and-process
-	time.Sleep(500 * time.Millisecond)
+	processor.waitFor(t, testutil.Data{
+		Number:     5,
+		Hash:       "DataHash-5",
+		ParentHash: "DataHash-4",
+	})
 
 	processor.assertData(t,
 		nil,
@@ -119,7 +122,11 @@ func TestSyncLatestDB(t *testing.T) {
 	}, processor)
 
 	// wait for poll-and-process
-	time.Sleep(500 * time.Millisecond)
+	processor.waitFor(t, testutil.Data{
+		Number:     9,
+		Hash:       "DataHash-999",
+		ParentHash: "DataHash-888",
+	})
 
 	processor.assertData(t,
 		nil,

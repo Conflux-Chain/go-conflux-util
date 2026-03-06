@@ -42,15 +42,25 @@ func TestReorgWindowPush(t *testing.T) {
 func TestReorgWindowEvict(t *testing.T) {
 	window := NewReorgWindow()
 
+	// evict empty window
+	window.Evict(5)
+
+	// push block 1 - 9
 	for i := uint64(1); i < 10; i++ {
 		pushed, popped := window.Push(i, fmt.Sprintf("Hash - %v", i), fmt.Sprintf("Hash - %v", i-1))
 		assert.Equal(t, true, pushed)
 		assert.Equal(t, false, popped)
 	}
 
+	// evict block 5
 	window.Evict(5)
-
 	assert.Equal(t, uint64(6), window.earliest)
+	assert.Equal(t, uint64(9), window.latest)
+
+	// evict block 9
+	window.Evict(9)
+	assert.Equal(t, uint64(10), window.earliest)
+	assert.Equal(t, uint64(9), window.latest)
 }
 
 func TestReorgWindowWithLatestBlocks(t *testing.T) {
