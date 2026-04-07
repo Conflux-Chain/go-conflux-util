@@ -12,22 +12,28 @@ package main
 import "github.com/Conflux-Chain/go-conflux-util/viper"
 
 func main() {
-	// initialize viper with environment variable prefix "FOO"
+	// initialize viper with environment variable prefix "FOO" and optional config.yaml file.
 	viper.MustInit("FOO")
 
-	// initialize viper with environment variable prefix "FOO" and config file "config-prod.yaml"
-	viper.MustInit("FOO", "config-prod.yaml")
+	// initialize viper with environment variable prefix "FOO" and custom config files:
+	// config.yaml, config-prod.yaml.
+	viper.MustInit("FOO", "config.yaml", "config-prod.yaml")
 }
 ```
 
-The 1st parameter `envPrefix` is used to overwrite configurations via environment variables, e.g.
+The 1st parameter `envPrefix` is used to overwrite configurations via environment variables. By default, the `.env` file will be auto loaded, which is common used in prod environment.
 
 ```shell
+# Note, the 'export' keyword is optional in .env file.
+
 # envPrefix is FOO
 export FOO_API_ENDPOINT="http://localhost:12345"
+
+# envPrefix is empty
+export API_ENDPOINT="http://localhost:12345"
 ```
 
-The 2nd optional parameter `configPath` indicates the configuration file path to load (e.g. `./config-prod.yaml`). If not specified, the program will search for `config.xxx` (e.g. `config.yaml`, `config.json` or `config.toml`) file under current folder and `./config` folder.
+The 2nd optional parameter `configFiles` indicates the configuration files to load (e.g. `./config.yaml` and `./config-prod.yaml`). If not specified, the program will search for `config.xxx` (e.g. `config.yaml`, `config.json` or `config.toml`) file under current folder and `./config` folder.
 
 As a best practice, we recommend to initialize `viper` via [config](../config/README.md).
 

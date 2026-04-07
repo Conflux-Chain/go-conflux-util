@@ -13,6 +13,7 @@ require (
 	github.com/go-telegram/bot v1.2.2
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
+	github.com/joho/godotenv v1.5.1
 	github.com/mcuadros/go-defaults v1.2.0
 	github.com/mitchellh/mapstructure v1.4.3
 	github.com/openweb3/go-rpc-provider v0.3.5
