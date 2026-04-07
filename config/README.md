@@ -11,11 +11,15 @@ import (
 )
 
 func init() {
+	// Init config with env prefix "FOO_"
 	cobra.OnInitialize(func() {
 		config.MustInit("FOO")
 	})
+
+	// Or init config with default env prefix "APP_"
+	cobra.OnInitialize(config.MustInitDefault)
 }
 
 ```
 
-You could follow the example [config.yaml](./config.yaml) to setup your own configuration file. Generally, you could only overwrite configurations if the default value not suitable.
+You could follow the [config.yaml.example](./config.yaml.example) or [.env.example](.env.example) to setup your own configuration file. Generally, you could only overwrite configurations if the default value not suitable.
