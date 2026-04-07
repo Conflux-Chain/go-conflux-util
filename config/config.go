@@ -11,6 +11,11 @@ import (
 	"github.com/Conflux-Chain/go-conflux-util/viper"
 )
 
+// MustInitDefault initializes with "APP" env var prefix and try to load configs from "config.xxx" file.
+func MustInitDefault() {
+	MustInit("APP")
+}
+
 // MustInit performs the necessary initializations for the application, particularly
 // by loading configuration settings from files or environment variables into `Viper`,
 // setting up metrics, alerts, and logging systems. This function is designed to be
