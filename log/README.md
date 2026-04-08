@@ -6,7 +6,8 @@ This package enhances the original [logrus](https://github.com/sirupsen/logrus),
 
 Currently, there are several configurations available:
 
-- Set log level.
+- Set default log level (default value is `info`).
+- Set log levels for specific modules.
 - Force or disable colors in Console or output file.
 - Hook with `alert`.
 - Output to file with rotation.
@@ -21,6 +22,15 @@ log.MustInit(conf)
 
 // or Initialize logging from configurations loaded by viper
 log.MustInitFromViper()
+```
+
+## Log with Module
+
+Application could specify different log levels for different moduels. Please use pre-defined factory method to create a logger with specific module name and log level.
+
+```go
+log.WithModule("rpc").Info("Info message")
+log.WithModule("rpc").Debug("Debug message")
 ```
 
 ## Hook with Alert

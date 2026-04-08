@@ -19,11 +19,12 @@ import (
 
 // LoggingConfig logging configuration such as log level etc.,
 type LoggingConfig struct {
-	Level        string       `default:"info"` // logging level
-	ForceColor   bool         // helpful on windows
-	DisableColor bool         // helpful to output logs in file
-	AlertHook    hook.Config  // alert hooking configurations
-	Output       OutputConfig // output configurations
+	Level        string            `default:"info"` // default logging level for all modules
+	Modules      map[string]string // logging levels for specific modules
+	ForceColor   bool              // helpful on windows
+	DisableColor bool              // helpful to output logs in file
+	AlertHook    hook.Config       // alert hooking configurations
+	Output       OutputConfig      // output configurations
 }
 
 // OutputConfig represents the output configuration.
@@ -92,6 +93,8 @@ func mustInit(conf LoggingConfig, ctx context.Context, wg *sync.WaitGroup) {
 		logrus.WithError(err).WithField("level", conf.Level).Fatal("Failed to parse log level")
 	}
 	logrus.SetLevel(level) // Set the parsed log level.
+
+	mustInitModuleLevels(conf.Modules)
 
 	// Set up the output.
 	if err := setupOutput(conf.Output); err != nil {
