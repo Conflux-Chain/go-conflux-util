@@ -7,6 +7,7 @@ import (
 
 	"github.com/Conflux-Chain/go-conflux-util/ctxutil"
 	"github.com/Conflux-Chain/go-conflux-util/health"
+	"github.com/Conflux-Chain/go-conflux-util/log"
 	"github.com/Conflux-Chain/go-conflux-util/parallel"
 )
 
@@ -53,6 +54,8 @@ func (worker *ParallelWorker[T]) ParallelDo(ctx context.Context, routine, task i
 			return data, nil
 		}
 
+		log.WithModule(ModuleName).WithError(err).WithField("block", bn).Debug("Failed to poll data in parallel")
+
 		if err = ctxutil.Sleep(ctx, worker.option.RetryInterval); err != nil {
 			return data, err
 		}
@@ -70,6 +73,9 @@ func (worker *ParallelWorker[T]) ParallelCollect(ctx context.Context, result *pa
 	}
 
 	worker.polled.Add(1)
+
+	bn := worker.offset + uint64(result.Task)
+	log.WithModule(ModuleName).WithField("block", bn).Trace("Succeeded to collect data in parallel")
 
 	return nil
 }
