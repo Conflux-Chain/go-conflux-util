@@ -1,13 +1,9 @@
 # Log Configurations
 # log:
-#   # Default log level
+#   # Log level in format of "level,module1=level1,module2=level2", where module log level is optional.
 #   level: info
 #   forceColor: false
 #   disableColor: false
-#   # Log levels for specific modules, default value is empty.
-#   modules:
-#     sync: debug
-#     rpc: debug
 #   output:
 #     # Output type options: stdout, stderr, file
 #     type: stderr
