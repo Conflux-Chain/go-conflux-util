@@ -7,6 +7,7 @@ import (
 
 	"github.com/Conflux-Chain/go-conflux-util/ctxutil"
 	"github.com/Conflux-Chain/go-conflux-util/health"
+	"github.com/Conflux-Chain/go-conflux-util/log"
 	"github.com/pkg/errors"
 )
 
@@ -61,12 +62,17 @@ func (poller *FinalizedPoller[T]) Poll(ctx context.Context, wg *sync.WaitGroup) 
 
 		poller.health.LogOnError(err, "Poll finalized blockchain data")
 
+		logger := log.WithModule(ModuleName).WithField("block", poller.nextBlockNumber)
+
 		if err != nil {
+			logger.WithError(err).Debug("Failed to poll finalized data")
 			err = ctxutil.Sleep(ctx, poller.option.RetryInterval)
 		} else if ok {
+			logger.Trace("Succeeded to poll finalized data")
 			err = ctxutil.WriteChannel(ctx, poller.dataCh, data)
 			poller.nextBlockNumber++
 		} else {
+			logger.Trace("No finalized data to poll")
 			err = ctxutil.Sleep(ctx, poller.option.IdleInterval)
 		}
 

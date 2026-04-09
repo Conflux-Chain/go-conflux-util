@@ -6,9 +6,12 @@ import (
 
 	"github.com/Conflux-Chain/go-conflux-util/ctxutil"
 	"github.com/Conflux-Chain/go-conflux-util/health"
+	"github.com/Conflux-Chain/go-conflux-util/log"
 	"github.com/mcuadros/go-defaults"
 	"gorm.io/gorm"
 )
+
+var ModuleName = "sync.process.db"
 
 type Option struct {
 	RetryInterval time.Duration `default:"3s"`
@@ -45,6 +48,8 @@ func (processor *RetriableProcessor) Write(ctx context.Context, op Operation) {
 		if err == nil {
 			return
 		}
+
+		log.WithModule(ModuleName).WithError(err).Debug("Failed to write database")
 
 		if err = ctxutil.Sleep(ctx, processor.option.RetryInterval); err != nil {
 			return

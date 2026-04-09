@@ -1,5 +1,7 @@
 package poll
 
+import "fmt"
+
 type ReorgWindowParams struct {
 	FinalizedBlockNumber uint64
 	FinalizedBlockHash   string
@@ -83,4 +85,13 @@ func (window *ReorgWindow) Evict(blockNumber uint64) {
 		delete(window.blockNumber2Hashes, i)
 		window.earliest++
 	}
+}
+
+func (window ReorgWindow) String() string {
+	if len(window.blockNumber2Hashes) == 0 {
+		return "{ blocks = 0 }"
+	}
+
+	return fmt.Sprintf("{ blocks = %v, earliest = %v, latest = %v }",
+		len(window.blockNumber2Hashes), window.earliest, window.latest)
 }

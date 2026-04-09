@@ -3,14 +3,19 @@ package poll
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/Conflux-Chain/go-conflux-util/channel"
 	"github.com/Conflux-Chain/go-conflux-util/ctxutil"
 	"github.com/Conflux-Chain/go-conflux-util/health"
+	"github.com/Conflux-Chain/go-conflux-util/log"
 	"github.com/Conflux-Chain/go-conflux-util/parallel"
 	"github.com/mcuadros/go-defaults"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
+
+var ModuleName = "sync.poll"
 
 type CatchUpOption struct {
 	Parallel ParallelOption
@@ -93,6 +98,8 @@ func (poller *CatchUpPoller[T]) Poll(ctx context.Context, wg *sync.WaitGroup) {
 			return
 		}
 
+		log.WithModule(ModuleName).WithError(err).Debug("Failed to poll once in catch up mode")
+
 		// retry
 		if err = ctxutil.Sleep(ctx, poller.option.Parallel.RetryInterval); err != nil {
 			return
@@ -113,13 +120,26 @@ func (poller *CatchUpPoller[T]) pollOnce(ctx context.Context) (int, error) {
 	}
 
 	// poll data in parallel
+	blocks := int(finalizedBlockNumber - poller.nextBlockNumber + 1)
+	log.WithModule(ModuleName).WithFields(logrus.Fields{
+		"next":      poller.nextBlockNumber,
+		"finalized": finalizedBlockNumber,
+		"blocks":    blocks,
+	}).Debug("Begin to poll once in catch up mode")
+
 	worker := NewParallelWorker(poller.adapter, poller.nextBlockNumber, poller.dataCh.SendCh(), poller.option.Parallel)
-	tasks := int(finalizedBlockNumber - poller.nextBlockNumber + 1)
-	err = parallel.Serial(ctx, worker, tasks, poller.option.Parallel.SerialOption)
+	start := time.Now()
+	err = parallel.Serial(ctx, worker, blocks, poller.option.Parallel.SerialOption)
 	poller.nextBlockNumber += worker.Polled()
 	if err != nil {
 		return 0, errors.WithMessage(err, "Failed to poll blockchain data in parallel")
 	}
 
-	return tasks, nil
+	log.WithModule(ModuleName).WithFields(logrus.Fields{
+		"finalized": finalizedBlockNumber,
+		"blocks":    blocks,
+		"elapsed":   time.Since(start),
+	}).Debug("Completed to poll once in catch up mode")
+
+	return blocks, nil
 }
