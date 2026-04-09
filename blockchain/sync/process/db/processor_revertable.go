@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/poll"
+	"github.com/Conflux-Chain/go-conflux-util/log"
 	"gorm.io/gorm"
 )
 
@@ -54,6 +55,8 @@ func (processor *RevertableAggregateProcessor[T]) Process(ctx context.Context, d
 		}
 
 		processor.Write(ctx, ComposeOperation(ops...))
+
+		log.WithModule(ModuleName).Debug("Succeeded to process reverted blockchain data")
 	}
 
 	processor.AggregateProcessor.Process(ctx, data.Data)

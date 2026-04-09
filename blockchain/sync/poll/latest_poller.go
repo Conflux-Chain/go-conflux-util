@@ -6,7 +6,9 @@ import (
 
 	"github.com/Conflux-Chain/go-conflux-util/ctxutil"
 	"github.com/Conflux-Chain/go-conflux-util/health"
+	"github.com/Conflux-Chain/go-conflux-util/log"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 type Revertable[T any] struct {
@@ -62,9 +64,13 @@ func (poller *LatestPoller[T]) Poll(ctx context.Context, wg *sync.WaitGroup) {
 
 		poller.health.LogOnError(err, "Poll latest blockchain data")
 
+		logger := log.WithModule(ModuleName).WithField("block", poller.nextBlockNumber)
+
 		if err != nil {
+			logger.WithError(err).Debug("Failed to poll latest data")
 			err = ctxutil.Sleep(ctx, poller.option.RetryInterval)
 		} else if ok {
+			logger.Trace("Succeeded to poll latest data")
 			err = ctxutil.WriteChannel(ctx, poller.dataCh, Revertable[T]{
 				Data:     data,
 				Reverted: reverted,
@@ -73,9 +79,11 @@ func (poller *LatestPoller[T]) Poll(ctx context.Context, wg *sync.WaitGroup) {
 			poller.nextBlockNumber++
 			reverted = false
 		} else if reorg {
+			logger.Debug("Reorg detected")
 			poller.nextBlockNumber--
 			reverted = true
 		} else {
+			logger.Trace("No latest data to poll")
 			err = ctxutil.Sleep(ctx, poller.option.IdleInterval)
 		}
 
@@ -123,5 +131,12 @@ func (poller *LatestPoller[T]) pollOnce(ctx context.Context) (data T, ok bool, r
 		return data, false, true, nil
 	}
 
-	panic("Block not in sequence")
+	log.WithModule(ModuleName).WithFields(logrus.Fields{
+		"block":  poller.nextBlockNumber,
+		"hash":   blockHash,
+		"parent": parentBlockHash,
+		"window": poller.window,
+	}).Fatal("Block not in sequence")
+
+	return data, false, false, nil
 }

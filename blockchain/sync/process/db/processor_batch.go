@@ -4,7 +4,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/Conflux-Chain/go-conflux-util/log"
 	"github.com/mcuadros/go-defaults"
+	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
 
@@ -75,7 +77,14 @@ func (processor *BatchAggregateProcessor[T]) Process(ctx context.Context, data T
 }
 
 func (processor *BatchAggregateProcessor[T]) write(ctx context.Context) {
+	start := time.Now()
+
 	processor.Write(ctx, processor)
+
+	log.WithModule(ModuleName).WithFields(logrus.Fields{
+		"size":    processor.size,
+		"elapsed": time.Since(start),
+	}).Trace("Succeeded to write database in batch")
 
 	// reset
 	processor.lastBatchTime = time.Now()
