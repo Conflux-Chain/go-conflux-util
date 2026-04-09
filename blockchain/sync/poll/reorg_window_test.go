@@ -11,30 +11,36 @@ func TestReorgWindowPush(t *testing.T) {
 	window := NewReorgWindow()
 
 	// push empty
-	pushed, popped := window.Push(5, "Hash - 5", "Hash - 4")
+	pushed, popped, err := window.Push(5, "Hash - 5", "Hash - 4")
+	assert.NoError(t, err)
 	assert.Equal(t, true, pushed)
 	assert.Equal(t, false, popped)
 
 	// push in sequence
-	pushed, popped = window.Push(6, "Hash - 6", "Hash - 5")
+	pushed, popped, err = window.Push(6, "Hash - 6", "Hash - 5")
+	assert.NoError(t, err)
 	assert.Equal(t, true, pushed)
 	assert.Equal(t, false, popped)
 
 	// push not in sequence
-	pushed, popped = window.Push(6, "Hash - 6", "Hash - 5")
-	assert.Equal(t, false, pushed)
-	assert.Equal(t, false, popped)
-	pushed, popped = window.Push(8, "Hash - 8", "Hash - 7")
-	assert.Equal(t, false, pushed)
-	assert.Equal(t, false, popped)
+	_, _, err = window.Push(6, "Hash - 6", "Hash - 5")
+	assert.Error(t, err)
+	_, _, err = window.Push(8, "Hash - 8", "Hash - 7")
+	assert.Error(t, err)
 
 	// push in sequence, but parent hash mismatch
-	pushed, popped = window.Push(7, "Hash - 7", "Hash - 66")
+	pushed, popped, err = window.Push(7, "Hash - 7", "Hash - 66")
+	assert.NoError(t, err)
 	assert.Equal(t, false, pushed)
 	assert.Equal(t, true, popped)
 
-	// push block 6 again due to popped
-	pushed, popped = window.Push(6, "Hash - 66", "Hash - 5")
+	// pop the finalized block 5
+	_, _, err = window.Push(6, "Hash - 66", "Hash - 55")
+	assert.Error(t, err)
+
+	// push block 6 again
+	pushed, popped, err = window.Push(6, "Hash - 66", "Hash - 5")
+	assert.NoError(t, err)
 	assert.Equal(t, true, pushed)
 	assert.Equal(t, false, popped)
 }
@@ -43,28 +49,25 @@ func TestReorgWindowEvict(t *testing.T) {
 	window := NewReorgWindow()
 
 	// evict empty window
-	window.Evict(5)
+	assert.Equal(t, 0, window.Evict(5))
 
 	// push block 1 - 9
-	for i := uint64(1); i < 10; i++ {
-		pushed, popped := window.Push(i, fmt.Sprintf("Hash - %v", i), fmt.Sprintf("Hash - %v", i-1))
+	for i := uint64(1); i <= 9; i++ {
+		pushed, popped, err := window.Push(i, fmt.Sprintf("Hash - %v", i), fmt.Sprintf("Hash - %v", i-1))
+		assert.NoError(t, err)
 		assert.Equal(t, true, pushed)
 		assert.Equal(t, false, popped)
 	}
 
-	// evict block 5
-	window.Evict(5)
-	assert.Equal(t, uint64(6), window.earliest)
-	assert.Equal(t, uint64(9), window.latest)
+	// finalized block == 5, evict block 1 - 4.
+	assert.Equal(t, 4, window.Evict(5))
 
-	// evict block 9
-	window.Evict(9)
-	assert.Equal(t, uint64(10), window.earliest)
-	assert.Equal(t, uint64(9), window.latest)
+	// finalized block is very big, then evit all except the latest block 9
+	assert.Equal(t, 4, window.Evict(100))
 }
 
 func TestReorgWindowWithLatestBlocks(t *testing.T) {
-	window := NewReorgWindowWithLatestBlocks(ReorgWindowParams{
+	window, err := NewReorgWindowWithLatestBlocks(ReorgWindowParams{
 		FinalizedBlockNumber: 5,
 		FinalizedBlockHash:   "Hash - 5",
 		LatestBlocks: map[uint64]string{
@@ -73,11 +76,21 @@ func TestReorgWindowWithLatestBlocks(t *testing.T) {
 			8: "Hash - 8",
 		},
 	})
+	assert.NoError(t, err)
 
-	assert.Equal(t, uint64(5), window.earliest)
-	assert.Equal(t, uint64(8), window.latest)
+	// evict nothing since not verify against on-chain data
+	assert.Equal(t, 0, window.Evict(100))
+	assert.Equal(t, 0, window.Evict(7))
 
-	pushed, popped := window.Push(9, "Hash - 9", "Hash - 8")
+	// push block 9, but reorg happened during service down time
+	pushed, popped, err := window.Push(9, "Hash - 9", "Hash - 88")
+	assert.NoError(t, err)
+	assert.Equal(t, false, pushed)
+	assert.Equal(t, true, popped)
+
+	// push block 8
+	pushed, popped, err = window.Push(8, "Hash - 88", "Hash - 7")
+	assert.NoError(t, err)
 	assert.Equal(t, true, pushed)
 	assert.Equal(t, false, popped)
 }

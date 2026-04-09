@@ -26,17 +26,22 @@ type LatestPoller[T any] struct {
 	health          *health.TimedCounter
 }
 
-func NewLatestPoller[T any](adapter Adapter[T], nextBlockNumber uint64, reorgParams ReorgWindowParams, option ...Option) *LatestPoller[T] {
+func NewLatestPoller[T any](adapter Adapter[T], nextBlockNumber uint64, reorgParams ReorgWindowParams, option ...Option) (*LatestPoller[T], error) {
 	opt := normalizeOpt(option...)
+
+	window, err := NewReorgWindowWithLatestBlocks(reorgParams)
+	if err != nil {
+		return nil, errors.WithMessage(err, "Failed to create reorg window")
+	}
 
 	return &LatestPoller[T]{
 		option:          opt,
 		adapter:         adapter,
 		nextBlockNumber: nextBlockNumber,
 		dataCh:          make(chan Revertable[T], opt.BufferSize),
-		window:          NewReorgWindowWithLatestBlocks(reorgParams),
+		window:          window,
 		health:          health.NewTimedCounter(opt.Health),
-	}
+	}, nil
 }
 
 // DataCh returns a read-only channel to consume data. The channel will not be closed
@@ -122,21 +127,17 @@ func (poller *LatestPoller[T]) pollOnce(ctx context.Context) (data T, ok bool, r
 	// detect reorg
 	blockHash := poller.adapter.GetBlockHash(data)
 	parentBlockHash := poller.adapter.GetParentBlockHash(data)
-	appended, popped := poller.window.Push(poller.nextBlockNumber, blockHash, parentBlockHash)
-	if appended {
-		return data, true, false, nil
+	appended, popped, err := poller.window.Push(poller.nextBlockNumber, blockHash, parentBlockHash)
+
+	// should never happen
+	if err != nil {
+		log.WithModule(ModuleName).WithError(err).WithFields(logrus.Fields{
+			"block":  poller.nextBlockNumber,
+			"hash":   blockHash,
+			"parent": parentBlockHash,
+			"window": poller.window,
+		}).Fatal("Block not in sequence or finalized block reverted")
 	}
 
-	if popped {
-		return data, false, true, nil
-	}
-
-	log.WithModule(ModuleName).WithFields(logrus.Fields{
-		"block":  poller.nextBlockNumber,
-		"hash":   blockHash,
-		"parent": parentBlockHash,
-		"window": poller.window,
-	}).Fatal("Block not in sequence")
-
-	return data, false, false, nil
+	return data, appended, popped, nil
 }

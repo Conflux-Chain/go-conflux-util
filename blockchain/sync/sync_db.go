@@ -8,6 +8,7 @@ import (
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/process"
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/process/db"
 	"github.com/Conflux-Chain/go-conflux-util/channel"
+	"github.com/pkg/errors"
 	"gorm.io/gorm"
 )
 
@@ -56,12 +57,18 @@ func StartFinalizedDB[T any](ctx context.Context, wg *sync.WaitGroup, params Par
 	go process.Process(ctx, wg, poller.DataCh(), processor)
 }
 
-func StartLatestDB[T any](ctx context.Context, wg *sync.WaitGroup, params ParamsDB[T], processors ...db.RevertableProcessor[T]) {
-	poller := poll.NewLatestPoller(params.Adapter, params.NextBlockNumber, params.Reorg, params.Poller)
+func StartLatestDB[T any](ctx context.Context, wg *sync.WaitGroup, params ParamsDB[T], processors ...db.RevertableProcessor[T]) error {
+	poller, err := poll.NewLatestPoller(params.Adapter, params.NextBlockNumber, params.Reorg, params.Poller)
+	if err != nil {
+		return errors.WithMessage(err, "Failed to create latest poller")
+	}
+
 	wg.Add(1)
 	go poller.Poll(ctx, wg)
 
 	processor := db.NewRevertableAggregateProcessor(params.Processor, params.DB, processors...)
 	wg.Add(1)
 	go process.Process(ctx, wg, poller.DataCh(), processor)
+
+	return nil
 }
