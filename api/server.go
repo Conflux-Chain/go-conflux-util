@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/Conflux-Chain/go-conflux-util/http/middlewares"
 	"github.com/Conflux-Chain/go-conflux-util/viper"
@@ -28,6 +29,11 @@ func MustServeFromViper(factory RouteFactory, middlewares ...middlewares.Middlew
 }
 
 func MustServe(config Config, factory RouteFactory, mws ...middlewares.Middleware) {
+	// gin init mode via init(), but .env may be loaded later and ignored the GIN_MODE.
+	if os.Getenv(gin.EnvGinMode) == gin.ReleaseMode {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	router := gin.New()
 
 	if !config.RecoveryDisabled {
