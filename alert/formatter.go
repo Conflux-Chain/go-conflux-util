@@ -169,8 +169,15 @@ type DingTalkMarkdownFormatter struct {
 
 func NewDingtalkMarkdownFormatter(tags, mentions []string) (*DingTalkMarkdownFormatter, error) {
 	funcMap := template.FuncMap{
-		"formatRFC3339": formatRFC3339,
-		"mentions":      func() []string { return mentions },
+		"upper":                  toUpper,
+		"formatLogLevel":         formatLogLevel,
+		"formatRFC3339":          formatRFC3339,
+		"formatSeverity":         formatSeverity,
+		"isHighPriorityLogLevel": isHighPriorityLogLevel,
+		"isHighPrioritySeverity": isHighPrioritySeverity,
+		"isWarningLogLevel":      isWarningLogLevel,
+		"isWarningSeverity":      isWarningSeverity,
+		"mentions":               func() []string { return mentions },
 	}
 	mf, err := newMarkdownFormatter(
 		tags, funcMap, dingTalkMarkdownTemplates[0], dingTalkMarkdownTemplates[1],
@@ -186,15 +193,50 @@ func formatRFC3339(t time.Time) string {
 	return t.Format(time.RFC3339)
 }
 
+func formatLogLevel(level logrus.Level) string {
+	return strings.ToUpper(level.String())
+}
+
+func formatSeverity(severity Severity) string {
+	return strings.ToUpper(severity.String())
+}
+
+func toUpper(text string) string {
+	return strings.ToUpper(text)
+}
+
+func isHighPriorityLogLevel(level logrus.Level) bool {
+	return level <= logrus.ErrorLevel
+}
+
+func isHighPrioritySeverity(severity Severity) bool {
+	return severity >= SeverityHigh
+}
+
+func isWarningLogLevel(level logrus.Level) bool {
+	return level == logrus.WarnLevel
+}
+
+func isWarningSeverity(severity Severity) bool {
+	return severity == SeverityMedium
+}
+
 type TelegramMarkdownFormatter struct {
 	*markdownFormatter
 }
 
 func NewTelegramMarkdownFormatter(tags, atUsers []string) (f *TelegramMarkdownFormatter, err error) {
 	funcMap := template.FuncMap{
+		"formatLogLevel":         formatLogLevel,
 		"toString":               toString,
+		"upper":                  toUpper,
 		"escapeMarkdown":         escapeMarkdown,
+		"formatSeverity":         formatSeverity,
 		"formatRFC3339":          formatRFC3339,
+		"isHighPriorityLogLevel": isHighPriorityLogLevel,
+		"isHighPrioritySeverity": isHighPrioritySeverity,
+		"isWarningLogLevel":      isWarningLogLevel,
+		"isWarningSeverity":      isWarningSeverity,
 		"truncateStringWithTail": truncateStringWithTail,
 		"mentions":               func() []string { return atUsers },
 	}
@@ -260,7 +302,14 @@ type SmtpHtmlFormatter struct {
 func NewSmtpHtmlFormatter(
 	conf SmtpConfig, tags []string) (f *SmtpHtmlFormatter, err error) {
 	funcMap := template.FuncMap{
-		"formatRFC3339": formatRFC3339,
+		"formatLogLevel":         formatLogLevel,
+		"formatRFC3339":          formatRFC3339,
+		"formatSeverity":         formatSeverity,
+		"isHighPriorityLogLevel": isHighPriorityLogLevel,
+		"isHighPrioritySeverity": isHighPrioritySeverity,
+		"isWarningLogLevel":      isWarningLogLevel,
+		"isWarningSeverity":      isWarningSeverity,
+		"upper":                  toUpper,
 	}
 	hf, err := newHtmlFormatter(
 		tags, funcMap, htmlTemplates[0], htmlTemplates[1],
