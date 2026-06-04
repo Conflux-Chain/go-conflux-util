@@ -44,12 +44,13 @@ func (config *MysqlConfig) CreateDatabaseIfAbsent(db *gorm.DB) (bool, error) {
 		return false, nil
 	}
 
-	var databases []string
-	if err := db.Raw("SHOW DATABASES LIKE '%v'", config.Database).Find(&databases).Error; err != nil {
+	rows, err := db.Raw(fmt.Sprintf("SHOW DATABASES LIKE '%v'", config.Database)).Rows()
+	if err != nil {
 		return false, errors.WithMessage(err, "Failed to query databases")
 	}
+	defer rows.Close()
 
-	if len(databases) > 0 {
+	if rows.Next() {
 		return false, nil
 	}
 
