@@ -75,7 +75,9 @@ func (r *Request) WithQueryParams(params map[string]string) *Request {
 			builder.WriteString("&")
 		}
 
-		builder.WriteString(k + "=" + v)
+		builder.WriteString(k)
+		builder.WriteString("=")
+		builder.WriteString(v)
 	}
 
 	r.url += builder.String()

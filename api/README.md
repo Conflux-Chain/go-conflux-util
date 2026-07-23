@@ -58,6 +58,7 @@ There are some pre-defined errors as below:
 - 5: JWT error.
 
 ## HTTP Response Status Code
+
 To distinguish backend service error and gateway error, we only use `200` and `600` as HTTP response status code:
 
 - 200: success, or known business error, e.g. entity not found.
@@ -70,6 +71,12 @@ There are some common used middlewares available:
 - JWT
 - Metrics
 - Wrapper to return (value, error) pair
+
+## Validators
+
+There are some helpful validator tag available:
+
+- `hex`: starts with `0x` prefix and heximal characters in even number, e.g. `0x`, `0x12`, `0x12abCD`.
 
 ## Unit Test
 
