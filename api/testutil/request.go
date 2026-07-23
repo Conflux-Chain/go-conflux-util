@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,19 +67,13 @@ func (r *Request) WithAuth(accessToken string) *Request {
 
 // WithQueryParams builds query params to concatenate with URL.
 func (r *Request) WithQueryParams(params map[string]string) *Request {
-	var builder strings.Builder
+	values := url.Values{}
 
 	for k, v := range params {
-		if builder.Len() == 0 {
-			builder.WriteString("?")
-		} else {
-			builder.WriteString("&")
-		}
-
-		builder.WriteString(k + "=" + v)
+		values.Set(k, v)
 	}
 
-	r.url += builder.String()
+	r.url += "?" + values.Encode()
 
 	return r
 }

@@ -1,0 +1,2 @@
+MD010: false # Disable rule MD010 (Hard tabs)
+MD013: false # Disable rule MD013 (Line length)
