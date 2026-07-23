@@ -76,7 +76,7 @@ There are some common used middlewares available:
 
 There are some helpful validator tags available:
 
-- `hex`: starts with `0x` prefix and contains an even number of hexadecimal characters, e.g. `0x`, `0x12`, `0x12abCD`. The value could be decoded via `hexutil.MustDecode(hexString)`.
+- `hex`: starts with `0x` prefix and contains an even number of hexadecimal characters, e.g. `0x`, `0x12`, `0x12abCD`. The value could be decoded via `hexutil.MustDecode(hexString)`, and it will never be panic.
 
 ## Unit Test
 
