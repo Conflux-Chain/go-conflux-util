@@ -9,6 +9,7 @@ import (
 )
 
 var (
+	// similar to the native hexadecimal tag, but requires 0x prefix and even number of characters
 	regexHex = regexp.MustCompile(`^0x(?:[0-9a-fA-F]{2})*$`)
 
 	validators = map[string]validator.Func{

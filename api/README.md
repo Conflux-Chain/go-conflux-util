@@ -74,9 +74,9 @@ There are some common used middlewares available:
 
 ## Validators
 
-There are some helpful validator tag available:
+There are some helpful validator tags available:
 
-- `hex`: starts with `0x` prefix and heximal characters in even number, e.g. `0x`, `0x12`, `0x12abCD`.
+- `hex`: starts with `0x` prefix and contains an even number of hexadecimal characters, e.g. `0x`, `0x12`, `0x12abCD`. The value could be decoded via `hexutil.MustDecode(hexString)`.
 
 ## Unit Test
 

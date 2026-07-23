@@ -3,16 +3,25 @@ package api
 import (
 	"testing"
 
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestRegexHex(t *testing.T) {
-	assert.True(t, regexHex.MatchString("0x"))
-	assert.True(t, regexHex.MatchString("0x12abCD"))
+	v, ok := binding.Validator.Engine().(*validator.Validate)
+	assert.True(t, ok)
 
-	assert.False(t, regexHex.MatchString("0X"))
-	assert.False(t, regexHex.MatchString(""))
-	assert.False(t, regexHex.MatchString("0x0"))
-	assert.False(t, regexHex.MatchString("0x123"))
-	assert.False(t, regexHex.MatchString("0x123G"))
+	type req struct {
+		V string `binding:"hex"`
+	}
+
+	assert.NoError(t, v.Struct(req{V: "0x"}))
+	assert.NoError(t, v.Struct(req{V: "0x12abCD"}))
+
+	assert.Error(t, v.Struct(req{V: "0X"}))
+	assert.Error(t, v.Struct(req{V: ""}))
+	assert.Error(t, v.Struct(req{V: "0x0"}))
+	assert.Error(t, v.Struct(req{V: "0x123"}))
+	assert.Error(t, v.Struct(req{V: "0x123G"}))
 }
