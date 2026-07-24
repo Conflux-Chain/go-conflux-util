@@ -71,6 +71,7 @@ There are some common used middlewares available:
 - JWT
 - Metrics
 - Wrapper to return (value, error) pair
+- Rate limit
 
 ## Validators
 

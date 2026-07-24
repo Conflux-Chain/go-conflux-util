@@ -18,10 +18,17 @@ func NewTokenBucket(qps int, burst int) Limiter {
 }
 
 func NewTokenBucketRate(qps rate.Limit, burst int) Limiter {
-	timeoutSecs := int64(float64(burst)/float64(qps)) + 1
+	var timeoutSecs int64 = 10
+	if qps > 0 {
+		timeoutSecs = int64(float64(burst)/float64(qps)) + 1
+	}
 
+	return NewTokenBucketWithTimeout(float64(qps), burst, timeoutSecs)
+}
+
+func NewTokenBucketWithTimeout(qps float64, burst int, timeoutSecs int64) Limiter {
 	return &TokenBucket{
-		inner:       rate.NewLimiter(qps, burst),
+		inner:       rate.NewLimiter(rate.Limit(qps), burst),
 		lastSeen:    time.Now().Unix(),
 		timeoutSecs: timeoutSecs,
 	}
