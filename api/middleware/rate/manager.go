@@ -22,10 +22,10 @@ type LimiterManager struct {
 func NewLimiterManager(config Config) *LimiterManager {
 	limiters := make(map[string]map[string]map[string]rate.Limiter)
 
-	for tier, tierConfig := range config.Limiter.Tiers {
+	for tier, api2Config := range config.Limiter {
 		limiters[tier] = make(map[string]map[string]rate.Limiter)
 
-		for api := range tierConfig.APIs {
+		for api := range api2Config {
 			limiters[tier][api] = make(map[string]rate.Limiter)
 		}
 	}
@@ -79,7 +79,7 @@ func (manager *LimiterManager) getOrCreateLimiter(tier, key, api string) (rate.L
 	}
 
 	// API config must exists because we have already initialized the limiters map in constructor
-	config := manager.config.Limiter.Tiers[tier].APIs[api]
+	config := manager.config.Limiter[tier][api]
 
 	limiter := rate.NewTokenBucketWithTimeout(config.Rate, config.Burst, manager.config.TTLsecs)
 	limitersByAPI[key] = limiter
