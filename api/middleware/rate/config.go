@@ -25,6 +25,10 @@ type APIConfig struct {
 
 // Add adds a new API rate limit configuration to the LimiterConfig. It returns true if the configuration was added successfully, or false if the configuration already exists.
 func (config *LimiterConfig) Add(tier, api string, rate float64, burst int) bool {
+	if config.Tiers == nil {
+		config.Tiers = make(map[string]TierConfig)
+	}
+
 	if _, ok := config.Tiers[tier]; !ok {
 		config.Tiers[tier] = TierConfig{
 			APIs: make(map[string]APIConfig),

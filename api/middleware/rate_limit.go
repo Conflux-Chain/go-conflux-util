@@ -50,7 +50,7 @@ func (manager *RateLimitManager) Middleware(api string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tier, key, err := manager.keyExtractor(c)
 		if err != nil {
-			ResponseError(c, apiUtil.ErrValidation(err))
+			c.AbortWithStatusJSON(http.StatusOK, apiUtil.ErrValidation(err))
 		} else if err = manager.Limit(tier, key, api); err != nil {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, apiUtil.ErrTooManyRequests(err))
 		} else {

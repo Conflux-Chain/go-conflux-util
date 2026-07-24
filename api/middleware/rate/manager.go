@@ -104,7 +104,18 @@ func (manager *LimiterManager) Expire() {
 }
 
 // ScheduleExpire expires the limiters periodically. Generally, it should be called in a goroutine.
-func (manager *LimiterManager) ScheduleExpire(ctx context.Context, wg *sync.WaitGroup) {
+func (manager *LimiterManager) ScheduleExpire() {
+	ticker := time.NewTicker(manager.config.ExpireInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		manager.Expire()
+	}
+}
+
+// ScheduleExpireCtx expires the limiters periodically until the context is done. It should be called in a goroutine.
+// Note, the wg must be not nil, and the caller should call wg.Add(1) before calling this function, and call wg.Wait() after the context is done.
+func (manager *LimiterManager) ScheduleExpireCtx(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	ticker := time.NewTicker(manager.config.ExpireInterval)
