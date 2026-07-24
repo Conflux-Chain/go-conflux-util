@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Conflux-Chain/go-conflux-util/rate"
+	"github.com/mcuadros/go-defaults"
 )
 
 // LimiterManager manages the limiters for different tiers, keys, and APIs. It is safe for concurrent use.
@@ -20,6 +21,8 @@ type LimiterManager struct {
 
 // NewLimiterManager creates a new LimiterManager with the given config.
 func NewLimiterManager(config Config) *LimiterManager {
+	defaults.SetDefaults(&config)
+
 	limiters := make(map[string]map[string]map[string]rate.Limiter)
 
 	for tier, api2Config := range config.Limiter {

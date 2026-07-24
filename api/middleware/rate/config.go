@@ -15,7 +15,7 @@ type LimiterConfig struct {
 	Burst int     // Burst is the maximum number of requests that can be made in a short period of time
 }
 
-// Add adds a new API rate limit configuration to the LimiterConfig. It returns true if the configuration was added successfully, or false if the configuration already exists.
+// Add adds a new limiter configuration for a given tier and API. If the configuration already exists, it returns false. Otherwise, it adds the configuration and returns true.
 func (config *Config) Add(tier, api string, rate float64, burst int) bool {
 	if config.Limiter == nil {
 		config.Limiter = make(map[string]map[string]LimiterConfig)

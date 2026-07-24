@@ -14,6 +14,11 @@ const RateLimitTierFree = "free"
 type RateLimitKeyExtractorFunc func(c *gin.Context) (tier, key string, err error)
 
 // GetRealIP retrieves the real IP address of the client from the gin context, considering the "X-Real-IP" header if present.
+//
+// Note, Gin provides a method ClientIP() to get the client IP address, but it requires to set the trusted proxies. In this case,
+// services have to change the proxy settings when proxy IP address changed.
+//
+// As a result, the service depends on the devops to set the correct "X-Real-IP" header in the reverse proxy.
 func GetRealIP(c *gin.Context) string {
 	ip := c.GetHeader("X-Real-IP")
 
@@ -38,10 +43,16 @@ type RateLimitManager struct {
 }
 
 // NewRateLimitManager creates a new RateLimitManager with the given configuration and key extractor function.
-func NewRateLimitManager(config rate.Config, keyExtractor RateLimitKeyExtractorFunc) *RateLimitManager {
+// If no key extractor function is provided, it defaults to using the DefaultRateLimitKeyExtractor.
+func NewRateLimitManager(config rate.Config, keyExtractor ...RateLimitKeyExtractorFunc) *RateLimitManager {
+	var extractor RateLimitKeyExtractorFunc = DefaultRateLimitKeyExtractor
+	if len(keyExtractor) > 0 {
+		extractor = keyExtractor[0]
+	}
+
 	return &RateLimitManager{
 		LimiterManager: rate.NewLimiterManager(config),
-		keyExtractor:   keyExtractor,
+		keyExtractor:   extractor,
 	}
 }
 
