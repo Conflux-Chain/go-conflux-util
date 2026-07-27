@@ -62,6 +62,10 @@ func (window *FixedWindow) advance(now time.Time) {
 }
 
 func (window *FixedWindow) Expired() bool {
+	return window.ExpiredAt(time.Now())
+}
+
+func (window *FixedWindow) ExpiredAt(now time.Time) bool {
 	startTime := atomic.LoadInt64(&window.startTime)
-	return time.Since(time.UnixMilli(startTime)) > window.interval
+	return time.UnixMilli(startTime).Add(window.interval).Before(now)
 }

@@ -112,6 +112,14 @@ func (j *Jwt[T, KEY]) Validate(tokenString string) (*JwtClaims[T], error) {
 		return nil, errors.WithMessage(err, "Failed to parse token")
 	}
 
+	if len(j.config.Issuer) > 0 && claims.Issuer != j.config.Issuer {
+		return nil, errors.Errorf("Invalid token issuer, expected = %v, actual = %v", j.config.Issuer, claims.Issuer)
+	}
+
+	if len(j.config.Subject) > 0 && claims.Subject != j.config.Subject {
+		return nil, errors.Errorf("Invalid token subject, expected = %v, actual = %v", j.config.Subject, claims.Subject)
+	}
+
 	return &claims, nil
 }
 

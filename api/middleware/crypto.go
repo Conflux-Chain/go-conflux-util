@@ -146,7 +146,12 @@ func (method *signingMethodEdDSA) FromPEM(data []byte) (ed25519.PrivateKey, erro
 		return nil, err
 	}
 
-	return key.(ed25519.PrivateKey), nil
+	privateKey, ok := key.(ed25519.PrivateKey)
+	if !ok {
+		return nil, errors.New("invalid ed25519 private key")
+	}
+
+	return privateKey, nil
 }
 
 func (method *signingMethodEdDSA) JwtSigningMethod() jwt.SigningMethod {

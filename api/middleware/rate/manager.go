@@ -92,13 +92,18 @@ func (manager *LimiterManager) getOrCreateLimiter(tier, key, api string) (rate.L
 
 // Expire expires the limiters that have expired. It should be called periodically.
 func (manager *LimiterManager) Expire() {
+	manager.ExpireAt(time.Now())
+}
+
+// ExpireAt expires the limiters that have expired at the given time. It should be called periodically.
+func (manager *LimiterManager) ExpireAt(now time.Time) {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
 	for _, limitersByAPI := range manager.limiters {
 		for _, limitersByKey := range limitersByAPI {
 			for key, limiter := range limitersByKey {
-				if limiter.Expired() {
+				if limiter.ExpiredAt(now) {
 					delete(limitersByKey, key)
 				}
 			}

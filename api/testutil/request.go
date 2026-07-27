@@ -66,6 +66,10 @@ func (r *Request) WithAuth(accessToken string) *Request {
 }
 
 // WithQueryParams builds query params to concatenate with URL.
+//
+// This helper is intended for a single build step in test code. If you call it
+// multiple times, the URL will be extended again, so prefer constructing all
+// query params before the first call.
 func (r *Request) WithQueryParams(params map[string]string) *Request {
 	values := url.Values{}
 
