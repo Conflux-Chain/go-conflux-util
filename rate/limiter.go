@@ -12,4 +12,5 @@ type Limiter interface {
 	// Expired indicates whether limiter not updated for a long time.
 	// Generally, it is used for garbage collection.
 	Expired() bool
+	ExpiredAt(now time.Time) bool
 }
