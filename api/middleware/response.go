@@ -55,8 +55,8 @@ func ResponseCsv(c *gin.Context, data CsvData) {
 	defer writer.Flush()
 
 	if !data.ExcludeBOMHeader {
-		//Write UTF-8 BOM header for Excel compatibility
-		_ = writer.Write([]string{"\xEF\xBB\xBF"})
+		// Write UTF-8 BOM header for Excel compatibility.
+		_, _ = c.Writer.Write([]byte("\xEF\xBB\xBF"))
 	}
 
 	_ = writer.WriteAll(data.Data)
