@@ -59,8 +59,7 @@ func (bucket *TokenBucket) LimitAt(now time.Time, n int) error {
 }
 
 func (bucket *TokenBucket) Expired() bool {
-	lastSeen := atomic.LoadInt64(&bucket.lastSeen)
-	return time.Now().Unix() > lastSeen+bucket.timeoutSecs
+	return bucket.ExpiredAt(time.Now())
 }
 
 func (bucket *TokenBucket) ExpiredAt(now time.Time) bool {
