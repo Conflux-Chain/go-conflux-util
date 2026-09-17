@@ -119,7 +119,10 @@ func (userOp *PackedUserOperation) SetPaymasterAndData(paymaster common.Address,
 func (userOp *PackedUserOperation) MaxGasCost() *big.Int {
 	maxCost := big.NewInt(0)
 
-	maxCost.Add(maxCost, userOp.PreVerificationGas)
+	if userOp.PreVerificationGas != nil {
+		maxCost.Add(maxCost, userOp.PreVerificationGas)
+	}
+
 	maxCost.Add(maxCost, userOp.VerificationGasLimit())
 	maxCost.Add(maxCost, userOp.CallGasLimit())
 	maxCost.Add(maxCost, userOp.PaymasterVerificationGasLimit())
