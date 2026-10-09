@@ -55,3 +55,14 @@ Note, above 2 methods support:
 
 - Set default value based on `default` tag.
 - Custom data type that implements the `encoding.TextUnmarshaler` interface.
+
+Both methods apply `default` tags through `go-defaults` **after decoding**.
+The library cannot distinguish an omitted value from an explicitly configured
+zero value. On supported fields, values such as `false`, `0`, and `""` are therefore
+replaced by a nonzero tagged default. Omit the corresponding `default` tag when
+the configuration must allow these zero values.
+
+This ordering also avoids merging configured slices with prefilled defaults.
+For example, with `default:"[one,two]"`, a configured `["configured"]` remains
+`["configured"]`, rather than becoming `["configured", "two"]`. An empty slice
+may still receive a tagged default according to `go-defaults` semantics.

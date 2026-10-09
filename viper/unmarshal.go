@@ -104,18 +104,26 @@ func MustUnmarshalKey(key string, valPtr interface{}, resolver ...ValueResolver)
 //
 // Provide custom value resolver if unmarshalling some special types like slice.
 // Note that valPtr must be some value pointer and not be nil.
+//
+// Default tags are applied after decoding: explicit zero values such as false,
+// 0, and "" cannot override nonzero defaults on fields supported by go-defaults.
 func UnmarshalKey(key string, valPtr interface{}, resolver ...ValueResolver) error {
 	subViper := sub(key, resolver...)
 	if err := subViper.Unmarshal(valPtr, viper.DecodeHook(defaultDecodeHook)); err != nil {
 		return err
 	}
 
+	// Apply defaults after decoding to avoid merging configured slices with
+	// prefilled defaults (e.g. [configured] must not become [configured, two]).
 	defaults.SetDefaults(valPtr)
 
 	return nil
 }
 
 // Unmarshal unmarshals the config into a Struct.
+//
+// Default tags are applied after decoding: explicit zero values such as false,
+// 0, and "" cannot override nonzero defaults on fields supported by go-defaults.
 func Unmarshal(valPtr any, opts ...viper.DecoderConfigOption) error {
 	copy := viper.New()
 
@@ -133,6 +141,8 @@ func Unmarshal(valPtr any, opts ...viper.DecoderConfigOption) error {
 		return err
 	}
 
+	// Keep the same post-decode ordering as UnmarshalKey so configured slices
+	// do not retain elements from prefilled default slices.
 	defaults.SetDefaults(valPtr)
 
 	return nil
