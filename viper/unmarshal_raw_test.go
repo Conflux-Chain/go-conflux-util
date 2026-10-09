@@ -3,10 +3,12 @@ package viper
 import (
 	"bytes"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type TestConfig struct {
@@ -22,14 +24,39 @@ type ValConfig struct {
 	Val4 string `default:"val4"`
 }
 
-func reset() {
-	os.Clearenv()
-	viper.Reset()
+// reset isolates the process-wide Viper and CFX environment used by these tests.
+// Tests using this helper must not run in parallel.
+func reset(t *testing.T) {
+	t.Helper()
+
+	// Save inherited test configuration without touching unrelated variables.
+	inheritedEnv := make(map[string]string)
+	for _, entry := range os.Environ() {
+		key, value, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(strings.ToUpper(key), "CFX_") {
+			inheritedEnv[key] = value
+		}
+	}
+
+	// Register restoration before removing variables so failures still clean up.
+	// Test-specific t.Setenv cleanups run first, in reverse registration order.
+	t.Cleanup(func() {
+		viper.Reset()
+		envKeyPrefix = ""
+		for key, value := range inheritedEnv {
+			assert.NoError(t, os.Setenv(key, value), "restore environment variable %s", key)
+		}
+	})
+
+	for key := range inheritedEnv {
+		require.NoError(t, os.Unsetenv(key), "unset environment variable %s", key)
+	}
+
 	initEnv("CFX")
 }
 
 func TestRawUnmarshalConfig(t *testing.T) {
-	reset()
+	reset(t)
 
 	// init config
 	viper.SetConfigType("yml")
@@ -52,11 +79,11 @@ foo:
 }
 
 func TestRawUnmarshalEnv(t *testing.T) {
-	reset()
+	reset(t)
 
 	// init env
-	os.Setenv("CFX_FOO_BAR_VAL2", "env2")
-	os.Setenv("CFX_FOO_BAR_VAL4", "env4")
+	t.Setenv("CFX_FOO_BAR_VAL2", "env2")
+	t.Setenv("CFX_FOO_BAR_VAL4", "env4")
 
 	// global config - works bad to overwrite by env
 	var config TestConfig
@@ -72,11 +99,11 @@ func TestRawUnmarshalEnv(t *testing.T) {
 }
 
 func TestRawUnmarshalMixed(t *testing.T) {
-	reset()
+	reset(t)
 
 	// init env
-	os.Setenv("CFX_FOO_BAR_VAL2", "env2")
-	os.Setenv("CFX_FOO_BAR_VAL4", "env4")
+	t.Setenv("CFX_FOO_BAR_VAL2", "env2")
+	t.Setenv("CFX_FOO_BAR_VAL4", "env4")
 
 	// init config
 	viper.SetConfigType("yml")

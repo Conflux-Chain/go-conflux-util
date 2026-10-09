@@ -2,7 +2,6 @@ package viper
 
 import (
 	"bytes"
-	"os"
 	"testing"
 	"time"
 
@@ -29,9 +28,9 @@ type pruneConfig struct {
 }
 
 func TestViperSub(t *testing.T) {
-	reset()
+	reset(t)
 
-	os.Setenv("CFX_PRUNE_THRESHOLD_LOG_MAXLOGS", "1000")
+	t.Setenv("CFX_PRUNE_THRESHOLD_LOG_MAXLOGS", "1000")
 
 	var jsonConf = []byte(`{"prune":{"name":"ptest1","enabled":true,"interval":"1s","threshold":{"tags":["block","prune"],"log":{"maxLogs":"2000"}}}}`)
 
@@ -55,13 +54,13 @@ func TestViperSub(t *testing.T) {
 		assert.Equal(t, 1000, pc.Threshold.Log.MaxLogs)
 
 		// supports to change env at runtime
-		os.Setenv("CFX_PRUNE_THRESHOLD_LOG_MAXLOGS", "5000")
+		t.Setenv("CFX_PRUNE_THRESHOLD_LOG_MAXLOGS", "5000")
 		var pc2 pruneConfig
 		assert.NoError(t, UnmarshalKey("prune", &pc2))
 		assert.Equal(t, 5000, pc2.Threshold.Log.MaxLogs)
 
 		// multiple sub path
-		os.Setenv("CFX_PRUNE_THRESHOLD_LOG_MAXLOGS", "15000")
+		t.Setenv("CFX_PRUNE_THRESHOLD_LOG_MAXLOGS", "15000")
 		var llc logLimit
 		assert.NoError(t, UnmarshalKey("prune.threshold.log", &llc))
 		assert.Equal(t, 15000, llc.MaxLogs)
@@ -69,10 +68,10 @@ func TestViperSub(t *testing.T) {
 }
 
 func TestEnvWithoutConfig(t *testing.T) {
-	reset()
+	reset(t)
 
-	os.Setenv("CFX_TESTCONFIG_ENABLED", "true")
-	os.Setenv("CFX_TESTCONFIG_SUBCONFIG_ENABLED", "true")
+	t.Setenv("CFX_TESTCONFIG_ENABLED", "true")
+	t.Setenv("CFX_TESTCONFIG_SUBCONFIG_ENABLED", "true")
 
 	var conf struct {
 		Enabled   bool
@@ -87,11 +86,11 @@ func TestEnvWithoutConfig(t *testing.T) {
 }
 
 func TestEnvConfigMixed(t *testing.T) {
-	reset()
+	reset(t)
 
 	// init env
-	os.Setenv("CFX_FOO_BAR_VAL2", "env2")
-	os.Setenv("CFX_FOO_BAR_VAL4", "env4")
+	t.Setenv("CFX_FOO_BAR_VAL2", "env2")
+	t.Setenv("CFX_FOO_BAR_VAL4", "env4")
 
 	// init config
 	viper.SetConfigType("yml")
@@ -119,15 +118,15 @@ foo:
  * - `GetStringSlice` requires space separated value, e.g. "a b c"
  */
 func TestEnvStringSlice(t *testing.T) {
-	reset()
+	reset(t)
 
 	var conf struct {
 		Names1 []string
 		Names2 []string
 	}
 
-	os.Setenv("CFX_TESTCONFIG_NAMES1", "a,b,c")
-	os.Setenv("CFX_TESTCONFIG_NAMES2", "a b c")
+	t.Setenv("CFX_TESTCONFIG_NAMES1", "a,b,c")
+	t.Setenv("CFX_TESTCONFIG_NAMES2", "a b c")
 
 	assert.NoError(t, UnmarshalKey("testConfig", &conf))
 	assert.Equal(t, []string{"a", "b", "c"}, conf.Names1)
@@ -138,7 +137,7 @@ func TestEnvStringSlice(t *testing.T) {
 }
 
 func TestUnmarshalEnvDateTypes(t *testing.T) {
-	reset()
+	reset(t)
 
 	type DataTypes struct {
 		Int          int
@@ -152,17 +151,17 @@ func TestUnmarshalEnvDateTypes(t *testing.T) {
 	}
 
 	// init env
-	os.Setenv("CFX_FOO_BAR_INT", "777")
-	os.Setenv("CFX_FOO_BAR_BOOL", "true")
-	os.Setenv("CFX_FOO_BAR_STRING", "teststring")
-	os.Setenv("CFX_FOO_BAR_DURATION", "30m")
-	os.Setenv("CFX_FOO_BAR_STRINGSLICE", "a,b,c")
-	os.Setenv("CFX_FOO_BAR_MAP_1030_VAL1", "vvv1")
-	os.Setenv("CFX_FOO_BAR_MAP_1030_VAL2", "vvv2")
-	os.Setenv("CFX_FOO_BAR_MAP_1_VAL3", "vvv3")
-	os.Setenv("CFX_FOO_BAR_MAP_1_VAL4", "vvv4")
-	os.Setenv("CFX_FOO_BAR_ADDRESS", "0x86E7e8a956c781cc7385cBc29fdE0e737dE48b73")
-	os.Setenv("CFX_FOO_BAR_ADDRESSSLICE", "0xdde37114971423be2497D190346AE57d82c5EbB7,0xE3bd412550FA07F1A3eBD1Fab285616016C38b96")
+	t.Setenv("CFX_FOO_BAR_INT", "777")
+	t.Setenv("CFX_FOO_BAR_BOOL", "true")
+	t.Setenv("CFX_FOO_BAR_STRING", "teststring")
+	t.Setenv("CFX_FOO_BAR_DURATION", "30m")
+	t.Setenv("CFX_FOO_BAR_STRINGSLICE", "a,b,c")
+	t.Setenv("CFX_FOO_BAR_MAP_1030_VAL1", "vvv1")
+	t.Setenv("CFX_FOO_BAR_MAP_1030_VAL2", "vvv2")
+	t.Setenv("CFX_FOO_BAR_MAP_1_VAL3", "vvv3")
+	t.Setenv("CFX_FOO_BAR_MAP_1_VAL4", "vvv4")
+	t.Setenv("CFX_FOO_BAR_ADDRESS", "0x86E7e8a956c781cc7385cBc29fdE0e737dE48b73")
+	t.Setenv("CFX_FOO_BAR_ADDRESSSLICE", "0xdde37114971423be2497D190346AE57d82c5EbB7,0xE3bd412550FA07F1A3eBD1Fab285616016C38b96")
 
 	expected := DataTypes{
 		Int:         777,
