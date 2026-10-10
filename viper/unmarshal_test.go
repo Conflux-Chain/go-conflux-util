@@ -194,3 +194,31 @@ func TestUnmarshalEnvDateTypes(t *testing.T) {
 	assert.NoError(t, UnmarshalKey("foo.bar", &sub))
 	assert.Equal(t, expected, sub)
 }
+
+func TestUnmarshalSliceDefaultTag(t *testing.T) {
+	reset(t)
+
+	var config struct {
+		Foo struct {
+			Slice []string `default:"[a,b,c]"`
+		}
+	}
+
+	// default tag works fine for []string type
+	assert.NoError(t, Unmarshal(&config))
+	assert.Equal(t, []string{"a", "b", "c"}, config.Foo.Slice)
+
+	// environment variable overrides the default tag, but with less elements: a,b,c -> 1,2
+	// If setting default values before decoding, then the output is "1,2,c"
+	t.Setenv("CFX_FOO_SLICE", "1,2")
+
+	// test UnmarshalKey
+	config.Foo.Slice = nil
+	assert.NoError(t, UnmarshalKey("foo", &config.Foo))
+	assert.Equal(t, []string{"1", "2"}, config.Foo.Slice)
+
+	// test Unmarshal
+	config.Foo.Slice = nil
+	assert.NoError(t, Unmarshal(&config))
+	assert.Equal(t, []string{"1", "2"}, config.Foo.Slice)
+}
