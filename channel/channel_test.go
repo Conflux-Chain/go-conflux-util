@@ -26,6 +26,7 @@ func testMemoryBoundedChannelCapacity(t *testing.T, capacity int) {
 	assert.Greater(t, capacity, 0)
 
 	channel := NewMemoryBoundedChannel[SizedData](capacity, 100*capacity)
+	defer channel.Close()
 
 	// write data
 	for i := 0; i < capacity; i++ {
@@ -70,6 +71,7 @@ func assertReadChannel[T any](t *testing.T, expected T, ch <-chan T) {
 
 func TestMemoryBoundedChannelMaxBytes(t *testing.T) {
 	channel := NewMemoryBoundedChannel[SizedData](3, 100)
+	defer channel.Close()
 
 	// maxBytes readched
 	mustWriteChannel(channel.SendCh(), SizedData{1, 100})
