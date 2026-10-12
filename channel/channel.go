@@ -104,8 +104,11 @@ func (ch *MemoryBoundedChannel[T]) loopEnqueue(stopCh chan<- struct{}) {
 		ch.enqueue(item)
 	}
 
+	// Hold the same lock as peek so closure cannot be missed before Wait.
+	ch.mu.Lock()
 	ch.recvClosed.Store(true)
 	ch.notEmptyCond.Broadcast()
+	ch.mu.Unlock()
 
 	if stopCh != nil {
 		stopCh <- struct{}{}
