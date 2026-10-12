@@ -11,6 +11,25 @@ var testCounterConfig = CounterConfig{
 	Remind:    10,
 }
 
+func TestNewCounterAppliesDefaultsToExplicitConfig(t *testing.T) {
+	tests := []struct {
+		name   string
+		config CounterConfig
+		want   CounterConfig
+	}{
+		{name: "zero config", config: CounterConfig{}, want: DefaultCounterConfig()},
+		{name: "partial config", config: CounterConfig{Threshold: 3}, want: CounterConfig{Threshold: 3, Remind: 60}},
+		{name: "complete config", config: testCounterConfig, want: testCounterConfig},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			counter := NewCounter(tt.config)
+			assert.Equal(t, tt.want, counter.config)
+		})
+	}
+}
+
 func TestCounterContinuousSuccess(t *testing.T) {
 	counter := NewCounter(testCounterConfig)
 

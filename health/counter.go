@@ -2,6 +2,7 @@ package health
 
 import (
 	"reflect"
+	"sync"
 
 	"github.com/mcuadros/go-defaults"
 	"github.com/sirupsen/logrus"
@@ -20,7 +21,11 @@ func DefaultCounterConfig() CounterConfig {
 
 // Counter represents an error tolerant health counter, which allows continuous failures in a short time
 // and periodically remind unhealthy if unrecovered in time.
+//
+// Counter is safe for concurrent use.
+// Counter must not be copied after first use.
 type Counter struct {
+	mu       sync.Mutex
 	config   CounterConfig
 	failures uint64
 }
@@ -30,9 +35,9 @@ func NewCounter(config ...CounterConfig) *Counter {
 
 	if len(config) > 0 {
 		cc = config[0]
-	} else {
-		cc = DefaultCounterConfig()
 	}
+
+	defaults.SetDefaults(&cc)
 
 	return &Counter{
 		config: cc,
@@ -41,6 +46,9 @@ func NewCounter(config ...CounterConfig) *Counter {
 
 // IsSuccess indicates whether any failure occurred.
 func (counter *Counter) IsSuccess() bool {
+	counter.mu.Lock()
+	defer counter.mu.Unlock()
+
 	return counter.failures == 0
 }
 
@@ -49,6 +57,9 @@ func (counter *Counter) IsSuccess() bool {
 //	@return recovered bool - indicates whether recovered from unhealthy status.
 //	@return failures uint64 - indicates the number of continuous failures before success.
 func (counter *Counter) OnSuccess() (recovered bool, failures uint64) {
+	counter.mu.Lock()
+	defer counter.mu.Unlock()
+
 	// last time was success status
 	if counter.failures == 0 {
 		return
@@ -71,6 +82,9 @@ func (counter *Counter) OnSuccess() (recovered bool, failures uint64) {
 //	@return unrecovered bool - indicates whether continuous failures occurred and unrecovered in a long time.
 //	@return failures uint64 - indicates the number of continuous failures so far.
 func (counter *Counter) OnFailure() (unhealthy bool, unrecovered bool, failures uint64) {
+	counter.mu.Lock()
+	defer counter.mu.Unlock()
+
 	counter.failures++
 
 	// error tolerant in short time

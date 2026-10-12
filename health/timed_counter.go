@@ -1,6 +1,7 @@
 package health
 
 import (
+	"sync"
 	"time"
 
 	"github.com/mcuadros/go-defaults"
@@ -8,8 +9,8 @@ import (
 )
 
 type TimedCounterConfig struct {
-	Threshold time.Duration `default:"1m"` // report unhealthy if threshold reached
-	Remind    time.Duration `default:"5m"` // remind unhealthy if unrecovered for a long time
+	Threshold time.Duration `default:"1m"` // report unhealthy if threshold reached; values <= 0 use the constructor default (1m)
+	Remind    time.Duration `default:"5m"` // remind unhealthy if unrecovered for a long time; values <= 0 use the constructor default (5m)
 }
 
 func DefaultTimedCounterConfig() TimedCounterConfig {
@@ -20,7 +21,11 @@ func DefaultTimedCounterConfig() TimedCounterConfig {
 
 // TimedCounter represents an error tolerant health counter, which allows continuous failures in a short time
 // and periodically remind unhealthy if unrecovered in time.
+//
+// TimedCounter is safe for concurrent use.
+// TimedCounter must not be copied after first use.
 type TimedCounter struct {
+	mu       sync.Mutex
 	config   TimedCounterConfig
 	failedAt time.Time // first failure time
 	reports  int       // number of times to report unhealthy
@@ -31,9 +36,17 @@ func NewTimedCounter(config ...TimedCounterConfig) *TimedCounter {
 
 	if len(config) > 0 {
 		tcc = config[0]
-	} else {
-		tcc = DefaultTimedCounterConfig()
 	}
+
+	if tcc.Threshold < 0 {
+		tcc.Threshold = 0
+	}
+
+	if tcc.Remind < 0 {
+		tcc.Remind = 0
+	}
+
+	defaults.SetDefaults(&tcc)
 
 	return &TimedCounter{
 		config: tcc,
@@ -42,6 +55,9 @@ func NewTimedCounter(config ...TimedCounterConfig) *TimedCounter {
 
 // IsSuccess indicates whether any failure occurred.
 func (counter *TimedCounter) IsSuccess() bool {
+	counter.mu.Lock()
+	defer counter.mu.Unlock()
+
 	return counter.failedAt.IsZero()
 }
 
@@ -50,6 +66,9 @@ func (counter *TimedCounter) IsSuccess() bool {
 //	@return recovered bool - indicates whether recovered from unhealthy status.
 //	@return elapsed time.Duration - indicates the duration since the first failure time.
 func (counter *TimedCounter) OnSuccess() (recovered bool, elapsed time.Duration) {
+	counter.mu.Lock()
+	defer counter.mu.Unlock()
+
 	return counter.onSuccessAt(time.Now())
 }
 
@@ -77,6 +96,9 @@ func (counter *TimedCounter) onSuccessAt(now time.Time) (recovered bool, elapsed
 //	@return unrecovered bool - indicates whether continuous failures occurred and unrecovered in a long time.
 //	@return elapsed time.Duration - indicates the duration since the first failure time.
 func (counter *TimedCounter) OnFailure() (unhealthy bool, unrecovered bool, elapsed time.Duration) {
+	counter.mu.Lock()
+	defer counter.mu.Unlock()
+
 	return counter.onFailureAt(time.Now())
 }
 
