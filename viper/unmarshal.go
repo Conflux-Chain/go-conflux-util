@@ -77,8 +77,9 @@ func keys(prefix string) []string {
 		orderedKeys = append(orderedKeys, key)
 	}
 
-	// Write parents before children so partial parent maps cannot overwrite
-	// child values resolved from other configuration sources.
+	// Write parents before children because a parent map may be only a partial
+	// value from a higher-priority source. Writing it after its children could
+	// discard independently resolved child values.
 	sort.Strings(orderedKeys)
 
 	return orderedKeys
@@ -112,8 +113,12 @@ func sub(name string, resolver ...ValueResolver) *viper.Viper {
 			value = viper.Get(key)
 		}
 
-		// A nil child value may be shadowed by a scalar parent. Writing it
-		// would replace that parent with a map and discard its resolved value.
+		// Viper treats a higher-priority scalar parent as shadowing lower-priority
+		// descendants. For example, CFX_FOO makes Get("foo.name") return nil even
+		// when foo.name exists in the config file. Writing that nil child would
+		// turn the scalar parent into a map and discard its resolved value.
+		// Non-nil children are still written because a higher-priority child source
+		// may legitimately override a lower-priority scalar parent.
 		if value != nil {
 			subViper.Set(subKey, value)
 		}

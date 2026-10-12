@@ -75,6 +75,17 @@ func TestUnmarshalParentOverrideShadowsEnvironmentChild(t *testing.T) {
 	}
 }
 
+func TestUnmarshalEnvironmentScalarParentShadowsFileChild(t *testing.T) {
+	reset(t)
+	viper.SetConfigType("json")
+	require.NoError(t, viper.ReadConfig(strings.NewReader(`{"foo":{"name":"file"}}`)))
+	t.Setenv("CFX_FOO", "environment")
+
+	var config struct{ Foo string }
+	require.NoError(t, Unmarshal(&config))
+	assert.Equal(t, "environment", config.Foo)
+}
+
 func TestUnmarshalEnvironmentParentPreservesResolvedChildren(t *testing.T) {
 	reset(t)
 	viper.SetConfigType("json")
