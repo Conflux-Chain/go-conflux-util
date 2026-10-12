@@ -69,18 +69,28 @@ func newMemoryBoundedChannelWithStopCh[T Sizable](capacity, maxBytes int, sendSt
 }
 
 // SendCh returns the sending channel.
+// Use Close to close it after all senders have stopped.
 func (ch *MemoryBoundedChannel[T]) SendCh() chan<- T {
 	return ch.sendCh
 }
 
 // RecvCh returns the receiving channel.
+// It closes after Close has been called and all accepted items have been received.
 func (ch *MemoryBoundedChannel[T]) RecvCh() <-chan T {
 	return ch.recvCh
 }
 
-// Close releases resources associated with the channel.
+// Close closes the sending channel and preserves all accepted items for receiving.
+// Repeated calls have no effect.
 //
-// Note, it will panic if continue to write data after closed, which is the same as the built-in channel behavior.
+// Callers must stop all senders before calling Close. Sending after Close panics,
+// as with a built-in channel.
+//
+// Close does not wait for the buffer to drain or the background goroutines to exit.
+// Callers must keep receiving until RecvCh closes to allow resources to be released.
+// If consumers stop early, arrange for the remaining items to be drained; otherwise
+// a blocked forwarding goroutine retains the channel and its buffered data even if
+// the caller drops its reference to the channel.
 func (ch *MemoryBoundedChannel[T]) Close() {
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
