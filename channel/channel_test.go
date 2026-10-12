@@ -26,6 +26,7 @@ func testMemoryBoundedChannelCapacity(t *testing.T, capacity int) {
 	assert.Greater(t, capacity, 0)
 
 	channel := NewMemoryBoundedChannel[SizedData](capacity, 100*capacity)
+	defer channel.Close()
 
 	// write data
 	for i := 0; i < capacity; i++ {
@@ -70,6 +71,7 @@ func assertReadChannel[T any](t *testing.T, expected T, ch <-chan T) {
 
 func TestMemoryBoundedChannelMaxBytes(t *testing.T) {
 	channel := NewMemoryBoundedChannel[SizedData](3, 100)
+	defer channel.Close()
 
 	// maxBytes readched
 	mustWriteChannel(channel.SendCh(), SizedData{1, 100})
@@ -85,6 +87,25 @@ func TestMemoryBoundedChannelMaxBytes(t *testing.T) {
 	mustWriteChannelBlocked(channel.SendCh(), SizedData{5, 10})
 	assertReadChannel(t, SizedData{3, 99}, channel.RecvCh())
 	assertReadChannel(t, SizedData{4, 10}, channel.RecvCh())
+}
+
+func TestMemoryBoundedChannelClosedEmpty(t *testing.T) {
+	sendStopCh := make(chan struct{}, 1)
+	recvStopCh := make(chan struct{}, 1)
+	channel := newMemoryBoundedChannelWithStopCh[SizedData](3, 100, sendStopCh, recvStopCh)
+
+	channel.Close()
+
+	// Both background loops must stop even when no items have been sent.
+	assertReadChannel(t, struct{}{}, sendStopCh)
+	assertReadChannel(t, struct{}{}, recvStopCh)
+
+	select {
+	case _, ok := <-channel.RecvCh():
+		assert.False(t, ok, "receiving channel must be closed")
+	case <-time.After(5 * time.Second):
+		t.Fatal("Timed out waiting for the empty receiving channel to close")
+	}
 }
 
 func TestMemoryBoundedChannelClosed(t *testing.T) {

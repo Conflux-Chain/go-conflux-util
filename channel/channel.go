@@ -3,12 +3,12 @@ package channel
 import (
 	"container/list"
 	"sync"
-	"sync/atomic"
 )
 
 // Sizable is the interface implemented by types that support to compute memory size.
 type Sizable interface {
-	Size() int // Memory size in bytes
+	// Size returns a non-negative estimate of the item's memory size in bytes.
+	Size() int
 }
 
 type Sized[T any] struct {
@@ -17,7 +17,11 @@ type Sized[T any] struct {
 }
 
 // MemoryBoundedChannel is a channel-like structure that bounds both the number of items and
-// the total memory size of the items in the channel.
+// the total estimated memory size of the items in the channel.
+//
+// Each item's Size is recorded once when enqueued; later changes to the item do not
+// update the recorded size. The sum of recorded sizes in the buffer must fit in an int.
+// The byte limit uses these estimates, not the process's actual memory usage.
 type MemoryBoundedChannel[T Sizable] struct {
 	mu           sync.Mutex
 	notFullCond  *sync.Cond // to wake up goroutine to write buffer
@@ -32,8 +36,8 @@ type MemoryBoundedChannel[T Sizable] struct {
 	sendCh chan T // channel for sending data
 	recvCh chan T // channel for receiving data
 
-	sendClosed atomic.Bool // indicates whether the send channel is closed
-	recvClosed atomic.Bool // indicates whether the recv channel is closed
+	sendClosed bool // indicates whether the send channel is closed; protected by mu
+	recvClosed bool // indicates whether the recv channel is closed; protected by mu
 }
 
 // NewMemoryBoundedChannel creates a new MemoryBoundedChannel with the specified capacity and maximum memory size.
@@ -41,7 +45,7 @@ type MemoryBoundedChannel[T Sizable] struct {
 // It will panic if capacity or maxBytes <= 0.
 //
 // To provide native channel alike behavior, this channel has to receive the data before checking the memory size.
-// As a result, the actual maximum memory size is maxBytes plus the last data size.
+// As a result, the total recorded size can exceed maxBytes by up to the last item's Size.
 func NewMemoryBoundedChannel[T Sizable](capacity, maxBytes int) *MemoryBoundedChannel[T] {
 	return newMemoryBoundedChannelWithStopCh[T](capacity, maxBytes, nil, nil)
 }
@@ -69,26 +73,37 @@ func newMemoryBoundedChannelWithStopCh[T Sizable](capacity, maxBytes int, sendSt
 }
 
 // SendCh returns the sending channel.
+// Use Close to close it after all senders have stopped.
 func (ch *MemoryBoundedChannel[T]) SendCh() chan<- T {
 	return ch.sendCh
 }
 
 // RecvCh returns the receiving channel.
+// It closes after Close has been called and all accepted items have been received.
 func (ch *MemoryBoundedChannel[T]) RecvCh() <-chan T {
 	return ch.recvCh
 }
 
-// Close releases resources associated with the channel.
+// Close closes the sending channel and preserves all accepted items for receiving.
+// Repeated calls have no effect.
 //
-// Note, it will panic if continue to write data after closed, which is the same as the built-in channel behavior.
+// Callers must stop all senders before calling Close. Sending after Close panics,
+// as with a built-in channel.
+//
+// Close does not wait for the buffer to drain or the background goroutines to exit.
+// Callers must keep receiving until RecvCh closes to allow resources to be released.
+// If consumers stop early, arrange for the remaining items to be drained; otherwise
+// a blocked forwarding goroutine retains the channel and its buffered data even if
+// the caller drops its reference to the channel.
 func (ch *MemoryBoundedChannel[T]) Close() {
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
 
 	// already closed
-	if !ch.sendClosed.CompareAndSwap(false, true) {
+	if ch.sendClosed {
 		return
 	}
+	ch.sendClosed = true
 
 	// Close sendCh to stop loopEnqueue goroutine.
 	// Note, recvCh cannot be closed here, otherwise loopDequeue
@@ -104,8 +119,11 @@ func (ch *MemoryBoundedChannel[T]) loopEnqueue(stopCh chan<- struct{}) {
 		ch.enqueue(item)
 	}
 
-	ch.recvClosed.Store(true)
+	// Hold the same lock as peek so closure cannot be missed before Wait.
+	ch.mu.Lock()
+	ch.recvClosed = true
 	ch.notEmptyCond.Broadcast()
+	ch.mu.Unlock()
 
 	if stopCh != nil {
 		stopCh <- struct{}{}
@@ -129,7 +147,7 @@ func (ch *MemoryBoundedChannel[T]) enqueue(item T) {
 	ch.notEmptyCond.Broadcast()
 
 	// blocking sending channel if buffer is full and this channel not closed yet
-	for !ch.sendClosed.Load() && (ch.buffer.Len() >= ch.capacity || ch.curBytes >= ch.maxBytes) {
+	for !ch.sendClosed && (ch.buffer.Len() >= ch.capacity || ch.curBytes >= ch.maxBytes) {
 		ch.notFullCond.Wait()
 	}
 }
@@ -159,7 +177,7 @@ func (ch *MemoryBoundedChannel[T]) peek() (val Sized[T], ok bool) {
 	defer ch.mu.Unlock()
 
 	// wait until there is data
-	for !ch.recvClosed.Load() && ch.buffer.Len() == 0 {
+	for !ch.recvClosed && ch.buffer.Len() == 0 {
 		ch.notEmptyCond.Wait()
 	}
 
