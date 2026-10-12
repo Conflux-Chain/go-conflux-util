@@ -89,3 +89,27 @@ func TestGetIPAddressHeaderSelection(t *testing.T) {
 		})
 	}
 }
+
+func TestGetIPAddressRemoteAddr(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		remote string
+		want   string
+	}{
+		{"IPv4 with port", "192.168.1.2:1234", "192.168.1.2"},
+		{"IPv4 without port", "192.168.1.2", "192.168.1.2"},
+		{"IPv6 with port", "[2001:db8::1]:1234", "2001:db8::1"},
+		{"IPv6 without port", "2001:db8::1", "2001:db8::1"},
+		{"IPv6 zone with port", "[fe80::1%eth0]:1234", "fe80::1%eth0"},
+		{"IPv6 zone without port", "fe80::1%eth0", "fe80::1%eth0"},
+		{"empty", "", ""},
+		{"nonstandard", "unknown", "unknown"},
+		{"malformed brackets", "[2001:db8::1", "[2001:db8::1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			r.RemoteAddr = tc.remote
+			assert.Equal(t, tc.want, GetIPAddress(r))
+		})
+	}
+}

@@ -31,6 +31,8 @@ func GetRealIPFromContext(ctx context.Context) (string, bool) {
 // filters. In a multi-proxy chain, this may select a proxy rather than the client.
 // Header addresses must be global unicast and outside private and explicitly
 // excluded subnets. These filters do not apply to the RemoteAddr fallback.
+// The fallback extracts the host from a host:port pair, preserving any IPv6
+// zone. If RemoteAddr cannot be split, it is returned unchanged.
 //
 // This function trusts forwarding headers without verifying the connection's
 // peer. Services using it must only accept requests through trusted proxies that
@@ -57,9 +59,9 @@ func GetIPAddress(r *http.Request) string {
 		}
 	}
 
-	// otherwise, use the RemoteAddr from HTTP request
-	if idx := strings.LastIndex(r.RemoteAddr, ":"); idx != -1 {
-		return r.RemoteAddr[:idx]
+	// Otherwise, extract the peer host, leaving unsplittable addresses intact.
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
 	}
 
 	return r.RemoteAddr
