@@ -46,8 +46,17 @@ func (opt *SerialOption) Normalize(tasks int) {
 	}
 }
 
-// Serial schedules tasks in sequence and handles the execution result in sequence as well.
-// If any task execution failed, it will terminate and return error immediately.
+// Serial executes tasks concurrently and collects results in task-index order.
+// If tasks <= 0, it returns nil without invoking callbacks.
+//
+// ParallelDo errors are passed to ParallelCollect in Result.Err; they do not
+// automatically terminate execution. If ParallelCollect returns an error, Serial
+// stops collection and returns that error. If collection observes ctx cancellation,
+// Serial returns ctx.Err().
+//
+// After collection finishes or stops, Serial cancels the worker context and waits
+// for all workers to exit before returning. Cancellation is cooperative: callbacks
+// may still be invoked after cancellation and must honor ctx to avoid blocking shutdown.
 func Serial[T any](ctx context.Context, parallelizable Interface[T], tasks int, option ...SerialOption) error {
 	if tasks <= 0 {
 		return nil
