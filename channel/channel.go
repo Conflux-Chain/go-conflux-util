@@ -8,7 +8,8 @@ import (
 
 // Sizable is the interface implemented by types that support to compute memory size.
 type Sizable interface {
-	Size() int // Memory size in bytes
+	// Size returns a non-negative estimate of the item's memory size in bytes.
+	Size() int
 }
 
 type Sized[T any] struct {
@@ -17,7 +18,11 @@ type Sized[T any] struct {
 }
 
 // MemoryBoundedChannel is a channel-like structure that bounds both the number of items and
-// the total memory size of the items in the channel.
+// the total estimated memory size of the items in the channel.
+//
+// Each item's Size is recorded once when enqueued; later changes to the item do not
+// update the recorded size. The sum of recorded sizes in the buffer must fit in an int.
+// The byte limit uses these estimates, not the process's actual memory usage.
 type MemoryBoundedChannel[T Sizable] struct {
 	mu           sync.Mutex
 	notFullCond  *sync.Cond // to wake up goroutine to write buffer
@@ -41,7 +46,7 @@ type MemoryBoundedChannel[T Sizable] struct {
 // It will panic if capacity or maxBytes <= 0.
 //
 // To provide native channel alike behavior, this channel has to receive the data before checking the memory size.
-// As a result, the actual maximum memory size is maxBytes plus the last data size.
+// As a result, the total recorded size can exceed maxBytes by up to the last item's Size.
 func NewMemoryBoundedChannel[T Sizable](capacity, maxBytes int) *MemoryBoundedChannel[T] {
 	return newMemoryBoundedChannelWithStopCh[T](capacity, maxBytes, nil, nil)
 }
