@@ -3,7 +3,6 @@ package channel
 import (
 	"container/list"
 	"sync"
-	"sync/atomic"
 )
 
 // Sizable is the interface implemented by types that support to compute memory size.
@@ -37,8 +36,8 @@ type MemoryBoundedChannel[T Sizable] struct {
 	sendCh chan T // channel for sending data
 	recvCh chan T // channel for receiving data
 
-	sendClosed atomic.Bool // indicates whether the send channel is closed
-	recvClosed atomic.Bool // indicates whether the recv channel is closed
+	sendClosed bool // indicates whether the send channel is closed; protected by mu
+	recvClosed bool // indicates whether the recv channel is closed; protected by mu
 }
 
 // NewMemoryBoundedChannel creates a new MemoryBoundedChannel with the specified capacity and maximum memory size.
@@ -101,9 +100,10 @@ func (ch *MemoryBoundedChannel[T]) Close() {
 	defer ch.mu.Unlock()
 
 	// already closed
-	if !ch.sendClosed.CompareAndSwap(false, true) {
+	if ch.sendClosed {
 		return
 	}
+	ch.sendClosed = true
 
 	// Close sendCh to stop loopEnqueue goroutine.
 	// Note, recvCh cannot be closed here, otherwise loopDequeue
@@ -121,7 +121,7 @@ func (ch *MemoryBoundedChannel[T]) loopEnqueue(stopCh chan<- struct{}) {
 
 	// Hold the same lock as peek so closure cannot be missed before Wait.
 	ch.mu.Lock()
-	ch.recvClosed.Store(true)
+	ch.recvClosed = true
 	ch.notEmptyCond.Broadcast()
 	ch.mu.Unlock()
 
@@ -147,7 +147,7 @@ func (ch *MemoryBoundedChannel[T]) enqueue(item T) {
 	ch.notEmptyCond.Broadcast()
 
 	// blocking sending channel if buffer is full and this channel not closed yet
-	for !ch.sendClosed.Load() && (ch.buffer.Len() >= ch.capacity || ch.curBytes >= ch.maxBytes) {
+	for !ch.sendClosed && (ch.buffer.Len() >= ch.capacity || ch.curBytes >= ch.maxBytes) {
 		ch.notFullCond.Wait()
 	}
 }
@@ -177,7 +177,7 @@ func (ch *MemoryBoundedChannel[T]) peek() (val Sized[T], ok bool) {
 	defer ch.mu.Unlock()
 
 	// wait until there is data
-	for !ch.recvClosed.Load() && ch.buffer.Len() == 0 {
+	for !ch.recvClosed && ch.buffer.Len() == 0 {
 		ch.notEmptyCond.Wait()
 	}
 
