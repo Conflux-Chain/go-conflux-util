@@ -1,7 +1,6 @@
 package middlewares
 
 import (
-	"bytes"
 	"context"
 	"net"
 	"net/http"
@@ -30,6 +29,8 @@ func GetRealIPFromContext(ctx context.Context) (string, bool) {
 // falling back to RemoteAddr when neither header contains an eligible address.
 // Each header is scanned from right to left for an address that passes the IP
 // filters. In a multi-proxy chain, this may select a proxy rather than the client.
+// Header addresses must be global unicast and outside private and explicitly
+// excluded subnets. These filters do not apply to the RemoteAddr fallback.
 //
 // This function trusts forwarding headers without verifying the connection's
 // peer. Services using it must only accept requests through trusted proxies that
@@ -64,46 +65,24 @@ func GetIPAddress(r *http.Request) string {
 	return r.RemoteAddr
 }
 
-// Remote IP Address with Go:
-// https://husobee.github.io/golang/ip-address/2015/12/17/remote-ip-go.html
-
-// ipRange is a structure that holds the start and end of a range of ip addresses.
-type ipRange struct {
-	start net.IP // inclusive
-	end   net.IP // exclusive
+// Preserve the existing exclusions beyond RFC 1918 private space. These special
+// ranges are not all private networks; this is not a complete routability list.
+var excludedIPSubnets = []net.IPNet{
+	{IP: net.IPv4(100, 64, 0, 0), Mask: net.CIDRMask(10, 32)}, // shared address space
+	{IP: net.IPv4(192, 0, 0, 0), Mask: net.CIDRMask(24, 32)},  // IETF protocol assignments
+	{IP: net.IPv4(198, 18, 0, 0), Mask: net.CIDRMask(15, 32)}, // benchmarking
 }
 
-func parseIpRange(start, end string) ipRange {
-	return ipRange{
-		start: net.ParseIP(start),
-		end:   net.ParseIP(end),
-	}
-}
-
-// includes checks if the specified `ip` is within the range.
-func (rng *ipRange) includes(ip net.IP) bool {
-	return bytes.Compare(ip, rng.start) >= 0 && bytes.Compare(ip, rng.end) < 0
-}
-
-var privateIpRanges = []ipRange{
-	parseIpRange("10.0.0.0", "10.255.255.255"),
-	parseIpRange("100.64.0.0", "100.127.255.255"),
-	parseIpRange("172.16.0.0", "172.31.255.255"),
-	parseIpRange("192.0.0.0", "192.0.0.255"),
-	parseIpRange("192.168.0.0", "192.168.255.255"),
-	parseIpRange("198.18.0.0", "198.19.255.255"),
-}
-
-// isPrivateSubnet - check to see if this ip is in a private subnet
+// isPrivateSubnet reports whether ip is private (IPv4 RFC 1918 or IPv6 ULA)
+// or belongs to one of the additional subnets excluded from forwarding headers.
 func isPrivateSubnet(ip net.IP) bool {
-	// my use case is only concerned with ipv4 atm
-	if ipv4 := ip.To4(); ipv4 != nil {
-		// iterate over all our ranges
-		for _, r := range privateIpRanges {
-			// check if this ip is in a private range
-			if r.includes(ipv4) {
-				return true
-			}
+	if ip.IsPrivate() {
+		return true
+	}
+
+	for _, subnet := range excludedIPSubnets {
+		if subnet.Contains(ip) {
+			return true
 		}
 	}
 
