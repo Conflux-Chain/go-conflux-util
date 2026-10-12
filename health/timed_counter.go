@@ -9,8 +9,8 @@ import (
 )
 
 type TimedCounterConfig struct {
-	Threshold time.Duration `default:"1m"` // report unhealthy if threshold reached
-	Remind    time.Duration `default:"5m"` // remind unhealthy if unrecovered for a long time
+	Threshold time.Duration `default:"1m"` // report unhealthy if threshold reached; values <= 0 use the constructor default (1m)
+	Remind    time.Duration `default:"5m"` // remind unhealthy if unrecovered for a long time; values <= 0 use the constructor default (5m)
 }
 
 func DefaultTimedCounterConfig() TimedCounterConfig {
@@ -36,9 +36,17 @@ func NewTimedCounter(config ...TimedCounterConfig) *TimedCounter {
 
 	if len(config) > 0 {
 		tcc = config[0]
-	} else {
-		tcc = DefaultTimedCounterConfig()
 	}
+
+	if tcc.Threshold < 0 {
+		tcc.Threshold = 0
+	}
+
+	if tcc.Remind < 0 {
+		tcc.Remind = 0
+	}
+
+	defaults.SetDefaults(&tcc)
 
 	return &TimedCounter{
 		config: tcc,
