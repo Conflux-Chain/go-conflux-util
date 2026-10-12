@@ -14,6 +14,8 @@ var (
 )
 
 func initEnv(envPrefix string) {
+	// MustInit calls initEnv once during process startup. Changing the prefix
+	// after initialization is unsupported because Viper keeps global state.
 	if len(envPrefix) > 0 {
 		envKeyPrefix = strings.ToUpper(envPrefix + "_")
 	}
@@ -30,7 +32,11 @@ func initEnv(envPrefix string) {
 //
 // If no config file specified, viper will search for config.xxx file by default.
 //
-// Note that it will panic and exit if failed to read from config files.
+// MustInit is intended to be called once during process startup. Repeated calls
+// are unsupported because Viper stores configuration and initialization state
+// globally; use a fresh process for a different environment prefix or config.
+//
+// Note that it will log a fatal error and exit if failed to read from config files.
 func MustInit(envPrefix string, configFiles ...string) {
 	logger := logrus.WithField("envPrefix", envPrefix)
 
