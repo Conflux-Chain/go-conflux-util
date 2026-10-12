@@ -10,7 +10,9 @@ import (
 
 var CtxKeyRealIP = CtxKey("X-Real-IP")
 
-// RealIP injects real remote IP address in context.
+// RealIP injects the address selected by GetIPAddress into the request context.
+// It does not verify proxy identity; the trusted-proxy deployment requirements
+// documented by GetIPAddress also apply to this middleware.
 func RealIP(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := context.WithValue(r.Context(), CtxKeyRealIP, GetIPAddress(r))
@@ -24,13 +26,26 @@ func GetRealIPFromContext(ctx context.Context) (string, bool) {
 	return val, ok
 }
 
-// GetIPAddress returns the real remote IP address.
+// GetIPAddress selects an IP address from X-Forwarded-For, then X-Real-IP,
+// falling back to RemoteAddr when neither header contains an eligible address.
+// Each header is scanned from right to left for an address that passes the IP
+// filters. In a multi-proxy chain, this may select a proxy rather than the client.
+//
+// This function trusts forwarding headers without verifying the connection's
+// peer. Services using it must only accept requests through trusted proxies that
+// remove or rebuild client-supplied forwarding headers. Setting X-Real-IP alone
+// is insufficient if an untrusted X-Forwarded-For header is preserved, since
+// X-Forwarded-For takes precedence.
+//
+// IP filtering does not establish trust. Without this deployment boundary,
+// clients can spoof the result; it must not be relied on for rate limiting or
+// access control in that case.
 func GetIPAddress(r *http.Request) string {
 	for _, h := range []string{"X-Forwarded-For", "X-Real-Ip"} {
 		addresses := strings.Split(r.Header.Get(h), ",")
 
-		// march from right to left until we get a public address
-		// that will be the address right before our proxy.
+		// Select the rightmost address that passes the filters. This does not
+		// validate the proxy chain or guarantee that the address is the client.
 		for i := len(addresses) - 1; i >= 0; i-- {
 			ip := strings.TrimSpace(addresses[i])
 			// header can contain spaces too, strip those out.
