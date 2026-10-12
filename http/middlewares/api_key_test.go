@@ -23,6 +23,9 @@ func TestGetApiKey(t *testing.T) {
 		{"escaped path key", "/v3/a%2Fb/method", "", 1, "a/b", true},
 		{"empty query", "/v3/secret?apikey=", "apikey", 1, "", false},
 		{"query key", "/v3/secret?apikey=configured", "apikey", 1, "configured", true},
+		{"negative path index", "/v3/secret", "", -1, "", false},
+		{"path index out of range", "/v3/secret", "", 2, "", false},
+		{"query ignores negative path index", "/v3/secret?apikey=configured", "apikey", -1, "configured", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, tc.target, nil)

@@ -12,7 +12,7 @@ var CtxKeyApiKey = CtxKey("X-API-Key")
 type ApiKeyOption struct {
 	Required  bool   // require a non-empty key; does not validate credentials
 	ParamName string // case-sensitive, enabled if specified
-	PathIndex int    // api key in URL path
+	PathIndex int    // zero-based URL path index; ignored when ParamName is set
 }
 
 // NewApiKeyMiddleware creates middleware to inject client API key in context.
@@ -42,6 +42,9 @@ func GetApiKeyFromContext(ctx context.Context) (string, bool) {
 // GetApiKey returns the client API key from the specified `url`. If `paramName`specified,
 // parse from query. Otherwise, parse from URL path with specified `pathIndex`. Note, the
 // `paramName` is case sensitive.
+// Path indices start at zero after trimming leading and trailing slashes;
+// negative or out-of-range indices return "", false. The index is ignored when
+// paramName is specified.
 // The boolean result reports whether a non-empty key was extracted, not whether
 // the key is a valid credential.
 func GetApiKey(r *http.Request, paramName string, pathIndex int) (string, bool) {
@@ -59,7 +62,7 @@ func GetApiKey(r *http.Request, paramName string, pathIndex int) (string, bool) 
 	escaped := strings.Trim(r.URL.EscapedPath(), "/")
 	fields := strings.Split(escaped, "/")
 
-	if pathIndex >= len(fields) {
+	if pathIndex < 0 || pathIndex >= len(fields) {
 		return "", false
 	}
 
