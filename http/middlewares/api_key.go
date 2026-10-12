@@ -18,6 +18,9 @@ type ApiKeyOption struct {
 // NewApiKeyMiddleware creates middleware to inject client API key in context.
 // Required rejects missing or empty keys with HTTP 400. Credential validation
 // remains the caller's responsibility.
+//
+// API keys in URL paths or query parameters may appear in access logs and request
+// traces. Callers are responsible for redacting these values.
 func NewApiKeyMiddleware(option ApiKeyOption) Middleware {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
