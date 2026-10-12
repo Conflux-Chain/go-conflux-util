@@ -30,9 +30,9 @@ func NewCounter(config ...CounterConfig) *Counter {
 
 	if len(config) > 0 {
 		cc = config[0]
-	} else {
-		cc = DefaultCounterConfig()
 	}
+
+	defaults.SetDefaults(&cc)
 
 	return &Counter{
 		config: cc,
