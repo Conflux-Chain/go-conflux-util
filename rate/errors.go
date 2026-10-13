@@ -6,6 +6,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+func errInvalidAmount(n int) error {
+	return errors.Errorf("Invalid request amount %v: must be positive", n)
+}
+
 func errMaxExceeded(max int) error {
 	return errors.Errorf("Too many requests, exceeds %v at a time", max)
 }
