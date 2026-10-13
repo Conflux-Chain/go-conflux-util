@@ -6,12 +6,31 @@ import (
 	"github.com/pkg/errors"
 )
 
-func errMaxExceeded(max int) error {
-	return errors.Errorf("Too many requests, exceeds %v at a time", max)
+// ErrRateLimited identifies requests rejected for exceeding the available quota
+// or the maximum amount per request. Use errors.Is to check wrapped errors.
+var ErrRateLimited = errors.New("rate limit exceeded")
+
+// rateLimitError preserves the detailed message while identifying quota errors.
+type rateLimitError struct {
+	error
 }
 
-func errRateLimited(max int, waitTime time.Duration) error {
-	return errors.Errorf(
-		"Too many requests (exceeds %v), try again after %v", max, waitTime.Round(time.Millisecond),
-	)
+func (rateLimitError) Is(target error) bool {
+	return target == ErrRateLimited
+}
+
+func errInvalidAmount(n int) error {
+	return errors.Errorf("Invalid request amount %v: must be positive", n)
+}
+
+func errMaxExceeded(max int) error {
+	return rateLimitError{errors.Errorf("Too many requests, exceeds %v at a time", max)}
+}
+
+// Preserve integer quotas and fractional rates without numeric conversion.
+// Keep the full wait duration so rounding cannot suggest retrying too early.
+func errRateLimited(max any, waitTime time.Duration) error {
+	return rateLimitError{errors.Errorf(
+		"Too many requests (exceeds %v), try again after %v", max, waitTime,
+	)}
 }

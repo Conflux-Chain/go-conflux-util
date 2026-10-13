@@ -9,13 +9,26 @@ import (
 	"github.com/pkg/errors"
 )
 
+// LimiterFactory resolves request identities and creates their limiters.
 type LimiterFactory interface {
-	// GetGroupAndKey generates group and key from context
+	// GetGroupAndKey generates group and key from context. It runs outside the
+	// registry lock and may run concurrently with other factory calls, including
+	// Create. Implementations must synchronize access to shared state.
 	GetGroupAndKey(ctx context.Context, resource string) (group, key string, err error)
-	// Create creates limiter by resource and group
+	// Create creates a limiter by resource and group under the registry lock.
+	// Use preloaded configuration and follow the callback restrictions on Registry.
 	Create(ctx context.Context, resource, group string) (rate.Limiter, error)
 }
 
+// Registry manages request limiters by resource, group, and key. It is safe for
+// concurrent use with callbacks that follow the contracts documented here and
+// on LimiterFactory. It must not be copied after first use.
+//
+// Factory.Create and the limiters' LimitN and Expired methods execute under the
+// registry lock. They must complete quickly, as they block other requests and
+// registry updates. Perform slow I/O before calling the registry. These callbacks
+// must not call methods that acquire the same registry's lock, such as LimitN,
+// GC, or Remove, or wait for another goroutine to do so; this would deadlock.
 type Registry struct {
 	factory LimiterFactory
 
@@ -38,6 +51,7 @@ func NewRegistry(factory LimiterFactory) *Registry {
 	}
 }
 
+// getLimiters requires the caller to hold r.mu.
 func (r *Registry) getLimiters(resource, group string) map[string]rate.Limiter {
 	limitersByGroup, ok := r.limiters[resource]
 	if !ok {
@@ -60,7 +74,7 @@ func (r *Registry) Limit(ctx context.Context, resource string) error {
 	return r.LimitN(ctx, resource, 1)
 }
 
-// Limit limits request rate according to HTTP request context.
+// LimitN limits request rate according to HTTP request context.
 // Note, it requires to hook IP/API key middlewares for HTTP server.
 func (r *Registry) LimitN(ctx context.Context, resource string, n int) error {
 	group, key, err := r.factory.GetGroupAndKey(ctx, resource)
@@ -92,27 +106,51 @@ func (r *Registry) LimitN(ctx context.Context, resource string, n int) error {
 	return limiter.LimitN(n)
 }
 
+// GC removes expired limiters and any empty groups and resources.
 func (r *Registry) GC() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	for _, limitersByGroup := range r.limiters {
-		for _, limitersByKey := range limitersByGroup {
+	for resource, limitersByGroup := range r.limiters {
+		for group, limitersByKey := range limitersByGroup {
 			for key, limiter := range limitersByKey {
 				if limiter.Expired() {
 					delete(limitersByKey, key)
 				}
 			}
+
+			if len(limitersByKey) == 0 {
+				delete(limitersByGroup, group)
+			}
+		}
+
+		if len(limitersByGroup) == 0 {
+			delete(r.limiters, resource)
 		}
 	}
 }
 
+// ScheduleGC runs GC periodically and blocks indefinitely. The interval must be
+// positive or it panics. Use ScheduleGCCtx when the scheduler needs to stop.
 func (r *Registry) ScheduleGC(interval time.Duration) {
+	r.ScheduleGCCtx(context.Background(), interval)
+}
+
+// ScheduleGCCtx runs GC periodically until ctx is done. It blocks and should
+// generally be called in a goroutine. The interval must be positive or it panics.
+// Cancellation does not interrupt a GC call already in progress, including one
+// waiting for the registry lock. Each call starts an independent scheduler.
+func (r *Registry) ScheduleGCCtx(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		r.GC()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			r.GC()
+		}
 	}
 }
 
@@ -129,6 +167,10 @@ func (r *Registry) Remove(resource, group string) {
 
 	if limiters, ok := r.limiters[resource]; ok {
 		delete(limiters, group)
+
+		if len(limiters) == 0 {
+			delete(r.limiters, resource)
+		}
 	}
 }
 
@@ -140,6 +182,10 @@ func (r *Registry) RemoveBatch(items map[string]map[string]bool) {
 		if limiters, ok := r.limiters[resource]; ok {
 			for group := range groups {
 				delete(limiters, group)
+			}
+
+			if len(limiters) == 0 {
+				delete(r.limiters, resource)
 			}
 		}
 	}

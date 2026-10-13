@@ -1,6 +1,7 @@
 package rate
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -16,6 +17,34 @@ func TestLimiterManagerNew(t *testing.T) {
 	// default values
 	assert.Equal(t, int64(600), manager.config.TTLsecs)
 	assert.Equal(t, time.Minute, manager.config.ExpireInterval)
+}
+
+func TestLimiterManagerNewInvalidConfig(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		rate    float64
+		burst   int
+		ttlSecs int64
+	}{
+		{"zero rate", 0, 1, 60},
+		{"negative rate", -1, 1, 60},
+		{"NaN rate", math.NaN(), 1, 60},
+		{"infinite rate", math.Inf(1), 1, 60},
+		{"zero burst", 1, 0, 60},
+		{"negative burst", 1, -1, 60},
+		{"negative TTL", 1, 1, -1},
+		{"TTL overflow", 1, 1, math.MaxInt64},
+		{"refill duration overflow", 1e-10, 1, 60},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			config := Config{TTLsecs: tc.ttlSecs}
+			config.Add("free", "/v1/status", 5, 20)
+			config.Add("vip", "/v2/status", tc.rate, tc.burst)
+
+			// Invalid settings must fail during construction, before any request.
+			assert.Panics(t, func() { NewLimiterManager(config) })
+		})
+	}
 }
 
 func TestLimiterManagerLimit(t *testing.T) {

@@ -1,6 +1,7 @@
 package rate
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -9,15 +10,111 @@ import (
 
 func TestFixedWindow(t *testing.T) {
 	limiter := NewFixedWindow(time.Minute, 10)
+	now := time.Now().Truncate(time.Minute).Add(time.Minute)
 
-	// first 10 tokens allowed
-	assert.NoError(t, limiter.Limit())
-	assert.NoError(t, limiter.LimitN(9))
+	// Rejected requests do not consume the remaining quota.
+	assert.NoError(t, limiter.LimitAt(now, 1))
+	assert.Error(t, limiter.LimitAt(now, 11))
+	assert.Error(t, limiter.LimitAt(now, 10))
+	assert.NoError(t, limiter.LimitAt(now, 9))
 
-	// the 11th token not allowed
-	assert.Error(t, limiter.Limit())
+	// A full window rejects requests until the next boundary.
+	next := now.Add(time.Minute)
+	assert.Error(t, limiter.LimitAt(now, 1))
+	assert.Error(t, limiter.LimitAt(next.Add(-time.Nanosecond), 1))
+	assert.False(t, limiter.ExpiredAt(next))
+	assert.True(t, limiter.ExpiredAt(next.Add(time.Nanosecond)))
 
-	// tokens allowed one minute later
-	assert.Error(t, limiter.LimitN(10))
-	assert.NoError(t, limiter.LimitAt(time.Now().Add(time.Minute), 1))
+	// Crossing the boundary resets the quota and advances expiration.
+	assert.NoError(t, limiter.LimitAt(next, 1))
+	assert.NoError(t, limiter.LimitAt(next, 9))
+	assert.Error(t, limiter.LimitAt(next, 1))
+	assert.False(t, limiter.ExpiredAt(next.Add(time.Nanosecond)))
+}
+
+func TestNewFixedWindowInvalidConfig(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		interval time.Duration
+		max      int
+	}{
+		{"zero interval", 0, 1},
+		{"negative interval", -time.Second, 1},
+		{"zero max", time.Minute, 0},
+		{"negative max", time.Minute, -1},
+		{"minimum max", time.Minute, math.MinInt},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Panics(t, func() {
+				NewFixedWindow(tc.interval, tc.max)
+			})
+		})
+	}
+}
+
+func TestFixedWindowNonPositiveAmount(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		n    int
+	}{
+		{"zero", 0},
+		{"negative", -1},
+		{"minimum int", math.MinInt},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			limiter := NewFixedWindow(time.Minute, 1)
+			now := time.Now().Truncate(time.Minute).Add(time.Minute)
+			assert.NoError(t, limiter.LimitAt(now, 1))
+
+			assert.ErrorContains(t, limiter.LimitAt(now.Add(time.Hour), tc.n), "must be positive")
+
+			// Invalid amounts do not advance the window or refund quota.
+			assert.True(t, limiter.ExpiredAt(now.Add(time.Minute+time.Nanosecond)))
+			assert.Error(t, limiter.LimitAt(now, 1))
+		})
+	}
+}
+
+func TestFixedWindowMaxIntQuota(t *testing.T) {
+	limiter := NewFixedWindow(time.Minute, math.MaxInt)
+	now := time.Now().Truncate(time.Minute).Add(time.Minute)
+	assert.NoError(t, limiter.LimitAt(now, math.MaxInt-1))
+	assert.Error(t, limiter.LimitAt(now, 2))
+	assert.NoError(t, limiter.LimitAt(now, 1))
+	assert.Error(t, limiter.LimitAt(now, 1))
+}
+
+func TestFixedWindowSubMillisecondInterval(t *testing.T) {
+	interval := 500 * time.Microsecond
+	limiter := NewFixedWindow(interval, 1)
+	now := time.Now().Truncate(time.Millisecond).Add(time.Second)
+	assert.NoError(t, limiter.LimitAt(now, 1))
+	assert.Error(t, limiter.LimitAt(now.Add(interval-time.Nanosecond), 1))
+
+	next := now.Add(interval)
+	assert.NoError(t, limiter.LimitAt(next, 1))
+	assert.Error(t, limiter.LimitAt(next, 1))
+	assert.False(t, limiter.ExpiredAt(next.Add(time.Nanosecond)))
+	assert.True(t, limiter.ExpiredAt(next.Add(interval+time.Nanosecond)))
+}
+
+func TestFixedWindowWaitTimePrecision(t *testing.T) {
+	for _, tc := range []struct {
+		interval time.Duration
+		message  string
+	}{
+		{400 * time.Microsecond, "Too many requests (exceeds 1), try again after 400µs"},
+		{1400 * time.Microsecond, "Too many requests (exceeds 1), try again after 1.4ms"},
+	} {
+		t.Run(tc.interval.String(), func(t *testing.T) {
+			limiter := NewFixedWindow(tc.interval, 1)
+			now := time.Now().Add(time.Second).Truncate(tc.interval)
+			assert.NoError(t, limiter.LimitAt(now, 1))
+
+			err := limiter.LimitAt(now, 1)
+			assert.EqualError(t, err, tc.message)
+			assert.ErrorIs(t, err, ErrRateLimited)
+			assert.NoError(t, limiter.LimitAt(now.Add(tc.interval), 1))
+		})
+	}
 }
