@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/Conflux-Chain/go-conflux-util/rate"
 	"github.com/stretchr/testify/assert"
@@ -94,6 +95,63 @@ func TestRegistryRemove(t *testing.T) {
 			factory.group = "first"
 			require.NoError(t, r.Limit(ctx, "resource"))
 			assert.NotSame(t, original, r.limiters["resource"]["first"]["key"])
+		})
+	}
+}
+
+func TestRegistryScheduleGCCtx(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		canceled bool
+		interval time.Duration
+	}{
+		{"already canceled", true, time.Hour},
+		{"cancel before first tick", false, time.Hour},
+		{"periodic GC", false, time.Millisecond},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := NewRegistry(&registryTestFactory{group: "group"})
+			r.limiters["resource"] = map[string]map[string]rate.Limiter{
+				"group": {"key": &registryTestLimiter{expired: true}},
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tc.canceled {
+				cancel()
+			}
+			done := make(chan struct{})
+			go func() {
+				r.ScheduleGCCtx(ctx, tc.interval)
+				close(done)
+			}()
+
+			if tc.interval == time.Millisecond {
+				assert.Eventually(t, func() bool {
+					r.mu.Lock()
+					defer r.mu.Unlock()
+					return len(r.limiters) == 0
+				}, 5*time.Second, time.Millisecond, "scheduled GC did not remove expired limiters")
+			}
+
+			cancel()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("GC scheduler did not return after cancellation")
+			}
+			if tc.interval == time.Hour {
+				assert.Contains(t, r.limiters, "resource", "GC should wait for its first tick")
+			}
+		})
+	}
+}
+
+func TestRegistryScheduleGCInvalidInterval(t *testing.T) {
+	r := NewRegistry(&registryTestFactory{group: "group"})
+	for _, interval := range []time.Duration{0, -time.Second} {
+		t.Run(interval.String(), func(t *testing.T) {
+			assert.Panics(t, func() { r.ScheduleGC(interval) })
+			assert.Panics(t, func() { r.ScheduleGCCtx(context.Background(), interval) })
 		})
 	}
 }

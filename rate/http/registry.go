@@ -116,12 +116,27 @@ func (r *Registry) GC() {
 	}
 }
 
+// ScheduleGC runs GC periodically and blocks indefinitely. The interval must be
+// positive or it panics. Use ScheduleGCCtx when the scheduler needs to stop.
 func (r *Registry) ScheduleGC(interval time.Duration) {
+	r.ScheduleGCCtx(context.Background(), interval)
+}
+
+// ScheduleGCCtx runs GC periodically until ctx is done. It blocks and should
+// generally be called in a goroutine. The interval must be positive or it panics.
+// Cancellation does not interrupt a GC call already in progress, including one
+// waiting for the registry lock. Each call starts an independent scheduler.
+func (r *Registry) ScheduleGCCtx(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		r.GC()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			r.GC()
+		}
 	}
 }
 
