@@ -246,7 +246,7 @@ func TestTokenBucketFractionalRateError(t *testing.T) {
 		message string
 	}{
 		{"below one", 0.5, "Too many requests (exceeds 0.5), try again after 2s"},
-		{"above one", 1.5, "Too many requests (exceeds 1.5), try again after 667ms"},
+		{"above one", 1.5, "Too many requests (exceeds 1.5), try again after 666.666666ms"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			limiter := NewTokenBucketRate(tc.qps, 1)

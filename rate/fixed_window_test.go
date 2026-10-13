@@ -97,3 +97,24 @@ func TestFixedWindowSubMillisecondInterval(t *testing.T) {
 	assert.False(t, limiter.ExpiredAt(next.Add(time.Nanosecond)))
 	assert.True(t, limiter.ExpiredAt(next.Add(interval+time.Nanosecond)))
 }
+
+func TestFixedWindowWaitTimePrecision(t *testing.T) {
+	for _, tc := range []struct {
+		interval time.Duration
+		message  string
+	}{
+		{400 * time.Microsecond, "Too many requests (exceeds 1), try again after 400µs"},
+		{1400 * time.Microsecond, "Too many requests (exceeds 1), try again after 1.4ms"},
+	} {
+		t.Run(tc.interval.String(), func(t *testing.T) {
+			limiter := NewFixedWindow(tc.interval, 1)
+			now := time.Now().Add(time.Second).Truncate(tc.interval)
+			assert.NoError(t, limiter.LimitAt(now, 1))
+
+			err := limiter.LimitAt(now, 1)
+			assert.EqualError(t, err, tc.message)
+			assert.ErrorIs(t, err, ErrRateLimited)
+			assert.NoError(t, limiter.LimitAt(now.Add(tc.interval), 1))
+		})
+	}
+}
