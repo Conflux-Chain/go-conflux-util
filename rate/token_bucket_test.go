@@ -34,6 +34,44 @@ func TestTokenBucketLimitAt(t *testing.T) {
 	}
 }
 
+func TestValidateTokenBucketConfig(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		qps         float64
+		burst       int
+		timeoutSecs int64
+		err         string
+	}{
+		{"valid", 1, 1, 60, ""},
+		{"fractional rate", 0.5, 1, 60, ""},
+		{"unlimited rate", float64(xrate.Inf), 1, 60, ""},
+		{"maximum timeout", 1, 1, maxTokenBucketTimeoutSecs, ""},
+		{"maximum refill duration", 1 / float64(maxTokenBucketTimeoutSecs), 1, 60, ""},
+		{"zero rate", 0, 1, 60, "qps must be positive and finite"},
+		{"NaN rate", math.NaN(), 1, 60, "qps must be positive and finite"},
+		{"infinite rate", math.Inf(1), 1, 60, "qps must be positive and finite"},
+		{"zero burst", 1, 0, 60, "burst must be positive"},
+		{"zero timeout", 1, 1, 0, "timeout must be positive"},
+		{"timeout overflow", 1, 1, maxTokenBucketTimeoutSecs + 1, "timeout exceeds time.Duration range"},
+		{"refill duration overflow", 1e-10, 1, 60, "refill duration exceeds time.Duration range"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateTokenBucketConfig(tc.qps, tc.burst, tc.timeoutSecs)
+			if tc.err == "" {
+				assert.NoError(t, err)
+				return
+			}
+
+			if assert.ErrorContains(t, err, tc.err) {
+				// Constructors retain string panic values; validation returns errors.
+				assert.PanicsWithValue(t, err.Error(), func() {
+					NewTokenBucketWithTimeout(tc.qps, tc.burst, tc.timeoutSecs)
+				})
+			}
+		})
+	}
+}
+
 func TestNewTokenBucketInvalidConfig(t *testing.T) {
 	for _, tc := range []struct {
 		name string

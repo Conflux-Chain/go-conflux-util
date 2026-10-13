@@ -20,6 +20,8 @@ type LimiterManager struct {
 }
 
 // NewLimiterManager creates a new LimiterManager with the given config.
+// After applying defaults, it panics if any configured token bucket's rate,
+// burst, or TTL is rejected by rate.ValidateTokenBucketConfig.
 func NewLimiterManager(config Config) *LimiterManager {
 	defaults.SetDefaults(&config)
 
@@ -28,7 +30,11 @@ func NewLimiterManager(config Config) *LimiterManager {
 	for tier, api2Config := range config.Limiter {
 		limiters[tier] = make(map[string]map[string]rate.Limiter)
 
-		for api := range api2Config {
+		for api, limiterConfig := range api2Config {
+			// Validate at startup; per-key buckets are still created on demand.
+			if err := rate.ValidateTokenBucketConfig(limiterConfig.Rate, limiterConfig.Burst, config.TTLsecs); err != nil {
+				panic(err.Error())
+			}
 			limiters[tier][api] = make(map[string]rate.Limiter)
 		}
 	}

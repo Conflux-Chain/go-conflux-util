@@ -1,6 +1,7 @@
 package rate
 
 import (
+	"errors"
 	"math"
 	"sync"
 	"time"
@@ -46,31 +47,40 @@ func NewTokenBucketRate(qps rate.Limit, burst int) Limiter {
 	return NewTokenBucketWithTimeout(float64(qps), burst, timeoutSecs)
 }
 
-// NewTokenBucketWithTimeout creates a token bucket with an explicit timeout in seconds.
-// It panics if qps is not positive and finite, or burst or timeoutSecs is not positive.
-// It also panics if timeoutSecs cannot fit in time.Duration (about 292 years).
-// The full-bucket refill time (burst/qps) must not exceed the largest whole-second
-// duration either, so the underlying limiter can represent reservation delays.
+// ValidateTokenBucketConfig checks token bucket parameters without creating a bucket.
+// It returns an error if qps is not positive and finite, or burst or timeoutSecs
+// is not positive. Both timeoutSecs and the full-bucket refill time (burst/qps)
+// must fit within the largest whole-second time.Duration (about 292 years).
 // The finite rate.Inf constant is supported for unlimited consumption.
-func NewTokenBucketWithTimeout(qps float64, burst int, timeoutSecs int64) Limiter {
+func ValidateTokenBucketConfig(qps float64, burst int, timeoutSecs int64) error {
 	if qps <= 0 || math.IsNaN(qps) || math.IsInf(qps, 0) {
-		panic("rate: token bucket qps must be positive and finite")
+		return errors.New("rate: token bucket qps must be positive and finite")
 	}
 
 	if burst <= 0 {
-		panic("rate: token bucket burst must be positive")
+		return errors.New("rate: token bucket burst must be positive")
 	}
 
 	if timeoutSecs <= 0 {
-		panic("rate: token bucket timeout must be positive")
+		return errors.New("rate: token bucket timeout must be positive")
 	}
 
 	if timeoutSecs > maxTokenBucketTimeoutSecs {
-		panic("rate: token bucket timeout exceeds time.Duration range")
+		return errors.New("rate: token bucket timeout exceeds time.Duration range")
 	}
 
 	if float64(burst)/qps > float64(maxTokenBucketTimeoutSecs) {
-		panic("rate: token bucket refill duration exceeds time.Duration range")
+		return errors.New("rate: token bucket refill duration exceeds time.Duration range")
+	}
+
+	return nil
+}
+
+// NewTokenBucketWithTimeout creates a token bucket with an explicit timeout in seconds.
+// It panics if ValidateTokenBucketConfig rejects the parameters.
+func NewTokenBucketWithTimeout(qps float64, burst int, timeoutSecs int64) Limiter {
+	if err := ValidateTokenBucketConfig(qps, burst, timeoutSecs); err != nil {
+		panic(err.Error())
 	}
 
 	return &TokenBucket{
