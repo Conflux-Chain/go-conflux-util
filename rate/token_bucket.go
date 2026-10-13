@@ -38,11 +38,18 @@ func (bucket *TokenBucket) Limit() error {
 	return bucket.LimitAt(time.Now(), 1)
 }
 
+// LimitN consumes n tokens at the current time, with the same amount rules as LimitAt.
 func (bucket *TokenBucket) LimitN(n int) error {
 	return bucket.LimitAt(time.Now(), n)
 }
 
+// LimitAt consumes n tokens at now. The amount must be positive;
+// otherwise it returns an error without changing state.
 func (bucket *TokenBucket) LimitAt(now time.Time, n int) error {
+	if n <= 0 {
+		return errInvalidAmount(n)
+	}
+
 	rsv := bucket.inner.ReserveN(now, n)
 	if !rsv.OK() {
 		return errMaxExceeded(bucket.inner.Burst())
