@@ -27,6 +27,8 @@ func FatalIfErr(err error, msg string, fields ...logrus.Fields) {
 func GracefulShutdown(wg *sync.WaitGroup, cancel context.CancelFunc) {
 	termCh := make(chan os.Signal, 1)
 	signal.Notify(termCh, syscall.SIGTERM, syscall.SIGINT)
+	// Unregister on return; the private channel does not need to be closed.
+	defer signal.Stop(termCh)
 
 	<-termCh
 	logrus.Info("SIGTERM/SIGINT received, start to shutdown program")
