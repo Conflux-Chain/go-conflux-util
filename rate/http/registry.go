@@ -92,17 +92,26 @@ func (r *Registry) LimitN(ctx context.Context, resource string, n int) error {
 	return limiter.LimitN(n)
 }
 
+// GC removes expired limiters and any empty groups and resources.
 func (r *Registry) GC() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	for _, limitersByGroup := range r.limiters {
-		for _, limitersByKey := range limitersByGroup {
+	for resource, limitersByGroup := range r.limiters {
+		for group, limitersByKey := range limitersByGroup {
 			for key, limiter := range limitersByKey {
 				if limiter.Expired() {
 					delete(limitersByKey, key)
 				}
 			}
+
+			if len(limitersByKey) == 0 {
+				delete(limitersByGroup, group)
+			}
+		}
+
+		if len(limitersByGroup) == 0 {
+			delete(r.limiters, resource)
 		}
 	}
 }
@@ -129,6 +138,10 @@ func (r *Registry) Remove(resource, group string) {
 
 	if limiters, ok := r.limiters[resource]; ok {
 		delete(limiters, group)
+
+		if len(limiters) == 0 {
+			delete(r.limiters, resource)
+		}
 	}
 }
 
@@ -140,6 +153,10 @@ func (r *Registry) RemoveBatch(items map[string]map[string]bool) {
 		if limiters, ok := r.limiters[resource]; ok {
 			for group := range groups {
 				delete(limiters, group)
+			}
+
+			if len(limiters) == 0 {
+				delete(r.limiters, resource)
 			}
 		}
 	}
