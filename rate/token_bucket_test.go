@@ -200,3 +200,23 @@ func TestTokenBucketSlowRefill(t *testing.T) {
 	// Rejected reservations must not consume the next token, even at a low rate.
 	assert.NoError(t, limiter.LimitAt(now.Add(1_000_000_000*time.Second), 1))
 }
+
+func TestTokenBucketFractionalRateError(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		qps     xrate.Limit
+		message string
+	}{
+		{"below one", 0.5, "Too many requests (exceeds 0.5), try again after 2s"},
+		{"above one", 1.5, "Too many requests (exceeds 1.5), try again after 667ms"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			limiter := NewTokenBucketRate(tc.qps, 1)
+			now := time.Unix(1700000000, 0)
+			assert.NoError(t, limiter.LimitAt(now, 1))
+			err := limiter.LimitAt(now, 1)
+			assert.EqualError(t, err, tc.message)
+			assert.ErrorIs(t, err, ErrRateLimited)
+		})
+	}
+}

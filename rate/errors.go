@@ -27,7 +27,8 @@ func errMaxExceeded(max int) error {
 	return rateLimitError{errors.Errorf("Too many requests, exceeds %v at a time", max)}
 }
 
-func errRateLimited(max int, waitTime time.Duration) error {
+// Preserve integer quotas and fractional rates without numeric conversion.
+func errRateLimited(max any, waitTime time.Duration) error {
 	return rateLimitError{errors.Errorf(
 		"Too many requests (exceeds %v), try again after %v", max, waitTime.Round(time.Millisecond),
 	)}
