@@ -1,6 +1,7 @@
 package rate
 
 import (
+	"math"
 	"sync/atomic"
 	"time"
 
@@ -13,10 +14,15 @@ type TokenBucket struct {
 	timeoutSecs int64
 }
 
+// NewTokenBucket creates a token bucket with an integer refill rate.
+// It panics if qps or burst is not positive.
 func NewTokenBucket(qps int, burst int) Limiter {
 	return NewTokenBucketRate(rate.Limit(qps), burst)
 }
 
+// NewTokenBucketRate creates a token bucket with an automatically calculated timeout.
+// It panics if qps is not positive and finite, or burst is not positive.
+// The finite rate.Inf constant is supported for unlimited consumption.
 func NewTokenBucketRate(qps rate.Limit, burst int) Limiter {
 	var timeoutSecs int64 = 10
 	if qps > 0 {
@@ -26,7 +32,22 @@ func NewTokenBucketRate(qps rate.Limit, burst int) Limiter {
 	return NewTokenBucketWithTimeout(float64(qps), burst, timeoutSecs)
 }
 
+// NewTokenBucketWithTimeout creates a token bucket with an explicit timeout in seconds.
+// It panics if qps is not positive and finite, or burst or timeoutSecs is not positive.
+// The finite rate.Inf constant is supported for unlimited consumption.
 func NewTokenBucketWithTimeout(qps float64, burst int, timeoutSecs int64) Limiter {
+	if qps <= 0 || math.IsNaN(qps) || math.IsInf(qps, 0) {
+		panic("rate: token bucket qps must be positive and finite")
+	}
+
+	if burst <= 0 {
+		panic("rate: token bucket burst must be positive")
+	}
+
+	if timeoutSecs <= 0 {
+		panic("rate: token bucket timeout must be positive")
+	}
+
 	return &TokenBucket{
 		inner:       rate.NewLimiter(rate.Limit(qps), burst),
 		lastSeen:    time.Now().Unix(),
