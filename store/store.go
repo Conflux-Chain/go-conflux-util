@@ -3,7 +3,6 @@ package store
 import (
 	"errors"
 
-	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
 
@@ -40,6 +39,8 @@ func (store *Store) GetById(modelPtr interface{}, id uint64) (bool, error) {
 	return store.Get(modelPtr, "id = ?", id)
 }
 
+// List queries a page ordered by ID. On success, it replaces the slice contents;
+// an empty page leaves an empty slice. slicePtr must point to a slice.
 func (store *Store) List(db *gorm.DB, idDesc bool, offset, limit int, slicePtr interface{}) (total int64, err error) {
 	var orderBy string
 	if idDesc {
@@ -51,13 +52,11 @@ func (store *Store) List(db *gorm.DB, idDesc bool, offset, limit int, slicePtr i
 	return store.ListByOrder(db, orderBy, offset, limit, slicePtr)
 }
 
+// ListByOrder queries a page with the given order. On success, it replaces the
+// slice contents; an empty page leaves an empty slice. slicePtr must point to a slice.
 func (*Store) ListByOrder(db *gorm.DB, orderBy string, offset, limit int, slicePtr interface{}) (total int64, err error) {
 	if err = db.Count(&total).Error; err != nil {
 		return 0, err
-	}
-
-	if !logrus.IsLevelEnabled(logrus.TraceLevel) && (total <= int64(offset)) {
-		return total, nil
 	}
 
 	if err = db.Order(orderBy).Offset(offset).Limit(limit).Find(slicePtr).Error; err != nil {
