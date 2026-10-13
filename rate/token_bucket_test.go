@@ -112,3 +112,48 @@ func TestTokenBucketNonPositiveAmount(t *testing.T) {
 		})
 	}
 }
+
+func TestTokenBucketAutomaticTimeoutRange(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		qps  xrate.Limit
+	}{
+		{"int64 boundary", xrate.Limit(1 / float64(math.MaxInt64))},
+		{"beyond int64", 1e-20},
+		{"infinite quotient", xrate.Limit(math.SmallestNonzeroFloat64)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.PanicsWithValue(t, "rate: automatic token bucket timeout exceeds int64 seconds", func() {
+				NewTokenBucketRate(tc.qps, 1)
+			})
+		})
+	}
+
+	// A slightly larger rate makes the computed timeout fit below the boundary.
+	qps := math.Nextafter(1/float64(math.MaxInt64), math.Inf(1))
+	assert.NotPanics(t, func() {
+		NewTokenBucketRate(xrate.Limit(qps), 1)
+	})
+}
+
+func TestTokenBucketExpirationBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		qps     xrate.Limit
+		timeout time.Duration
+	}{
+		{"integer rate", 1, 2 * time.Second},
+		{"fractional rate", 0.4, 3 * time.Second},
+		{"unlimited rate", xrate.Inf, time.Second},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			limiter := NewTokenBucketRate(tc.qps, 1)
+			now := time.Unix(1700000000, 0)
+			assert.NoError(t, limiter.LimitAt(now, 1))
+			deadline := now.Add(tc.timeout)
+			assert.False(t, limiter.ExpiredAt(deadline.Add(-time.Second)))
+			assert.False(t, limiter.ExpiredAt(deadline))
+			assert.True(t, limiter.ExpiredAt(deadline.Add(time.Second)))
+		})
+	}
+}

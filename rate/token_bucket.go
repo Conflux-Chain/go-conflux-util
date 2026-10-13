@@ -16,17 +16,25 @@ type TokenBucket struct {
 
 // NewTokenBucket creates a token bucket with an integer refill rate.
 // It panics if qps or burst is not positive.
+// See NewTokenBucketRate for the automatic timeout's representable range.
 func NewTokenBucket(qps int, burst int) Limiter {
 	return NewTokenBucketRate(rate.Limit(qps), burst)
 }
 
 // NewTokenBucketRate creates a token bucket with an automatically calculated timeout.
 // It panics if qps is not positive and finite, or burst is not positive.
+// It also panics if the calculated timeout cannot fit in int64 seconds.
 // The finite rate.Inf constant is supported for unlimited consumption.
 func NewTokenBucketRate(qps rate.Limit, burst int) Limiter {
 	var timeoutSecs int64 = 10
-	if qps > 0 {
-		timeoutSecs = int64(float64(burst)/float64(qps)) + 1
+	if qps > 0 && burst > 0 {
+		refillSecs := float64(burst) / float64(qps)
+		// float64(MaxInt64) rounds up to 2^63. Smaller float64 values
+		// leave enough room for the extra second after conversion.
+		if refillSecs >= float64(math.MaxInt64) {
+			panic("rate: automatic token bucket timeout exceeds int64 seconds")
+		}
+		timeoutSecs = int64(refillSecs) + 1
 	}
 
 	return NewTokenBucketWithTimeout(float64(qps), burst, timeoutSecs)
@@ -91,6 +99,9 @@ func (bucket *TokenBucket) Expired() bool {
 	return bucket.ExpiredAt(time.Now())
 }
 
+// ExpiredAt reports whether now is past the expiration time, in Unix seconds.
+// It assumes ordinary business timestamps and timeout values whose sum fits in
+// int64 Unix seconds; overflow from extreme values is not handled.
 func (bucket *TokenBucket) ExpiredAt(now time.Time) bool {
 	lastSeen := atomic.LoadInt64(&bucket.lastSeen)
 	return now.Unix() > lastSeen+bucket.timeoutSecs
