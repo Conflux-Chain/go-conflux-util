@@ -9,15 +9,24 @@ import (
 
 func TestFixedWindow(t *testing.T) {
 	limiter := NewFixedWindow(time.Minute, 10)
+	now := time.Now().Truncate(time.Minute).Add(time.Minute)
 
-	// first 10 tokens allowed
-	assert.NoError(t, limiter.Limit())
-	assert.NoError(t, limiter.LimitN(9))
+	// Rejected requests do not consume the remaining quota.
+	assert.NoError(t, limiter.LimitAt(now, 1))
+	assert.Error(t, limiter.LimitAt(now, 11))
+	assert.Error(t, limiter.LimitAt(now, 10))
+	assert.NoError(t, limiter.LimitAt(now, 9))
 
-	// the 11th token not allowed
-	assert.Error(t, limiter.Limit())
+	// A full window rejects requests until the next boundary.
+	next := now.Add(time.Minute)
+	assert.Error(t, limiter.LimitAt(now, 1))
+	assert.Error(t, limiter.LimitAt(next.Add(-time.Nanosecond), 1))
+	assert.False(t, limiter.ExpiredAt(next))
+	assert.True(t, limiter.ExpiredAt(next.Add(time.Nanosecond)))
 
-	// tokens allowed one minute later
-	assert.Error(t, limiter.LimitN(10))
-	assert.NoError(t, limiter.LimitAt(time.Now().Add(time.Minute), 1))
+	// Crossing the boundary resets the quota and advances expiration.
+	assert.NoError(t, limiter.LimitAt(next, 1))
+	assert.NoError(t, limiter.LimitAt(next, 9))
+	assert.Error(t, limiter.LimitAt(next, 1))
+	assert.False(t, limiter.ExpiredAt(next.Add(time.Nanosecond)))
 }

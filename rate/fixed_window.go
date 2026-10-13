@@ -1,16 +1,18 @@
 package rate
 
 import (
-	"sync/atomic"
+	"sync"
 	"time"
 )
 
 // FixedWindow limits rate in a fixed window.
+// It is safe for concurrent use and must not be copied after first use.
 type FixedWindow struct {
 	interval time.Duration
 	max      int64
 
-	startTime int64 // in milliseconds
+	mu        sync.Mutex // protects startTime and count
+	startTime int64      // in milliseconds
 	count     int64
 }
 
@@ -35,29 +37,30 @@ func (window *FixedWindow) LimitAt(now time.Time, n int) error {
 		return errMaxExceeded(int(window.max))
 	}
 
+	window.mu.Lock()
+	defer window.mu.Unlock()
+
 	window.advance(now)
 
-	if count := atomic.AddInt64(&window.count, int64(n)); count <= window.max {
+	if count := window.count + int64(n); count <= window.max {
+		window.count = count
 		return nil
 	}
 
-	// rollback
-	atomic.AddInt64(&window.count, int64(-n))
-
-	startTime := atomic.LoadInt64(&window.startTime)
-	nextTime := time.UnixMilli(startTime).Add(window.interval)
+	nextTime := time.UnixMilli(window.startTime).Add(window.interval)
 	waitTime := nextTime.Sub(now)
 
 	return errRateLimited(int(window.max), waitTime)
 }
 
+// advance starts a new window when needed. The caller must hold window.mu.
 func (window *FixedWindow) advance(now time.Time) {
 	truncated := now.Truncate(window.interval).UnixMilli()
 
-	if startTime := atomic.LoadInt64(&window.startTime); startTime < truncated {
+	if window.startTime < truncated {
 		// reset
-		atomic.StoreInt64(&window.startTime, truncated)
-		atomic.StoreInt64(&window.count, 0)
+		window.startTime = truncated
+		window.count = 0
 	}
 }
 
@@ -66,6 +69,8 @@ func (window *FixedWindow) Expired() bool {
 }
 
 func (window *FixedWindow) ExpiredAt(now time.Time) bool {
-	startTime := atomic.LoadInt64(&window.startTime)
-	return time.UnixMilli(startTime).Add(window.interval).Before(now)
+	window.mu.Lock()
+	defer window.mu.Unlock()
+
+	return time.UnixMilli(window.startTime).Add(window.interval).Before(now)
 }
