@@ -48,8 +48,9 @@ func (bucket *TokenBucket) LimitAt(now time.Time, n int) error {
 		return errMaxExceeded(bucket.inner.Burst())
 	}
 
-	if waitTime := rsv.Delay(); waitTime > 0 {
-		rsv.Cancel()
+	// Keep delay checks and cancellation on the same clock as ReserveN.
+	if waitTime := rsv.DelayFrom(now); waitTime > 0 {
+		rsv.CancelAt(now)
 		return errRateLimited(int(bucket.inner.Limit()), waitTime)
 	}
 
