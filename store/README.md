@@ -41,6 +41,18 @@ config := store.NewMemoryConfig()
 db := config.MustOpenOrCreate(tables...)
 ```
 
+Use `NewMemoryConfig` for an in-memory database. It limits the pool to one open
+connection, retains one idle connection, and disables connection lifetime expiry
+to preserve the database across operations. If you construct or change the config
+yourself, you are responsible for suitable connection pool settings. This also
+applies to the automatic memory fallback when neither MySQL nor SQLite is configured;
+`OpenOrCreate` uses the supplied pool settings as-is.
+
+With `NewMemoryConfig`, operations share one connection. Within a transaction,
+use its `tx` handle for database work; using the original `db` while the transaction
+holds the connection can block waiting for that same connection. Close the pool when
+finished, for example with `defer store.NewStore(db).Close()`.
+
 ## Store Utilities
 
 There are some very helpful `CRUD` utilities available in [Store](./store.go) struct.

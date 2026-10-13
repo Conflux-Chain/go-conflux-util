@@ -26,12 +26,19 @@ type Config struct {
 	Mysql  *MysqlConfig
 }
 
+// NewMemoryConfig configures a private SQLite memory database with one open
+// connection, one retained idle connection, and no connection lifetime expiry.
+// These settings keep the database available across operations until it is closed.
 func NewMemoryConfig() Config {
 	config := Config{
 		Sqlite: &SqliteConfig{},
 	}
 
 	defaults.SetDefaults(&config)
+	config.MaxOpenConns = 1
+	config.MaxIdleConns = 1
+	// Apply after defaults, which would replace zero with the default lifetime.
+	config.ConnMaxLifetime = 0
 
 	return config
 }
