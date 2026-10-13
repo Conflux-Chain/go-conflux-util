@@ -49,6 +49,8 @@ func NewTokenBucketRate(qps rate.Limit, burst int) Limiter {
 // NewTokenBucketWithTimeout creates a token bucket with an explicit timeout in seconds.
 // It panics if qps is not positive and finite, or burst or timeoutSecs is not positive.
 // It also panics if timeoutSecs cannot fit in time.Duration (about 292 years).
+// The full-bucket refill time (burst/qps) must not exceed the largest whole-second
+// duration either, so the underlying limiter can represent reservation delays.
 // The finite rate.Inf constant is supported for unlimited consumption.
 func NewTokenBucketWithTimeout(qps float64, burst int, timeoutSecs int64) Limiter {
 	if qps <= 0 || math.IsNaN(qps) || math.IsInf(qps, 0) {
@@ -65,6 +67,10 @@ func NewTokenBucketWithTimeout(qps float64, burst int, timeoutSecs int64) Limite
 
 	if timeoutSecs > maxTokenBucketTimeoutSecs {
 		panic("rate: token bucket timeout exceeds time.Duration range")
+	}
+
+	if float64(burst)/qps > float64(maxTokenBucketTimeoutSecs) {
+		panic("rate: token bucket refill duration exceeds time.Duration range")
 	}
 
 	return &TokenBucket{

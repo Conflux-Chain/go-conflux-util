@@ -165,3 +165,38 @@ func TestTokenBucketExpirationBoundary(t *testing.T) {
 		})
 	}
 }
+
+func TestTokenBucketRefillDurationRange(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		qps   float64
+		burst int
+	}{
+		{"beyond boundary", math.Nextafter(1/float64(maxTokenBucketTimeoutSecs), 0), 1},
+		{"slow single token", 1e-10, 1},
+		{"slow full burst", 1e-9, 10},
+		{"infinite quotient", math.SmallestNonzeroFloat64, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.PanicsWithValue(t, "rate: token bucket refill duration exceeds time.Duration range", func() {
+				NewTokenBucketWithTimeout(tc.qps, tc.burst, 60)
+			})
+		})
+	}
+
+	// A refill at the largest supported whole-second duration is still valid.
+	limiter := NewTokenBucketWithTimeout(1/float64(maxTokenBucketTimeoutSecs), 1, 60)
+	now := time.Unix(1700000000, 0)
+	assert.NoError(t, limiter.LimitAt(now, 1))
+	assert.ErrorIs(t, limiter.LimitAt(now, 1), ErrRateLimited)
+}
+
+func TestTokenBucketSlowRefill(t *testing.T) {
+	limiter := NewTokenBucketWithTimeout(1e-9, 1, 60)
+	now := time.Unix(1700000000, 0)
+	assert.NoError(t, limiter.LimitAt(now, 1))
+	assert.ErrorIs(t, limiter.LimitAt(now, 1), ErrRateLimited)
+	assert.ErrorIs(t, limiter.LimitAt(now, 1), ErrRateLimited)
+	// Rejected reservations must not consume the next token, even at a low rate.
+	assert.NoError(t, limiter.LimitAt(now.Add(1_000_000_000*time.Second), 1))
+}
