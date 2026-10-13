@@ -32,22 +32,22 @@ func TestFixedWindow(t *testing.T) {
 	assert.False(t, limiter.ExpiredAt(next.Add(time.Nanosecond)))
 }
 
-func TestFixedWindowNonPositiveMax(t *testing.T) {
+func TestNewFixedWindowInvalidConfig(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		max  int
+		name     string
+		interval time.Duration
+		max      int
 	}{
-		{"zero", 0},
-		{"negative", -1},
-		{"minimum int", math.MinInt},
+		{"zero interval", 0, 1},
+		{"negative interval", -time.Second, 1},
+		{"zero max", time.Minute, 0},
+		{"negative max", time.Minute, -1},
+		{"minimum max", time.Minute, math.MinInt},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			limiter := NewFixedWindow(time.Minute, tc.max)
-			now := time.Now().Truncate(time.Minute).Add(time.Minute)
-			assert.ErrorContains(t, limiter.LimitAt(now, 0), "must be positive")
-			assert.ErrorContains(t, limiter.LimitAt(now, -1), "must be positive")
-			assert.Error(t, limiter.LimitAt(now, 1))
-			assert.Error(t, limiter.LimitAt(now.Add(time.Minute), 1))
+			assert.Panics(t, func() {
+				NewFixedWindow(tc.interval, tc.max)
+			})
 		})
 	}
 }

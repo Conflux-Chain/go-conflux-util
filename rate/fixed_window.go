@@ -17,8 +17,16 @@ type FixedWindow struct {
 }
 
 // NewFixedWindow creates a limiter with at most max tokens per interval.
-// A non-positive max rejects all positive consumption amounts.
+// It panics if interval or max is not positive.
 func NewFixedWindow(interval time.Duration, max int) Limiter {
+	if interval <= 0 {
+		panic("rate: fixed window interval must be positive")
+	}
+
+	if max <= 0 {
+		panic("rate: fixed window max must be positive")
+	}
+
 	return &FixedWindow{
 		interval:  interval,
 		max:       max,
