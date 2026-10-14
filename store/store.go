@@ -22,6 +22,9 @@ func (store *Store) Close() error {
 	}
 }
 
+// Get retrieves the first matching record, returning false and nil if none is found.
+// whereQuery must be a trusted SQL condition; bind input values through args,
+// for example, Get(&user, "name = ?", name).
 func (store *Store) Get(modelPtr interface{}, whereQuery string, args ...interface{}) (bool, error) {
 	err := store.DB.Where(whereQuery, args...).First(modelPtr).Error
 	if err == nil {
@@ -41,6 +44,8 @@ func (store *Store) GetById(modelPtr interface{}, id uint64) (bool, error) {
 
 // List queries a page ordered by ID. On success, it replaces the slice contents;
 // an empty page leaves an empty slice. slicePtr must point to a slice.
+// Like ListByOrder, it runs a count query followed by a page query;
+// counting and large offsets can be expensive on large datasets.
 func (store *Store) List(db *gorm.DB, idDesc bool, offset, limit int, slicePtr interface{}) (total int64, err error) {
 	var orderBy string
 	if idDesc {
@@ -54,6 +59,10 @@ func (store *Store) List(db *gorm.DB, idDesc bool, offset, limit int, slicePtr i
 
 // ListByOrder queries a page with the given order. On success, it replaces the
 // slice contents; an empty page leaves an empty slice. slicePtr must point to a slice.
+// orderBy must be a trusted SQL ordering expression. Map external sort options
+// to an allowlist of columns and directions before calling this method.
+// It runs a count query followed by a page query; counting and large offsets
+// can be expensive on large datasets.
 func (*Store) ListByOrder(db *gorm.DB, orderBy string, offset, limit int, slicePtr interface{}) (total int64, err error) {
 	if err = db.Count(&total).Error; err != nil {
 		return 0, err

@@ -58,6 +58,11 @@ func (config *Config) MustOpenOrCreate(tables ...any) *gorm.DB {
 	return db
 }
 
+// OpenOrCreate opens the configured database and runs AutoMigrate for the supplied models.
+// MySQL takes precedence over SQLite; if neither is configured, it uses SQLite memory storage.
+// MySQL database creation is attempted only when Mysql.AutoCreate is true.
+// Connection pool settings are used as supplied, including for the memory fallback.
+// Use NewMemoryConfig for a memory database with suitable pool settings.
 func (config *Config) OpenOrCreate(tables ...any) (*gorm.DB, error) {
 	var dialector gorm.Dialector
 

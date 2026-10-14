@@ -32,7 +32,11 @@ func main() {
 }
 ```
 
-Generally, the database will be created if absent, and auto migrate all specified tables, e.g. add new column, index.
+MySQL takes precedence when both MySQL and SQLite are configured. If neither is
+configured, initialization falls back to a SQLite memory database.
+For MySQL, a missing database is created only when `Mysql.AutoCreate` is `true`.
+Initialization runs `AutoMigrate` for all supplied models, for example to add
+columns and indexes.
 
 In unit test, you could initialize a memory database as following:
 
@@ -56,3 +60,12 @@ finished, for example with `defer store.NewStore(db).Close()`.
 ## Store Utilities
 
 There are some very helpful `CRUD` utilities available in [Store](./store.go) struct.
+
+`Get` accepts a trusted SQL condition in `whereQuery`. Pass input values through
+`args`, for example `store.Get(&user, "name = ?", name)`. `ListByOrder` accepts a
+trusted SQL ordering expression in `orderBy`; map external sort options to an
+allowlist of columns and directions before calling it.
+
+`List` and `ListByOrder` run a count query followed by a page query. Counting and
+large offsets can be expensive on large datasets; consider cursor pagination in
+the application when this cost becomes significant.
