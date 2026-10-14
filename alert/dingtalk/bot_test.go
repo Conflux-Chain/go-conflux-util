@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -75,6 +76,44 @@ func TestSendResponse(t *testing.T) {
 			} else {
 				assert.ErrorContains(t, err, tc.wantError)
 			}
+		})
+	}
+}
+
+func TestSendQueryParameters(t *testing.T) {
+	for _, tc := range []struct {
+		name, path, secret, wantToken string
+	}{
+		{"no query", "/hook", "test-secret", ""},
+		{"access token", "/hook?access_token=test%2Btoken", "test-secret", "test+token"},
+		{"replace signature", "/hook?access_token=test-token&timestamp=old&sign=old&sign=older", "test-secret", "test-token"},
+		{"unsigned", "/hook?access_token=test-token", "", "test-token"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, "/hook", r.URL.Path)
+				query := r.URL.Query()
+				assert.Equal(t, tc.wantToken, query.Get("access_token"))
+				if tc.secret == "" {
+					assert.NotContains(t, query, "timestamp")
+					assert.NotContains(t, query, "sign")
+				} else {
+					timestamp := query.Get("timestamp")
+					_, err := strconv.ParseInt(timestamp, 10, 64)
+					assert.NoError(t, err)
+					assert.Len(t, query["timestamp"], 1)
+					assert.Len(t, query["sign"], 1)
+					assert.Equal(t, computeHmacSha256(timestamp+"\n"+tc.secret, tc.secret), query.Get("sign"))
+				}
+				w.Header().Set("Content-Type", "application/json")
+				io.WriteString(w, `{"errcode":0,"errmsg":"ok"}`)
+			}))
+			defer server.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			err := NewRobot(server.URL+tc.path, tc.secret).SendText(ctx, "test", nil, false)
+			assert.NoError(t, err)
 		})
 	}
 }

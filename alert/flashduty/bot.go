@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/pkg/errors"
 )
@@ -16,12 +17,19 @@ type Robot struct {
 	pushUri string
 }
 
+// NewRobot creates a robot. A non-empty secret overrides the webhook URL's
+// integration_key parameter.
 func NewRobot(pushUri, secret string) *Robot {
-	webURL := pushUri
 	if len(secret) != 0 {
-		webURL += fmt.Sprintf("?integration_key=%s", secret)
+		// Leave invalid URLs unchanged so Send reports the error.
+		if webhook, err := url.Parse(pushUri); err == nil {
+			query := webhook.Query()
+			query.Set("integration_key", secret)
+			webhook.RawQuery = query.Encode()
+			pushUri = webhook.String()
+		}
 	}
-	return &Robot{pushUri: webURL}
+	return &Robot{pushUri: pushUri}
 }
 
 // Send sends a flashduty message.

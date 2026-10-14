@@ -82,9 +82,9 @@ func (r Robot) send(ctx context.Context, msg interface{}) error {
 		return errors.WithMessage(err, "failed to marshal message")
 	}
 
-	webURL := r.webHook
-	if len(r.secret) != 0 {
-		webURL += genSignedURL(r.secret)
+	webURL, err := genSignedURL(r.webHook, r.secret)
+	if err != nil {
+		return errors.WithMessage(err, "failed to generate signed URL")
 	}
 
 	req, errRequest := http.NewRequestWithContext(ctx, http.MethodPost, webURL, bytes.NewReader(jm))
@@ -120,12 +120,23 @@ func (r Robot) send(ctx context.Context, msg interface{}) error {
 	return nil
 }
 
-func genSignedURL(secret string) string {
+func genSignedURL(webhook, secret string) (string, error) {
+	if len(secret) == 0 {
+		return webhook, nil
+	}
+
+	webURL, err := url.Parse(webhook)
+	if err != nil {
+		return "", err
+	}
+
 	timeStr := fmt.Sprintf("%d", time.Now().UnixNano()/1e6)
 	sign := fmt.Sprintf("%s\n%s", timeStr, secret)
-	signData := computeHmacSha256(sign, secret)
-	encodeURL := url.QueryEscape(signData)
-	return fmt.Sprintf("&timestamp=%s&sign=%s", timeStr, encodeURL)
+	query := webURL.Query()
+	query.Set("timestamp", timeStr)
+	query.Set("sign", computeHmacSha256(sign, secret))
+	webURL.RawQuery = query.Encode()
+	return webURL.String(), nil
 }
 
 func computeHmacSha256(message string, secret string) string {

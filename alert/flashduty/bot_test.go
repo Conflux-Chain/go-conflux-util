@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -74,6 +75,33 @@ func TestSendResponse(t *testing.T) {
 			} else {
 				assert.ErrorContains(t, err, tc.wantError)
 			}
+		})
+	}
+}
+
+func TestSendQueryParameters(t *testing.T) {
+	for _, tc := range []struct {
+		name, path, secret string
+		wantQuery          url.Values
+	}{
+		{"no query", "/hook", "test-key", url.Values{"integration_key": {"test-key"}}},
+		{"existing query and special characters", "/hook?source=app", "test+a&extra=1", url.Values{"source": {"app"}, "integration_key": {"test+a&extra=1"}}},
+		{"override key", "/hook?integration_key=old&integration_key=older", "new-key", url.Values{"integration_key": {"new-key"}}},
+		{"key in URL", "/hook?integration_key=url%2Bkey&source=app", "", url.Values{"source": {"app"}, "integration_key": {"url+key"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, "/hook", r.URL.Path)
+				assert.Equal(t, tc.wantQuery, r.URL.Query())
+				w.Header().Set("Content-Type", "application/json")
+				io.WriteString(w, `{"data":{"alert_key":"test"}}`)
+			}))
+			defer server.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			err := NewRobot(server.URL+tc.path, tc.secret).Send(ctx, "test", MsgLevelInfo, "", "", nil)
+			assert.NoError(t, err)
 		})
 	}
 }
