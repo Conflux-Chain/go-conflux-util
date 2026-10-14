@@ -83,14 +83,23 @@ func newAsyncHook(hook logrus.Hook, opts AsyncOption) *AsyncHook {
 // Fire implements the logrus.Hook interface, which enqueues log entries for async processing or
 // handles them synchronously if necessary.
 // Queue congestion and recovery notifications are sent synchronously and may delay this call.
+// Queued entries have a shallow copy of Data; callers must not concurrently mutate objects
+// referenced by its values while the entry is being processed.
 func (h *AsyncHook) Fire(entry *logrus.Entry) error {
 	// Synchronously fire the hook for fatal levels or if the hook is not started.
 	if entry.Level <= logrus.FatalLevel || !h.started.Load() {
 		return h.Hook.Fire(entry)
 	}
 
+	// Logrus continues using entry.Buffer after Fire returns. Dup copies Data without
+	// sharing that buffer, but omits Level, Message and Caller, so restore them here.
+	queued := entry.Dup()
+	queued.Level = entry.Level
+	queued.Message = entry.Message
+	queued.Caller = entry.Caller
+
 	select {
-	case h.jobQueue <- entry: // Attempt to enqueue the log entry.
+	case h.jobQueue <- queued: // Attempt to enqueue the independent log entry.
 		h.onFiredSuccess()
 		return nil
 	default: // if the queue is full, return an error.
