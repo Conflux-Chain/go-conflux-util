@@ -18,6 +18,8 @@ We recommend to initialize the log module from a configuration file or environme
 
 Choose exactly one initialization entry point (`MustInit`, `MustInitFromViper`, `MustInitWithCtx`, or `MustInitWithCtxFromViper`) and call it once during process startup, before concurrent logging or creating module entries. Repeated or concurrent initialization and runtime reconfiguration are unsupported. Reinitialization can register duplicate alert hooks and does not stop existing workers or close replaced output writers. The library does not reject repeated calls; callers are responsible for following this contract.
 
+Detected configuration decoding, log level, output configuration and alert hook initialization errors are logged with `logrus.Fatal`. With Logrus's default exit function, this terminates the process with exit code `1` without running Go `defer` functions. `recover` cannot intercept this exit.
+
 ```go
 // Initialize logging by specifying configurations
 log.MustInit(conf)
