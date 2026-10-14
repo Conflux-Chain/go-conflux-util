@@ -7,17 +7,18 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var moduleLevels map[string]logrus.Level
+var moduleLoggers map[string]*logrus.Logger
 
 // mustInitLogLevels initializes log levels in format of "level,module1=level1,module2=level2", where module log level is optional.
-func mustInitLogLevels(levels string) {
+func mustInitLogLevels(levels string) map[string]logrus.Level {
 	defaultLevel, moduleLevelMap, err := parseLogLevels(levels)
 	if err != nil {
 		logrus.WithError(err).WithField("levels", levels).Fatal("Failed to parse log levels")
 	}
 
 	logrus.SetLevel(defaultLevel)
-	moduleLevels = moduleLevelMap
+
+	return moduleLevelMap
 }
 
 // parseLogLevels parses log levels in format of "level,module1=level1,moduel2=level2", where module log level is optional.
@@ -52,16 +53,38 @@ func parseLogLevels(levels string) (defaultLogLevel logrus.Level, moduleLogLevel
 	return
 }
 
-// WithModule returns a logger with module name and specific log level.
+// initModuleLoggers snapshots the configured standard logger before concurrent logging starts.
+func initModuleLoggers(levels map[string]logrus.Level) {
+	base := logrus.StandardLogger()
+	loggers := make(map[string]*logrus.Logger, len(levels))
+	for module, level := range levels {
+		// Use a new logger so its mutex, entry pool and level are independent.
+		logger := logrus.New()
+		logger.Out = base.Out
+		logger.Formatter = base.Formatter
+		logger.ReportCaller = base.ReportCaller
+		logger.ExitFunc = base.ExitFunc
+		logger.BufferPool = base.BufferPool
+		logger.SetLevel(level)
+		// Share hook instances, but keep each logger's hook registry independent.
+		for hookLevel, hooks := range base.Hooks {
+			logger.Hooks[hookLevel] = append([]logrus.Hook(nil), hooks...)
+		}
+		loggers[module] = logger
+	}
+	moduleLoggers = loggers
+}
+
+// WithModule returns an entry with the module name and its configured log level.
+// Explicitly configured modules reuse independent loggers created during initialization;
+// later standard logger configuration changes are not propagated to them.
+// Unconfigured modules use the standard logger. Initialize logging before creating module entries.
 //
 // Note, the module name should not contain delimiters "=" and ",".
 // Otherwise, the behavior is unknown.
 func WithModule(module string) *logrus.Entry {
-	moduleLogger := logrus.WithField("module", module)
-
-	if level, ok := moduleLevels[module]; ok {
-		moduleLogger.Logger.SetLevel(level)
+	if logger, ok := moduleLoggers[module]; ok {
+		return logger.WithField("module", module)
 	}
-
-	return moduleLogger
+	return logrus.WithField("module", module)
 }

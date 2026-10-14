@@ -85,7 +85,7 @@ func MustInitWithCtx(ctx context.Context, wg *sync.WaitGroup, conf LoggingConfig
 // mustInit initializes the logging system with the provided configuration and sets up an alert hook.
 // It supports graceful shutdown by optionally using a context and wait group for the alert hook registration.
 func mustInit(conf LoggingConfig, ctx context.Context, wg *sync.WaitGroup) {
-	mustInitLogLevels(conf.Level)
+	moduleLevels := mustInitLogLevels(conf.Level)
 
 	// Set up the output.
 	if err := setupOutput(conf.Output); err != nil {
@@ -111,6 +111,7 @@ func mustInit(conf LoggingConfig, ctx context.Context, wg *sync.WaitGroup) {
 
 	// Apply the configured formatter to the logger.
 	logrus.SetFormatter(formatter)
+	initModuleLoggers(moduleLevels)
 
 	// Log a debug message indicating successful initialization along with the effective configuration.
 	logrus.WithField("config", fmt.Sprintf("%+v", conf)).Debug("Log initialized")

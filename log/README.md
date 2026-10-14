@@ -26,12 +26,14 @@ log.MustInitFromViper()
 
 ## Log with Module
 
-Application could specify different log levels for different moduels. Please use pre-defined factory method to create a logger with specific module name and log level.
+Applications can configure independent module levels, for example `info,rpc=debug,db=error`. Initialize logging before creating module entries. Explicitly configured modules reuse their own logger; other modules use the global logger and its default level.
 
 ```go
 log.WithModule("rpc").Info("Info message")
 log.WithModule("rpc").Debug("Debug message")
 ```
+
+Module loggers inherit the output target, formatter, hooks and other logger settings at initialization. Later changes to the global logger's level, output, formatter or hook registry do not update these module loggers. The output target, formatter and hook instances are shared, so custom implementations must support concurrent use across loggers. Complete initialization before starting concurrent logging.
 
 ## Hook with Alert
 
