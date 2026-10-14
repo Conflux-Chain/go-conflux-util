@@ -37,6 +37,7 @@ func NewRobot(pushUri, secret string) *Robot {
 // Send sends a flashduty message.
 // It uses ctx for cancellation and does not add a timeout. Callers should provide
 // a context with a deadline to bound the request duration.
+// Redirects are rejected; configure the final webhook URL.
 func (r Robot) Send(ctx context.Context, title, level, alertKey, description string, data map[string]string) error {
 	return r.send(ctx, &message{
 		Title:       title,
@@ -82,7 +83,11 @@ func (r Robot) send(ctx context.Context, msg interface{}) error {
 	}
 
 	req.Header.Add("Content-Type", "application/json")
-	resp, errDo := http.DefaultClient.Do(req)
+	client := *http.DefaultClient
+	client.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	resp, errDo := client.Do(req)
 	if errDo != nil {
 		return errors.WithMessage(errDo, "failed to do http request")
 	}

@@ -81,6 +81,32 @@ func TestSendResponse(t *testing.T) {
 	}
 }
 
+func TestSendRejectsRedirects(t *testing.T) {
+	for _, status := range []int{
+		http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther,
+		http.StatusTemporaryRedirect, http.StatusPermanentRedirect,
+	} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/hook" {
+					http.Redirect(w, r, "/target", status)
+					return
+				}
+				t.Error("unexpected request to redirect target")
+				w.Header().Set("Content-Type", "application/json")
+				io.WriteString(w, `{"errcode":0,"errmsg":"ok"}`)
+			}))
+			defer server.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			err := NewRobot(server.URL+"/hook", "").SendText(ctx, "test", nil, false)
+			assert.ErrorContains(t, err, "dingtalk send failed: HTTP")
+			assert.ErrorContains(t, err, http.StatusText(status))
+		})
+	}
+}
+
 func TestSendQueryParameters(t *testing.T) {
 	for _, tc := range []struct {
 		name, path, secret, wantToken string
