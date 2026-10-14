@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -114,6 +115,37 @@ func TestSendQueryParameters(t *testing.T) {
 			defer cancel()
 			err := NewRobot(server.URL+tc.path, tc.secret).SendText(ctx, "test", nil, false)
 			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestSendResponseSizeLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		size int
+	}{
+		{"at limit", 1 << 20},
+		{"over limit", (1 << 20) + 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			response := `{"errcode":0,"errmsg":"ok"}`
+			response += strings.Repeat(" ", tc.size-len(response))
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				// Send without Content-Length to exercise the read limit.
+				w.(http.Flusher).Flush()
+				io.WriteString(w, response)
+			}))
+			defer server.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			err := NewRobot(server.URL, "").SendText(ctx, "test", nil, false)
+			if tc.size == 1<<20 {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorContains(t, err, "response body exceeds 1048576 bytes")
+			}
 		})
 	}
 }

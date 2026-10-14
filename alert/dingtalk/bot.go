@@ -16,6 +16,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+const maxResponseBodySize = 1 << 20 // 1 MiB
+
 func ErrMsgTypeNotSupported(msgType string) error {
 	return errors.Errorf("message type %s not supported", msgType)
 }
@@ -107,9 +109,12 @@ func (r Robot) send(ctx context.Context, msg interface{}) error {
 		return fmt.Errorf("dingtalk send failed: HTTP %s", resp.Status)
 	}
 
-	body, errReadBody := io.ReadAll(resp.Body)
+	body, errReadBody := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodySize+1))
 	if errReadBody != nil {
 		return errors.WithMessage(errReadBody, "failed to read http response body")
+	}
+	if len(body) > maxResponseBodySize {
+		return fmt.Errorf("dingtalk response body exceeds %d bytes", maxResponseBodySize)
 	}
 
 	var dr dingResponse
