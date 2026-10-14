@@ -35,15 +35,23 @@ type influxdbReporter struct {
 	client client.Client
 }
 
-func (r *influxdbReporter) makeClient() (err error) {
-	r.client, err = client.NewHTTPClient(client.HTTPConfig{
+func (r *influxdbReporter) makeClient() error {
+	newClient, err := client.NewHTTPClient(client.HTTPConfig{
 		Addr:     r.config.Host,
 		Username: r.config.Username,
 		Password: r.config.Password,
 		Timeout:  r.config.Timeout,
 	})
+	if err != nil {
+		return err
+	}
 
-	return
+	// Release the old client's idle connections before replacing its pool.
+	if r.client != nil {
+		r.client.Close()
+	}
+	r.client = newClient
+	return nil
 }
 
 // InfluxDB reports metrics to specified InfluxDB for the given metrics.Registry at each d interval.
