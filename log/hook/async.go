@@ -111,7 +111,8 @@ func (h *AsyncHook) Fire(entry *logrus.Entry) error {
 // startWithCtx initiates the hook's workers and sets up a mechanism to gracefully
 // drain the job queue upon receiving a shutdown signal through the provided context.
 func (h *AsyncHook) startWithCtx(ctx context.Context, wg *sync.WaitGroup) {
-	defer h.started.Store(true)
+	// Mark started before launching workers so an early exit cannot be overwritten.
+	h.started.Store(true)
 
 	wg.Add(1)
 	go func() {
@@ -136,7 +137,7 @@ func (h *AsyncHook) startWithCtx(ctx context.Context, wg *sync.WaitGroup) {
 
 // start launches the hook's worker goroutines without lifecycle managment.
 func (h *AsyncHook) start() {
-	defer h.started.Store(true) // Mark the hook as started.
+	h.started.Store(true) // Mark the hook as started before launching workers.
 
 	for i := 0; i < h.NumWorkers; i++ {
 		go h.worker(context.Background())
