@@ -2,6 +2,9 @@ package flashduty
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -39,4 +42,39 @@ func TestSend(t *testing.T) {
 
 	err := robot.Send(ctx, "test", MsgLevelInfo, "# Hello, test!", "description", map[string]string{"service": "engine", "resourcetype": "cpu"})
 	assert.NoError(t, err)
+}
+
+func TestSendResponse(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		response  string
+		wantError string
+	}{
+		{
+			name:     "success",
+			response: `{"request_id":"test","data":{"alert_key":"example"}}`,
+		},
+		{
+			name:      "provider error",
+			response:  `{"error":{"code":"Unauthorized","message":"invalid integration key"}}`,
+			wantError: "flashduty error: code = Unauthorized, message = invalid integration key",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				io.WriteString(w, tc.response)
+			}))
+			defer server.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			err := NewRobot(server.URL, "").Send(ctx, "test", MsgLevelInfo, "", "description", nil)
+			if tc.wantError == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorContains(t, err, tc.wantError)
+			}
+		})
+	}
 }
