@@ -27,9 +27,8 @@ type AsyncOption struct {
 type AsyncHook struct {
 	logrus.Hook                  // Embedded logrus hook.
 	AsyncOption                  // Embedded options.
-	mu           sync.Mutex      // Synchronizes access to `healthStatus`.
 	started      atomic.Bool     // Atomic flag indicating hook startup state.
-	healthStatus *health.Counter // Tracks queue health.
+	healthStatus *health.Counter // Tracks queue health with its own internal synchronization.
 
 	jobQueue chan *logrus.Entry // Buffered channel for enqueuing log entries.
 }
@@ -77,6 +76,7 @@ func newAsyncHook(hook logrus.Hook, opts AsyncOption) *AsyncHook {
 
 // Fire implements the logrus.Hook interface, which enqueues log entries for async processing or
 // handles them synchronously if necessary.
+// Queue congestion and recovery notifications are sent synchronously and may delay this call.
 func (h *AsyncHook) Fire(entry *logrus.Entry) error {
 	// Synchronously fire the hook for fatal levels or if the hook is not started.
 	if entry.Level <= logrus.FatalLevel || !h.started.Load() {
@@ -150,9 +150,6 @@ func (h *AsyncHook) fire(entry *logrus.Entry) {
 
 // onFiredSuccess signals successful enqueue and monitors queue health recovery.
 func (h *AsyncHook) onFiredSuccess() {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
 	recovered, failures := h.healthStatus.OnSuccess()
 	if recovered {
 		h.notify("Async hook queue congestion recovered", logrus.Fields{"failures": failures})
@@ -161,9 +158,6 @@ func (h *AsyncHook) onFiredSuccess() {
 
 // onFiredFailure handles failed enqueues and monitors queue congestion.
 func (h *AsyncHook) onFiredFailure(err error, entry *logrus.Entry) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
 	unhealthy, uncovered, failures := h.healthStatus.OnFailure()
 	if unhealthy {
 		h.notify("Async hook queue is congested", logrus.Fields{"failures": failures})
@@ -194,7 +188,8 @@ func (h *AsyncHook) drainJobQueue() {
 	}
 }
 
-// notify sends a message through the hook as a warning.
+// notify sends a warning synchronously without holding a queue health lock.
+// Concurrent notifications may complete out of order.
 func (h *AsyncHook) notify(msg string, fields logrus.Fields) {
 	h.fire(&logrus.Entry{
 		Time:    time.Now(),
