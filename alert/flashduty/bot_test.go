@@ -47,22 +47,21 @@ func TestSend(t *testing.T) {
 func TestSendResponse(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
+		status    int
 		response  string
 		wantError string
 	}{
-		{
-			name:     "success",
-			response: `{"request_id":"test","data":{"alert_key":"example"}}`,
-		},
-		{
-			name:      "provider error",
-			response:  `{"error":{"code":"Unauthorized","message":"invalid integration key"}}`,
-			wantError: "flashduty error: code = Unauthorized, message = invalid integration key",
-		},
+		{"success", http.StatusOK, `{"request_id":"test","data":{"alert_key":"example"}}`, ""},
+		{"provider error", http.StatusOK, `{"error":{"code":"Unauthorized","message":"invalid integration key"}}`, "flashduty error: code = Unauthorized, message = invalid integration key"},
+		{"unauthorized", http.StatusUnauthorized, `{}`, "flashduty send failed: HTTP 401 Unauthorized"},
+		{"rate limited", http.StatusTooManyRequests, `{}`, "flashduty send failed: HTTP 429 Too Many Requests"},
+		{"server error", http.StatusInternalServerError, `{}`, "flashduty send failed: HTTP 500 Internal Server Error"},
+		{"non-JSON error", http.StatusBadGateway, "upstream unavailable", "flashduty send failed: HTTP 502 Bad Gateway"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tc.status)
 				io.WriteString(w, tc.response)
 			}))
 			defer server.Close()

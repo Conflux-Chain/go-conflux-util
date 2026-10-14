@@ -76,6 +76,10 @@ func (r Robot) send(ctx context.Context, msg interface{}) error {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("flashduty send failed: HTTP %s", resp.Status)
+	}
+
 	body, errReadBody := io.ReadAll(resp.Body)
 	if errReadBody != nil {
 		return errors.WithMessage(errReadBody, "failed to read http response body")
