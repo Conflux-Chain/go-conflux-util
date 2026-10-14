@@ -92,14 +92,15 @@ func (config *Config) openOrCreate(dialector gorm.Dialector, tables ...any) (*go
 		return nil, errors.WithMessage(err, "Failed to retrieve mysql.DB")
 	}
 
+	// Apply connection pool settings before migration, including memory DB limits.
+	sqlDb.SetConnMaxLifetime(config.ConnMaxLifetime)
+	sqlDb.SetMaxOpenConns(config.MaxOpenConns)
+	sqlDb.SetMaxIdleConns(config.MaxIdleConns)
+
 	if err := db.AutoMigrate(tables...); err != nil {
 		sqlDb.Close()
 		return nil, errors.WithMessage(err, "Failed to auto migrate tables")
 	}
-
-	sqlDb.SetConnMaxLifetime(config.ConnMaxLifetime)
-	sqlDb.SetMaxOpenConns(config.MaxOpenConns)
-	sqlDb.SetMaxIdleConns(config.MaxIdleConns)
 
 	logrus.Debug("Database initialized")
 
