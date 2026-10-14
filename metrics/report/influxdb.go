@@ -96,7 +96,8 @@ func (r *influxdbReporter) run(d time.Duration) {
 	pingTicker := time.NewTicker(time.Second * 5)
 	defer pingTicker.Stop()
 
-	health := health.NewCounter()
+	// Track write results only: a successful Ping does not imply successful reporting.
+	reportHealth := health.NewCounter()
 
 	for {
 		var err error
@@ -116,9 +117,10 @@ func (r *influxdbReporter) run(d time.Duration) {
 					logrus.WithError(err).Info("Failed to recreate InfluxDB client")
 				}
 			}
+			continue
 		}
 
-		recovered, unhealthy, unrecovered, failures := health.OnError(err)
+		recovered, unhealthy, unrecovered, failures := reportHealth.OnError(err)
 		switch {
 		case unhealthy:
 			logrus.Error("InfluxDB reporter becomes unhealthy")
