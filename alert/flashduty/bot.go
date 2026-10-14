@@ -103,7 +103,7 @@ func (r Robot) send(ctx context.Context, msg interface{}) error {
 	var fdr response
 	err = json.Unmarshal(body, &fdr)
 	if err != nil {
-		return errors.WithMessagef(err, "failed to unmarshal response: %s", string(body))
+		return errors.WithMessage(err, "failed to unmarshal response")
 	}
 	if len(fdr.Error.Code) > 0 {
 		return errors.WithMessage(&fdr.Error, "flashDutyRobot send failed")

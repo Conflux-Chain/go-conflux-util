@@ -2,6 +2,7 @@ package flashduty
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -77,6 +78,25 @@ func TestSendResponse(t *testing.T) {
 				assert.ErrorContains(t, err, tc.wantError)
 			}
 		})
+	}
+}
+
+func TestSendInvalidJSONResponse(t *testing.T) {
+	const body = "<html>upstream diagnostic details</html>"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		io.WriteString(w, body)
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	err := NewRobot(server.URL, "").Send(ctx, "test", MsgLevelInfo, "", "description", nil)
+	if assert.Error(t, err) {
+		assert.ErrorContains(t, err, "failed to unmarshal response")
+		assert.NotContains(t, err.Error(), body)
+		var syntaxError *json.SyntaxError
+		assert.ErrorAs(t, err, &syntaxError)
 	}
 }
 
