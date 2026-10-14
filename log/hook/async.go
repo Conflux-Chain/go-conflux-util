@@ -18,9 +18,13 @@ var ErrAsyncQueueFull = errors.New("async hook queue is full")
 
 // AsyncOption defines configuration options for the AsyncHook.
 type AsyncOption struct {
-	NumWorkers  int           // Number of worker goroutines. Non-positive values disable async mode (default: 0).
-	QueueSize   int           `default:"60"` // Maximum number of queued jobs.
-	StopTimeout time.Duration `default:"5s"` // Timeout duration before forced exit of async processing.
+	NumWorkers int // Number of worker goroutines. Non-positive values disable async mode (default: 0).
+	QueueSize  int `default:"60"` // Maximum number of queued jobs.
+
+	// StopTimeout is a best-effort queue draining budget after all workers exit.
+	// It excludes waiting for workers and cannot interrupt hook calls or notifications,
+	// so it does not bound the total shutdown time.
+	StopTimeout time.Duration `default:"5s"`
 }
 
 // AsyncHook is a logrus hook that processes log entries asynchronously.
@@ -35,8 +39,10 @@ type AsyncHook struct {
 
 // NewAsyncHookWithCtx initializes and starts a new AsyncHook instance that integrates with
 // graceful shutdown handling.
-// It's designed to work harmoniously with the application's shutdown process to ensure
-// no logs are lost during shutdown.
+// On cancellation, it waits for workers to exit, then attempts to drain queued entries.
+// StopTimeout does not bound wg.Wait; the underlying hook must limit its own I/O duration.
+// Stop and wait for log producers before cancelling ctx to avoid enqueuing during shutdown.
+// Delivery is best effort: queue overflow, drain timeout, or send failures can lose alerts.
 // If opts.NumWorkers <= 0, entries are handled synchronously without starting background work.
 func NewAsyncHookWithCtx(
 	ctx context.Context, wg *sync.WaitGroup, hook logrus.Hook, opts AsyncOption) *AsyncHook {
@@ -111,10 +117,10 @@ func (h *AsyncHook) startWithCtx(ctx context.Context, wg *sync.WaitGroup) {
 			}()
 		}
 
-		// Waits for all workers before attempting to drain the job queue.
+		// Wait for all workers; StopTimeout has not started and cannot interrupt their hook calls.
 		awg.Wait()
 
-		// Drain remaining jobs in the queue to ensure no logs are lost during shutdown.
+		// Attempt to drain remaining jobs within the best-effort StopTimeout budget.
 		h.drainJobQueue()
 	}()
 }
@@ -168,7 +174,9 @@ func (h *AsyncHook) onFiredFailure(err error, entry *logrus.Entry) {
 	h.outputStderr(err, entry)
 }
 
-// drainJobQueue processes any remaining log entries in the job queue upon shutdown.
+// drainJobQueue attempts to process remaining entries after all workers exit.
+// Expiry is checked between hook calls and cannot interrupt them or the final notification.
+// When both an entry and expiry are ready, select may still choose the entry.
 func (h *AsyncHook) drainJobQueue() {
 	ctx, cancel := context.WithTimeout(context.Background(), h.StopTimeout)
 	defer cancel()

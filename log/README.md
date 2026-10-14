@@ -41,3 +41,11 @@ Developers can configure the alert hook to set up default notification channels 
 // Send alert to the 'tgrobot' channel only.
 logrus.WithField("@channel", "tgrobot").Warn("Some warning occurred")
 ```
+
+### Asynchronous alert shutdown
+
+When asynchronous alerts are enabled, use `log.MustInitWithCtx` or `log.MustInitWithCtxFromViper` with a context and wait group to track shutdown. Direct hook users can use `hook.NewAsyncHookWithCtx`. Stop and wait for log producers before cancelling the hook context, then wait for shutdown to complete.
+
+Shutdown waits for workers to exit before starting `StopTimeout` to drain the remaining queue. This is a best-effort draining budget, not a total shutdown deadline: it cannot interrupt an underlying `Hook.Fire` call or the final shutdown notification. The underlying hook must limit its own I/O duration; a blocked call can keep `wg.Wait()` blocked beyond `StopTimeout`.
+
+Alert delivery is best effort. A full queue, drain timeout, or send failure can result in lost alerts; graceful shutdown does not guarantee delivery of every alert.
