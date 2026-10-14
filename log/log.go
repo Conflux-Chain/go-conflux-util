@@ -42,6 +42,7 @@ type RotationConfig struct {
 }
 
 // MustInitFromViper initializes the logging system using configurations from viper.
+// It shares MustInit's startup-only initialization contract; call only one MustInit* entry point.
 //
 // Precondition:
 //   - Viper must be initialized with appropriate configurations before calling this function.
@@ -57,6 +58,7 @@ func MustInitFromViper() {
 
 // MustInitWithCtxFromViper performs the similar initializations as `MustInitFromViper` with
 // support for graceful shutdown by accepting a context and a wait group.
+// It shares MustInit's startup-only initialization contract; call only one MustInit* entry point.
 //
 // Parameters:
 //   - ctx: The context for graceful shutdown handling.
@@ -72,12 +74,19 @@ func MustInitWithCtxFromViper(ctx context.Context, wg *sync.WaitGroup) {
 // It configures the log level, adds an alert hook, sets a text formatter, and adapts the logger
 // for Geth compatibility.
 // In case of any error during initialization, this function will panic.
+//
+// Call exactly one of the MustInit* entry points once during process startup, before
+// concurrent logging or creating module entries. Repeated or concurrent initialization
+// and runtime reconfiguration are unsupported. Reinitialization can append duplicate
+// alert hooks and does not stop existing workers or close replaced output writers.
+// This contract is the caller's responsibility; repeated calls are not rejected.
 func MustInit(conf LoggingConfig) {
 	mustInit(conf, nil, nil)
 }
 
 // MustInitWithCtx performs the similiar initializations as `MustInit` with support for
 // graceful shutdown by accepting a context and a wait group.
+// It shares MustInit's startup-only initialization contract; call only one MustInit* entry point.
 func MustInitWithCtx(ctx context.Context, wg *sync.WaitGroup, conf LoggingConfig) {
 	mustInit(conf, ctx, wg)
 }

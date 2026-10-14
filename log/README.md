@@ -16,6 +16,8 @@ Currently, there are several configurations available:
 
 We recommend to initialize the log module from a configuration file or environment variables.
 
+Choose exactly one initialization entry point (`MustInit`, `MustInitFromViper`, `MustInitWithCtx`, or `MustInitWithCtxFromViper`) and call it once during process startup, before concurrent logging or creating module entries. Repeated or concurrent initialization and runtime reconfiguration are unsupported. Reinitialization can register duplicate alert hooks and does not stop existing workers or close replaced output writers. The library does not reject repeated calls; callers are responsible for following this contract.
+
 ```go
 // Initialize logging by specifying configurations
 log.MustInit(conf)
