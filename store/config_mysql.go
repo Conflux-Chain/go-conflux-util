@@ -2,7 +2,7 @@ package store
 
 import (
 	"fmt"
-	"strings"
+	"net/url"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -11,9 +11,11 @@ import (
 )
 
 type MysqlConfig struct {
-	Host       string `default:"127.0.0.1:3306"`
-	Username   string `default:"root"`
-	Password   string
+	Host     string `default:"127.0.0.1:3306"`
+	Username string `default:"root"`
+	Password string
+	// Database is trusted project configuration used as an unquoted SQL identifier
+	// when creating the database. It must follow MySQL naming rules and avoid reserved words.
 	Database   string
 	AutoCreate bool   // indicates whether to create database if absent
 	Location   string // time.Location name, e.g. "UTC (default)", "Local" or "Asia/Shanghai"
@@ -32,8 +34,7 @@ func (config *MysqlConfig) Open(dbName ...string) gorm.Dialector {
 	dsn := fmt.Sprintf("%v:%v@tcp(%v)/%v?parseTime=true", config.Username, config.Password, config.Host, database)
 
 	if len(config.Location) > 0 {
-		// escape "/" as "%2F"
-		dsn += fmt.Sprintf("&loc=%v", strings.ReplaceAll(config.Location, "/", "%2F"))
+		dsn += fmt.Sprintf("&loc=%v", url.QueryEscape(config.Location))
 	}
 
 	return mysql.Open(dsn)
@@ -44,7 +45,7 @@ func (config *MysqlConfig) CreateDatabaseIfAbsent(db *gorm.DB) (bool, error) {
 		return false, nil
 	}
 
-	rows, err := db.Raw(fmt.Sprintf("SHOW DATABASES LIKE '%v'", config.Database)).Rows()
+	rows, err := db.Raw("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = ?", config.Database).Rows()
 	if err != nil {
 		return false, errors.WithMessage(err, "Failed to query databases")
 	}
@@ -52,6 +53,9 @@ func (config *MysqlConfig) CreateDatabaseIfAbsent(db *gorm.DB) (bool, error) {
 
 	if rows.Next() {
 		return false, nil
+	}
+	if err := rows.Err(); err != nil {
+		return false, errors.WithMessage(err, "Failed to query databases")
 	}
 
 	dbCreateSql := fmt.Sprintf(

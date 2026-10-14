@@ -26,12 +26,19 @@ type Config struct {
 	Mysql  *MysqlConfig
 }
 
+// NewMemoryConfig configures a private SQLite memory database with one open
+// connection, one retained idle connection, and no connection lifetime expiry.
+// These settings keep the database available across operations until it is closed.
 func NewMemoryConfig() Config {
 	config := Config{
 		Sqlite: &SqliteConfig{},
 	}
 
 	defaults.SetDefaults(&config)
+	config.MaxOpenConns = 1
+	config.MaxIdleConns = 1
+	// Apply after defaults, which would replace zero with the default lifetime.
+	config.ConnMaxLifetime = 0
 
 	return config
 }
@@ -51,6 +58,11 @@ func (config *Config) MustOpenOrCreate(tables ...any) *gorm.DB {
 	return db
 }
 
+// OpenOrCreate opens the configured database and runs AutoMigrate for the supplied models.
+// MySQL takes precedence over SQLite; if neither is configured, it uses SQLite memory storage.
+// MySQL database creation is attempted only when Mysql.AutoCreate is true.
+// Connection pool settings are used as supplied, including for the memory fallback.
+// Use NewMemoryConfig for a memory database with suitable pool settings.
 func (config *Config) OpenOrCreate(tables ...any) (*gorm.DB, error) {
 	var dialector gorm.Dialector
 
@@ -85,14 +97,15 @@ func (config *Config) openOrCreate(dialector gorm.Dialector, tables ...any) (*go
 		return nil, errors.WithMessage(err, "Failed to retrieve mysql.DB")
 	}
 
+	// Apply connection pool settings before migration, including memory DB limits.
+	sqlDb.SetConnMaxLifetime(config.ConnMaxLifetime)
+	sqlDb.SetMaxOpenConns(config.MaxOpenConns)
+	sqlDb.SetMaxIdleConns(config.MaxIdleConns)
+
 	if err := db.AutoMigrate(tables...); err != nil {
 		sqlDb.Close()
 		return nil, errors.WithMessage(err, "Failed to auto migrate tables")
 	}
-
-	sqlDb.SetConnMaxLifetime(config.ConnMaxLifetime)
-	sqlDb.SetMaxOpenConns(config.MaxOpenConns)
-	sqlDb.SetMaxIdleConns(config.MaxIdleConns)
 
 	logrus.Debug("Database initialized")
 
