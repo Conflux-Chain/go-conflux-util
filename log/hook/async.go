@@ -18,39 +18,50 @@ var ErrAsyncQueueFull = errors.New("async hook queue is full")
 
 // AsyncOption defines configuration options for the AsyncHook.
 type AsyncOption struct {
-	NumWorkers  int           // Number of worker goroutines. If set to 0 (default), async mode is disabled.
-	QueueSize   int           `default:"60"` // Maximum number of queued jobs.
-	StopTimeout time.Duration `default:"5s"` // Timeout duration before forced exit of async processing.
+	NumWorkers int // Number of worker goroutines. Non-positive values disable async mode (default: 0).
+	QueueSize  int `default:"60"` // Maximum number of queued jobs.
+
+	// StopTimeout is a best-effort queue draining budget after all workers exit.
+	// It excludes waiting for workers and cannot interrupt hook calls or notifications,
+	// so it does not bound the total shutdown time.
+	StopTimeout time.Duration `default:"5s"`
 }
 
 // AsyncHook is a logrus hook that processes log entries asynchronously.
 type AsyncHook struct {
 	logrus.Hook                  // Embedded logrus hook.
 	AsyncOption                  // Embedded options.
-	mu           sync.Mutex      // Synchronizes access to `healthStatus`.
 	started      atomic.Bool     // Atomic flag indicating hook startup state.
-	healthStatus *health.Counter // Tracks queue health.
+	healthStatus *health.Counter // Tracks queue health with its own internal synchronization.
 
 	jobQueue chan *logrus.Entry // Buffered channel for enqueuing log entries.
 }
 
 // NewAsyncHookWithCtx initializes and starts a new AsyncHook instance that integrates with
 // graceful shutdown handling.
-// It's designed to work harmoniously with the application's shutdown process to ensure
-// no logs are lost during shutdown.
+// On cancellation, it waits for workers to exit, then attempts to drain queued entries.
+// StopTimeout does not bound wg.Wait; the underlying hook must limit its own I/O duration.
+// Stop and wait for log producers before cancelling ctx to avoid enqueuing during shutdown.
+// Delivery is best effort: queue overflow, drain timeout, or send failures can lose alerts.
+// If opts.NumWorkers <= 0, entries are handled synchronously without starting background work.
 func NewAsyncHookWithCtx(
 	ctx context.Context, wg *sync.WaitGroup, hook logrus.Hook, opts AsyncOption) *AsyncHook {
 	h := newAsyncHook(hook, opts)
-	h.startWithCtx(ctx, wg)
+	if opts.NumWorkers > 0 {
+		h.startWithCtx(ctx, wg)
+	}
 
 	return h
 }
 
 // NewAsyncHook initializes and starts a standard AsyncHook without graceful shutdown handling.
 // Use this when you don't require integration with a graceful shutdown mechanism.
+// If opts.NumWorkers <= 0, entries are handled synchronously without starting background work.
 func NewAsyncHook(hook logrus.Hook, opts AsyncOption) *AsyncHook {
 	h := newAsyncHook(hook, opts)
-	h.start()
+	if opts.NumWorkers > 0 {
+		h.start()
+	}
 
 	return h
 }
@@ -71,14 +82,24 @@ func newAsyncHook(hook logrus.Hook, opts AsyncOption) *AsyncHook {
 
 // Fire implements the logrus.Hook interface, which enqueues log entries for async processing or
 // handles them synchronously if necessary.
+// Queue congestion and recovery notifications are sent synchronously and may delay this call.
+// Queued entries have a shallow copy of Data; callers must not concurrently mutate objects
+// referenced by its values while the entry is being processed.
 func (h *AsyncHook) Fire(entry *logrus.Entry) error {
 	// Synchronously fire the hook for fatal levels or if the hook is not started.
 	if entry.Level <= logrus.FatalLevel || !h.started.Load() {
 		return h.Hook.Fire(entry)
 	}
 
+	// Logrus continues using entry.Buffer after Fire returns. Dup copies Data without
+	// sharing that buffer, but omits Level, Message and Caller, so restore them here.
+	queued := entry.Dup()
+	queued.Level = entry.Level
+	queued.Message = entry.Message
+	queued.Caller = entry.Caller
+
 	select {
-	case h.jobQueue <- entry: // Attempt to enqueue the log entry.
+	case h.jobQueue <- queued: // Attempt to enqueue the independent log entry.
 		h.onFiredSuccess()
 		return nil
 	default: // if the queue is full, return an error.
@@ -90,7 +111,8 @@ func (h *AsyncHook) Fire(entry *logrus.Entry) error {
 // startWithCtx initiates the hook's workers and sets up a mechanism to gracefully
 // drain the job queue upon receiving a shutdown signal through the provided context.
 func (h *AsyncHook) startWithCtx(ctx context.Context, wg *sync.WaitGroup) {
-	defer h.started.Store(true)
+	// Mark started before launching workers so an early exit cannot be overwritten.
+	h.started.Store(true)
 
 	wg.Add(1)
 	go func() {
@@ -105,17 +127,17 @@ func (h *AsyncHook) startWithCtx(ctx context.Context, wg *sync.WaitGroup) {
 			}()
 		}
 
-		// Waits for all workers before attempting to drain the job queue.
+		// Wait for all workers; StopTimeout has not started and cannot interrupt their hook calls.
 		awg.Wait()
 
-		// Drain remaining jobs in the queue to ensure no logs are lost during shutdown.
+		// Attempt to drain remaining jobs within the best-effort StopTimeout budget.
 		h.drainJobQueue()
 	}()
 }
 
 // start launches the hook's worker goroutines without lifecycle managment.
 func (h *AsyncHook) start() {
-	defer h.started.Store(true) // Mark the hook as started.
+	h.started.Store(true) // Mark the hook as started before launching workers.
 
 	for i := 0; i < h.NumWorkers; i++ {
 		go h.worker(context.Background())
@@ -144,9 +166,6 @@ func (h *AsyncHook) fire(entry *logrus.Entry) {
 
 // onFiredSuccess signals successful enqueue and monitors queue health recovery.
 func (h *AsyncHook) onFiredSuccess() {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
 	recovered, failures := h.healthStatus.OnSuccess()
 	if recovered {
 		h.notify("Async hook queue congestion recovered", logrus.Fields{"failures": failures})
@@ -155,9 +174,6 @@ func (h *AsyncHook) onFiredSuccess() {
 
 // onFiredFailure handles failed enqueues and monitors queue congestion.
 func (h *AsyncHook) onFiredFailure(err error, entry *logrus.Entry) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
 	unhealthy, uncovered, failures := h.healthStatus.OnFailure()
 	if unhealthy {
 		h.notify("Async hook queue is congested", logrus.Fields{"failures": failures})
@@ -168,7 +184,9 @@ func (h *AsyncHook) onFiredFailure(err error, entry *logrus.Entry) {
 	h.outputStderr(err, entry)
 }
 
-// drainJobQueue processes any remaining log entries in the job queue upon shutdown.
+// drainJobQueue attempts to process remaining entries after all workers exit.
+// Expiry is checked between hook calls and cannot interrupt them or the final notification.
+// When both an entry and expiry are ready, select may still choose the entry.
 func (h *AsyncHook) drainJobQueue() {
 	ctx, cancel := context.WithTimeout(context.Background(), h.StopTimeout)
 	defer cancel()
@@ -188,7 +206,8 @@ func (h *AsyncHook) drainJobQueue() {
 	}
 }
 
-// notify sends a message through the hook as a warning.
+// notify sends a warning synchronously without holding a queue health lock.
+// Concurrent notifications may complete out of order.
 func (h *AsyncHook) notify(msg string, fields logrus.Fields) {
 	h.fire(&logrus.Entry{
 		Time:    time.Now(),
@@ -201,7 +220,7 @@ func (h *AsyncHook) notify(msg string, fields logrus.Fields) {
 // outputStderr writes the error and the log entry to the standard error output.
 func (h *AsyncHook) outputStderr(err error, entry *logrus.Entry) {
 	formatter := logrus.TextFormatter{}
-	entryStr, _ := formatter.Format(entry)
+	formatted, _ := formatter.Format(entry)
 
-	fmt.Fprintf(os.Stderr, "Failed to fire async hook with error: %v for logrus entry: %v\n", err, entryStr)
+	fmt.Fprintf(os.Stderr, "Failed to fire async hook with error: %v for logrus entry: %s", err, string(formatted))
 }

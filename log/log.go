@@ -42,12 +42,14 @@ type RotationConfig struct {
 }
 
 // MustInitFromViper initializes the logging system using configurations from viper.
+// It shares MustInit's startup-only initialization contract; call only one MustInit* entry point.
 //
 // Precondition:
 //   - Viper must be initialized with appropriate configurations before calling this function.
 //
-// Panics:
-//   - This function will panic if it encounters any errors during initialization.
+// Configuration decoding errors are logged with logrus.Fatal. Other initialization
+// errors follow MustInit's fatal error handling. With Logrus's default exit function,
+// the process exits with code 1 without running Go defers; recover cannot intercept this exit.
 func MustInitFromViper() {
 	var conf LoggingConfig
 	viperUtil.MustUnmarshalKey("log", &conf)
@@ -57,6 +59,8 @@ func MustInitFromViper() {
 
 // MustInitWithCtxFromViper performs the similar initializations as `MustInitFromViper` with
 // support for graceful shutdown by accepting a context and a wait group.
+// It shares MustInit's startup-only initialization contract; call only one MustInit* entry point.
+// Configuration decoding and initialization errors follow MustInitFromViper's fatal error handling.
 //
 // Parameters:
 //   - ctx: The context for graceful shutdown handling.
@@ -69,15 +73,24 @@ func MustInitWithCtxFromViper(ctx context.Context, wg *sync.WaitGroup) {
 }
 
 // MustInit sets up the logging system according to the provided LoggingConfig and log level.
-// It configures the log level, adds an alert hook, sets a text formatter, and adapts the logger
-// for Geth compatibility.
-// In case of any error during initialization, this function will panic.
+// It configures the log levels, output, alert hook, text formatter and module loggers.
+// Detected log level, output configuration and alert hook initialization errors are logged
+// with logrus.Fatal. With Logrus's default exit function, the process exits with code 1
+// without running Go defers; recover cannot intercept this exit.
+//
+// Call exactly one of the MustInit* entry points once during process startup, before
+// concurrent logging or creating module entries. Repeated or concurrent initialization
+// and runtime reconfiguration are unsupported. Reinitialization can append duplicate
+// alert hooks and does not stop existing workers or close replaced output writers.
+// This contract is the caller's responsibility; repeated calls are not rejected.
 func MustInit(conf LoggingConfig) {
 	mustInit(conf, nil, nil)
 }
 
 // MustInitWithCtx performs the similiar initializations as `MustInit` with support for
 // graceful shutdown by accepting a context and a wait group.
+// It shares MustInit's startup-only initialization contract; call only one MustInit* entry point.
+// Initialization errors follow MustInit's fatal error handling.
 func MustInitWithCtx(ctx context.Context, wg *sync.WaitGroup, conf LoggingConfig) {
 	mustInit(conf, ctx, wg)
 }
@@ -85,7 +98,7 @@ func MustInitWithCtx(ctx context.Context, wg *sync.WaitGroup, conf LoggingConfig
 // mustInit initializes the logging system with the provided configuration and sets up an alert hook.
 // It supports graceful shutdown by optionally using a context and wait group for the alert hook registration.
 func mustInit(conf LoggingConfig, ctx context.Context, wg *sync.WaitGroup) {
-	mustInitLogLevels(conf.Level)
+	moduleLevels := mustInitLogLevels(conf.Level)
 
 	// Set up the output.
 	if err := setupOutput(conf.Output); err != nil {
@@ -111,6 +124,7 @@ func mustInit(conf LoggingConfig, ctx context.Context, wg *sync.WaitGroup) {
 
 	// Apply the configured formatter to the logger.
 	logrus.SetFormatter(formatter)
+	initModuleLoggers(moduleLevels)
 
 	// Log a debug message indicating successful initialization along with the effective configuration.
 	logrus.WithField("config", fmt.Sprintf("%+v", conf)).Debug("Log initialized")
