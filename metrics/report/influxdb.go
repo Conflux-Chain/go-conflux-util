@@ -70,6 +70,8 @@ func InfluxDB(config InfluxDBConfig, reg metrics.Registry, d time.Duration) {
 }
 
 // InfluxDBOnce reports metrics to an InfluxDB for the given metrics.Registry.
+// Measurements that cannot be encoded are skipped.
+// A nil error does not guarantee that every registered metric was reported.
 func InfluxDBOnce(config InfluxDBConfig, reg metrics.Registry) error {
 	reporter := influxdbReporter{
 		config: config,
@@ -155,6 +157,8 @@ func (r *influxdbReporter) send(timestamp int64) error {
 			return
 		}
 
+		// Skip measurements that cannot be encoded (e.g. NaN or Inf field values)
+		// so invalid metrics do not prevent valid metrics from being reported.
 		if p, err := client.NewPoint(measurement, r.config.Tags, fields, now); err == nil {
 			bps.AddPoint(p)
 		}
