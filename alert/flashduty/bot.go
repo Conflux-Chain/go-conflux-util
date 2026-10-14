@@ -33,6 +33,8 @@ func NewRobot(pushUri, secret string) *Robot {
 }
 
 // Send sends a flashduty message.
+// It uses ctx for cancellation and does not add a timeout. Callers should provide
+// a context with a deadline to bound the request duration.
 func (r Robot) Send(ctx context.Context, title, level, alertKey, description string, data map[string]string) error {
 	return r.send(ctx, &message{
 		Title:       title,

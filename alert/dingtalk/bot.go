@@ -31,6 +31,8 @@ func NewRobot(webhook, secret string) *Robot {
 }
 
 // Send sends a dingtalk message.
+// It uses ctx for cancellation and does not add a timeout. Callers should provide
+// a context with a deadline to bound the request duration.
 func (r Robot) Send(ctx context.Context, msgType, title, text string, atMobiles []string, isAtAll bool) error {
 	switch msgType {
 	case MsgTypeText:
@@ -43,6 +45,7 @@ func (r Robot) Send(ctx context.Context, msgType, title, text string, atMobiles 
 }
 
 // SendText send a text type message.
+// As with Send, callers should provide a context with a deadline.
 func (r Robot) SendText(ctx context.Context, content string, atMobiles []string, isAtAll bool) error {
 	return r.send(ctx, &textMessage{
 		MsgType: MsgTypeText,
@@ -57,6 +60,7 @@ func (r Robot) SendText(ctx context.Context, content string, atMobiles []string,
 }
 
 // SendMarkdown send a markdown type message.
+// As with Send, callers should provide a context with a deadline.
 func (r Robot) SendMarkdown(ctx context.Context, title, text string, atMobiles []string, isAtAll bool) error {
 	return r.send(ctx, &markdownMessage{
 		MsgType: MsgTypeMarkdown,

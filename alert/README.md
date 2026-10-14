@@ -43,8 +43,15 @@ notifyCh := alert.DefaultManager().Channel(chID)
 
 Once the channel is initialized, you can send a notification message through the channel:
 
+FlashDuty and DingTalk use the supplied context for cancellation and do not add
+a default request timeout. Set a deadline when calling them directly; the example
+below allows three seconds. The logrus alert hook sets its own `SendTimeout`.
+
 ```go
-notifyCh.Send(context.Background(), &alert.Notification{
+ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+defer cancel()
+
+notifyCh.Send(ctx, &alert.Notification{
     Title:    "Alert testing",
     Severity: alert.SeverityLow,
     Content: `This is a test notification message`,
