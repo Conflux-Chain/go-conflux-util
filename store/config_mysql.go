@@ -2,7 +2,7 @@ package store
 
 import (
 	"fmt"
-	"strings"
+	"net/url"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -34,8 +34,7 @@ func (config *MysqlConfig) Open(dbName ...string) gorm.Dialector {
 	dsn := fmt.Sprintf("%v:%v@tcp(%v)/%v?parseTime=true", config.Username, config.Password, config.Host, database)
 
 	if len(config.Location) > 0 {
-		// escape "/" as "%2F"
-		dsn += fmt.Sprintf("&loc=%v", strings.ReplaceAll(config.Location, "/", "%2F"))
+		dsn += fmt.Sprintf("&loc=%v", url.QueryEscape(config.Location))
 	}
 
 	return mysql.Open(dsn)
