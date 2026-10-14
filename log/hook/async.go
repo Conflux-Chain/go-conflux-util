@@ -220,7 +220,7 @@ func (h *AsyncHook) notify(msg string, fields logrus.Fields) {
 // outputStderr writes the error and the log entry to the standard error output.
 func (h *AsyncHook) outputStderr(err error, entry *logrus.Entry) {
 	formatter := logrus.TextFormatter{}
-	entryStr, _ := formatter.Format(entry)
+	formatted, _ := formatter.Format(entry)
 
-	fmt.Fprintf(os.Stderr, "Failed to fire async hook with error: %v for logrus entry: %v\n", err, entryStr)
+	fmt.Fprintf(os.Stderr, "Failed to fire async hook with error: %v for logrus entry: %s", err, string(formatted))
 }
