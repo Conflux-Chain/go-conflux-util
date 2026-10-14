@@ -29,9 +29,8 @@ type Config struct {
 }
 
 // MustInitFromViper inits metrics from viper settings.
-// This should be called before any metric (e.g. timer, histogram) created.
-// Because `metrics.Enabled` in go-ethereum is `false` by default, which leads to noop
-// metric created for static variables in any package.
+// Call it only once during application startup, before creating or using metrics.
+// Like Init, it does not support reinitialization or dynamic disabling.
 //
 // Note that viper must be initialized before this, otherwise metrics
 // settings may not be loaded correctly. Besides, this init will panic
@@ -44,6 +43,10 @@ func MustInitFromViper() {
 }
 
 // Init inits metrics with provided metrics configurations.
+// Call it only once during application startup, before creating or using metrics.
+// An enabled InfluxDB reporter runs for the lifetime of the process and cannot be
+// stopped through this API. Reinitialization and dynamic disabling are unsupported:
+// another enabled call starts another reporter, and disabling does not stop an existing one.
 func Init(config Config) {
 	metrics.UseNilMetrics = !config.Enabled
 

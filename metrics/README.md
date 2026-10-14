@@ -6,6 +6,13 @@ This package enhances the original [go-metrics](https://github.com/rcrowley/go-m
 
 It is highly recommended to initialize metrics via [config](../config/README.md). However, you could still initialize metrics programmatically.
 
+Call `Init` or `MustInitFromViper` only once during application startup, before creating or using metrics.
+An enabled InfluxDB reporter runs for the lifetime of the process and has no stop mechanism.
+Reinitialization and dynamic disabling are unsupported: initializing again with InfluxDB enabled starts
+another reporter, while calling `Init` with `Enabled: false` does not stop an existing reporter.
+When using `report.InfluxDB` directly, it blocks after successful client initialization and is typically
+run in a goroutine.
+
 ```go
 package main
 

@@ -55,6 +55,8 @@ func (r *influxdbReporter) makeClient() error {
 }
 
 // InfluxDB reports metrics to specified InfluxDB for the given metrics.Registry at each d interval.
+// After successful client initialization, it blocks and reports for the lifetime
+// of the process; callers typically run it in a goroutine. It has no stop mechanism.
 func InfluxDB(config InfluxDBConfig, reg metrics.Registry, d time.Duration) {
 	reporter := influxdbReporter{
 		config: config,
