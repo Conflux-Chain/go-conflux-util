@@ -16,6 +16,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+const maxResponseBodySize = 1 << 20 // 1 MiB
+
 func ErrMsgTypeNotSupported(msgType string) error {
 	return errors.Errorf("message type %s not supported", msgType)
 }
@@ -31,6 +33,9 @@ func NewRobot(webhook, secret string) *Robot {
 }
 
 // Send sends a dingtalk message.
+// It uses ctx for cancellation and does not add a timeout. Callers should provide
+// a context with a deadline to bound the request duration.
+// Redirects are rejected; configure the final webhook URL.
 func (r Robot) Send(ctx context.Context, msgType, title, text string, atMobiles []string, isAtAll bool) error {
 	switch msgType {
 	case MsgTypeText:
@@ -43,6 +48,7 @@ func (r Robot) Send(ctx context.Context, msgType, title, text string, atMobiles 
 }
 
 // SendText send a text type message.
+// As with Send, callers should provide a context with a deadline.
 func (r Robot) SendText(ctx context.Context, content string, atMobiles []string, isAtAll bool) error {
 	return r.send(ctx, &textMessage{
 		MsgType: MsgTypeText,
@@ -57,6 +63,7 @@ func (r Robot) SendText(ctx context.Context, content string, atMobiles []string,
 }
 
 // SendMarkdown send a markdown type message.
+// As with Send, callers should provide a context with a deadline.
 func (r Robot) SendMarkdown(ctx context.Context, title, text string, atMobiles []string, isAtAll bool) error {
 	return r.send(ctx, &markdownMessage{
 		MsgType: MsgTypeMarkdown,
@@ -82,9 +89,9 @@ func (r Robot) send(ctx context.Context, msg interface{}) error {
 		return errors.WithMessage(err, "failed to marshal message")
 	}
 
-	webURL := r.webHook
-	if len(r.secret) != 0 {
-		webURL += genSignedURL(r.secret)
+	webURL, err := genSignedURL(r.webHook, r.secret)
+	if err != nil {
+		return errors.WithMessage(err, "failed to generate signed URL")
 	}
 
 	req, errRequest := http.NewRequestWithContext(ctx, http.MethodPost, webURL, bytes.NewReader(jm))
@@ -93,15 +100,26 @@ func (r Robot) send(ctx context.Context, msg interface{}) error {
 	}
 
 	req.Header.Add("Content-Type", "application/json")
-	resp, errDo := http.DefaultClient.Do(req)
+	client := *http.DefaultClient
+	client.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	resp, errDo := client.Do(req)
 	if errDo != nil {
 		return errors.WithMessage(errDo, "failed to do http request")
 	}
 	defer resp.Body.Close()
 
-	body, errReadBody := io.ReadAll(resp.Body)
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("dingtalk send failed: HTTP %s", resp.Status)
+	}
+
+	body, errReadBody := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodySize+1))
 	if errReadBody != nil {
 		return errors.WithMessage(errReadBody, "failed to read http response body")
+	}
+	if len(body) > maxResponseBodySize {
+		return fmt.Errorf("dingtalk response body exceeds %d bytes", maxResponseBodySize)
 	}
 
 	var dr dingResponse
@@ -116,12 +134,23 @@ func (r Robot) send(ctx context.Context, msg interface{}) error {
 	return nil
 }
 
-func genSignedURL(secret string) string {
+func genSignedURL(webhook, secret string) (string, error) {
+	if len(secret) == 0 {
+		return webhook, nil
+	}
+
+	webURL, err := url.Parse(webhook)
+	if err != nil {
+		return "", err
+	}
+
 	timeStr := fmt.Sprintf("%d", time.Now().UnixNano()/1e6)
 	sign := fmt.Sprintf("%s\n%s", timeStr, secret)
-	signData := computeHmacSha256(sign, secret)
-	encodeURL := url.QueryEscape(signData)
-	return fmt.Sprintf("&timestamp=%s&sign=%s", timeStr, encodeURL)
+	query := webURL.Query()
+	query.Set("timestamp", timeStr)
+	query.Set("sign", computeHmacSha256(sign, secret))
+	webURL.RawQuery = query.Encode()
+	return webURL.String(), nil
 }
 
 func computeHmacSha256(message string, secret string) string {

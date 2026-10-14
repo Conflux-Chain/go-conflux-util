@@ -2,7 +2,12 @@ package dingtalk
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -40,4 +45,133 @@ func TestSendMarkdown(t *testing.T) {
 	// Please manually check if message sent to dingtalk group chat
 	err := robot.SendMarkdown(ctx, "test", "# Hello, test!", nil, false)
 	assert.NoError(t, err)
+}
+
+func TestSendResponse(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		status    int
+		response  string
+		wantError string
+	}{
+		{"success", http.StatusOK, `{"errcode":0,"errmsg":"ok"}`, ""},
+		{"provider error", http.StatusOK, `{"errcode":310000,"errmsg":"invalid token"}`, "dingrobot send failed: invalid token"},
+		{"unauthorized", http.StatusUnauthorized, `{}`, "dingtalk send failed: HTTP 401 Unauthorized"},
+		{"rate limited", http.StatusTooManyRequests, `{}`, "dingtalk send failed: HTTP 429 Too Many Requests"},
+		{"server error", http.StatusInternalServerError, `{}`, "dingtalk send failed: HTTP 500 Internal Server Error"},
+		{"non-JSON error", http.StatusBadGateway, "upstream unavailable", "dingtalk send failed: HTTP 502 Bad Gateway"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tc.status)
+				io.WriteString(w, tc.response)
+			}))
+			defer server.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			err := NewRobot(server.URL, "").SendText(ctx, "test", nil, false)
+			if tc.wantError == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorContains(t, err, tc.wantError)
+			}
+		})
+	}
+}
+
+func TestSendRejectsRedirects(t *testing.T) {
+	for _, status := range []int{
+		http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther,
+		http.StatusTemporaryRedirect, http.StatusPermanentRedirect,
+	} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/hook" {
+					http.Redirect(w, r, "/target", status)
+					return
+				}
+				t.Error("unexpected request to redirect target")
+				w.Header().Set("Content-Type", "application/json")
+				io.WriteString(w, `{"errcode":0,"errmsg":"ok"}`)
+			}))
+			defer server.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			err := NewRobot(server.URL+"/hook", "").SendText(ctx, "test", nil, false)
+			assert.ErrorContains(t, err, "dingtalk send failed: HTTP")
+			assert.ErrorContains(t, err, http.StatusText(status))
+		})
+	}
+}
+
+func TestSendQueryParameters(t *testing.T) {
+	for _, tc := range []struct {
+		name, path, secret, wantToken string
+	}{
+		{"no query", "/hook", "test-secret", ""},
+		{"access token", "/hook?access_token=test%2Btoken", "test-secret", "test+token"},
+		{"replace signature", "/hook?access_token=test-token&timestamp=old&sign=old&sign=older", "test-secret", "test-token"},
+		{"unsigned", "/hook?access_token=test-token", "", "test-token"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, "/hook", r.URL.Path)
+				query := r.URL.Query()
+				assert.Equal(t, tc.wantToken, query.Get("access_token"))
+				if tc.secret == "" {
+					assert.NotContains(t, query, "timestamp")
+					assert.NotContains(t, query, "sign")
+				} else {
+					timestamp := query.Get("timestamp")
+					_, err := strconv.ParseInt(timestamp, 10, 64)
+					assert.NoError(t, err)
+					assert.Len(t, query["timestamp"], 1)
+					assert.Len(t, query["sign"], 1)
+					assert.Equal(t, computeHmacSha256(timestamp+"\n"+tc.secret, tc.secret), query.Get("sign"))
+				}
+				w.Header().Set("Content-Type", "application/json")
+				io.WriteString(w, `{"errcode":0,"errmsg":"ok"}`)
+			}))
+			defer server.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			err := NewRobot(server.URL+tc.path, tc.secret).SendText(ctx, "test", nil, false)
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestSendResponseSizeLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		size int
+	}{
+		{"at limit", 1 << 20},
+		{"over limit", (1 << 20) + 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			response := `{"errcode":0,"errmsg":"ok"}`
+			response += strings.Repeat(" ", tc.size-len(response))
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				// Send without Content-Length to exercise the read limit.
+				w.(http.Flusher).Flush()
+				io.WriteString(w, response)
+			}))
+			defer server.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			err := NewRobot(server.URL, "").SendText(ctx, "test", nil, false)
+			if tc.size == 1<<20 {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorContains(t, err, "response body exceeds 1048576 bytes")
+			}
+		})
+	}
 }

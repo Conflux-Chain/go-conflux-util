@@ -7,24 +7,37 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/pkg/errors"
 )
+
+const maxResponseBodySize = 1 << 20 // 1 MiB
 
 // Robot represents a flashduty custom robot that can send messages to groups.
 type Robot struct {
 	pushUri string
 }
 
+// NewRobot creates a robot. A non-empty secret overrides the webhook URL's
+// integration_key parameter.
 func NewRobot(pushUri, secret string) *Robot {
-	webURL := pushUri
 	if len(secret) != 0 {
-		webURL += fmt.Sprintf("?integration_key=%s", secret)
+		// Leave invalid URLs unchanged so Send reports the error.
+		if webhook, err := url.Parse(pushUri); err == nil {
+			query := webhook.Query()
+			query.Set("integration_key", secret)
+			webhook.RawQuery = query.Encode()
+			pushUri = webhook.String()
+		}
 	}
-	return &Robot{pushUri: webURL}
+	return &Robot{pushUri: pushUri}
 }
 
 // Send sends a flashduty message.
+// It uses ctx for cancellation and does not add a timeout. Callers should provide
+// a context with a deadline to bound the request duration.
+// Redirects are rejected; configure the final webhook URL.
 func (r Robot) Send(ctx context.Context, title, level, alertKey, description string, data map[string]string) error {
 	return r.send(ctx, &message{
 		Title:       title,
@@ -70,24 +83,35 @@ func (r Robot) send(ctx context.Context, msg interface{}) error {
 	}
 
 	req.Header.Add("Content-Type", "application/json")
-	resp, errDo := http.DefaultClient.Do(req)
+	client := *http.DefaultClient
+	client.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	resp, errDo := client.Do(req)
 	if errDo != nil {
 		return errors.WithMessage(errDo, "failed to do http request")
 	}
 	defer resp.Body.Close()
 
-	body, errReadBody := io.ReadAll(resp.Body)
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("flashduty send failed: HTTP %s", resp.Status)
+	}
+
+	body, errReadBody := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodySize+1))
 	if errReadBody != nil {
 		return errors.WithMessage(errReadBody, "failed to read http response body")
+	}
+	if len(body) > maxResponseBodySize {
+		return fmt.Errorf("flashduty response body exceeds %d bytes", maxResponseBodySize)
 	}
 
 	var fdr response
 	err = json.Unmarshal(body, &fdr)
 	if err != nil {
-		return errors.WithMessagef(err, "failed to unmarshal response: %s", string(body))
+		return errors.WithMessage(err, "failed to unmarshal response")
 	}
 	if len(fdr.Error.Code) > 0 {
-		return errors.WithMessage(err, "flashDutyRobot send failed")
+		return errors.WithMessage(&fdr.Error, "flashDutyRobot send failed")
 	}
 
 	return nil
