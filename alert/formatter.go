@@ -321,7 +321,13 @@ func NewSmtpHtmlFormatter(
 	return &SmtpHtmlFormatter{conf: conf, htmlFormatter: hf}, nil
 }
 
+// Format builds an HTML email and rejects titles containing CR or LF to prevent
+// the title from introducing additional email headers.
 func (f *SmtpHtmlFormatter) Format(note *Notification) (msg string, err error) {
+	if strings.ContainsAny(note.Title, "\r\n") {
+		return "", errors.WithMessage(ErrInvalidNotification, "SMTP title must not contain CR or LF")
+	}
+
 	body, err := f.htmlFormatter.Format(note)
 	if err != nil {
 		return "", err
