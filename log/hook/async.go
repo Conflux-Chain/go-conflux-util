@@ -18,7 +18,7 @@ var ErrAsyncQueueFull = errors.New("async hook queue is full")
 
 // AsyncOption defines configuration options for the AsyncHook.
 type AsyncOption struct {
-	NumWorkers  int           // Number of worker goroutines. If set to 0 (default), async mode is disabled.
+	NumWorkers  int           // Number of worker goroutines. Non-positive values disable async mode (default: 0).
 	QueueSize   int           `default:"60"` // Maximum number of queued jobs.
 	StopTimeout time.Duration `default:"5s"` // Timeout duration before forced exit of async processing.
 }
@@ -38,19 +38,25 @@ type AsyncHook struct {
 // graceful shutdown handling.
 // It's designed to work harmoniously with the application's shutdown process to ensure
 // no logs are lost during shutdown.
+// If opts.NumWorkers <= 0, entries are handled synchronously without starting background work.
 func NewAsyncHookWithCtx(
 	ctx context.Context, wg *sync.WaitGroup, hook logrus.Hook, opts AsyncOption) *AsyncHook {
 	h := newAsyncHook(hook, opts)
-	h.startWithCtx(ctx, wg)
+	if opts.NumWorkers > 0 {
+		h.startWithCtx(ctx, wg)
+	}
 
 	return h
 }
 
 // NewAsyncHook initializes and starts a standard AsyncHook without graceful shutdown handling.
 // Use this when you don't require integration with a graceful shutdown mechanism.
+// If opts.NumWorkers <= 0, entries are handled synchronously without starting background work.
 func NewAsyncHook(hook logrus.Hook, opts AsyncOption) *AsyncHook {
 	h := newAsyncHook(hook, opts)
-	h.start()
+	if opts.NumWorkers > 0 {
+		h.start()
+	}
 
 	return h
 }
