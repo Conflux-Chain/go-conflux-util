@@ -1,3 +1,5 @@
+//go:build integration
+
 package dlock
 
 import (
@@ -39,7 +41,7 @@ func setup() error {
 	host := os.Getenv("TEST_MYSQL_HOST")
 	database := os.Getenv("TEST_MYSQL_DB")
 	if len(host) == 0 || len(database) == 0 {
-		return nil
+		return errors.New("integration requires TEST_MYSQL_HOST and TEST_MYSQL_DB")
 	}
 
 	conf := store.Config{

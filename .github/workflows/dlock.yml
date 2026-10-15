@@ -1,0 +1,31 @@
+name: dlock safety
+on: [push, pull_request]
+jobs:
+  mysql:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        mysql: ['8.0', '8.4']
+    services:
+      mysql:
+        image: mysql:${{ matrix.mysql }}
+        env:
+          MYSQL_ROOT_PASSWORD: integration
+          MYSQL_DATABASE: dlock_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -pintegration"
+          --health-interval=10s --health-timeout=5s --health-retries=12
+    env:
+      TEST_MYSQL_HOST: 127.0.0.1:3306
+      TEST_MYSQL_USER: root
+      TEST_MYSQL_PWD: integration
+      TEST_MYSQL_DB: dlock_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test -race ./dlock
+      - run: go test -race -tags integration -count=1 -timeout=180s ./dlock
+      - run: go vet ./dlock
