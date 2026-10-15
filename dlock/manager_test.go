@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Conflux-Chain/go-conflux-util/store"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -107,4 +109,22 @@ func TestInvalidLease(t *testing.T) {
 		del: func(context.Context, string, string) (bool, error) { return true, nil },
 	})
 	assert.NoError(t, manager.Release(ctx, NewLockIntent("key", "nonce", 0)))
+}
+
+func TestManagerRequiresMySQL(t *testing.T) {
+	for _, conf := range []store.Config{{}, store.NewMemoryConfig()} {
+		manager, err := NewLockManagerFromConfig(conf)
+		assert.Nil(t, manager)
+		assert.ErrorIs(t, err, ErrMySQLRequired)
+	}
+	viper.Reset()
+	t.Cleanup(viper.Reset)
+	manager, err := OpenLockManagerFromViper()
+	assert.Nil(t, manager)
+	assert.ErrorIs(t, err, ErrMySQLRequired)
+
+	viper.Set("store.maxOpenConns", "not-an-integer")
+	manager, err = OpenLockManagerFromViper()
+	assert.Nil(t, manager)
+	assert.ErrorContains(t, err, "MaxOpenConns")
 }

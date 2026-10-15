@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/Conflux-Chain/go-conflux-util/store"
+	"github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -15,6 +17,7 @@ var (
 	ErrInvalidLockIntent     = errors.New("lock intent must not be nil")
 	ErrEmptyNonce            = errors.New("lock nonce must not be empty")
 	ErrInvalidLease          = errors.New("lock lease must be positive")
+	ErrMySQLRequired         = errors.New("dlock requires MySQL configuration")
 )
 
 // Backend defines the interface for the underlying storage backend of the distributed lock.
@@ -72,10 +75,36 @@ func NewLockManager(be Backend) *LockManager {
 	return &LockManager{backend: be}
 }
 
+// NewLockManagerFromViper opens a MySQL manager and exits the process on failure.
+// Use OpenLockManagerFromViper to handle initialization errors.
 func NewLockManagerFromViper() *LockManager {
-	conf := store.MustNewConfigFromViper()
-	db := conf.MustOpenOrCreate(&Dlock{})
-	return NewLockManager(NewMySQLBackend(db))
+	manager, err := OpenLockManagerFromViper()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to initialize distributed lock manager")
+	}
+	return manager
+}
+
+// OpenLockManagerFromViper opens a MySQL manager using the store configuration.
+func OpenLockManagerFromViper() (*LockManager, error) {
+	var conf store.Config
+	if err := viper.UnmarshalKey("store", &conf); err != nil {
+		return nil, err
+	}
+	return NewLockManagerFromConfig(conf)
+}
+
+// NewLockManagerFromConfig opens a MySQL manager with the supplied pool settings.
+// MySQL takes precedence if both MySQL and SQLite are configured.
+func NewLockManagerFromConfig(conf store.Config) (*LockManager, error) {
+	if conf.Mysql == nil {
+		return nil, ErrMySQLRequired
+	}
+	db, err := conf.OpenOrCreate(&Dlock{})
+	if err != nil {
+		return nil, err
+	}
+	return NewLockManager(NewMySQLBackend(db)), nil
 }
 
 // Acquire tries to acquire a distributed lock with the given key and lease duration.
