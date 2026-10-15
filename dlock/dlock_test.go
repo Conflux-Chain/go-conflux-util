@@ -2,6 +2,8 @@ package dlock
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"os"
 	"testing"
 	"time"
@@ -10,6 +12,7 @@ import (
 	"github.com/mcuadros/go-defaults"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -20,7 +23,7 @@ var (
 // `TEST_MYSQL_HOST`: MySQL database host;
 // `TEST_MYSQL_USER`: MySQL database username;
 // `TEST_MYSQL_PWD`:  MySQL database password;
-// `TEST_MYSQL_DB`:   MySQL database database.
+// `TEST_MYSQL_DB`:   dedicated MySQL test database, never a production database.
 func TestMain(m *testing.M) {
 	if err := setup(); err != nil {
 		panic(errors.WithMessage(err, "failed to setup"))
@@ -60,59 +63,71 @@ func setup() error {
 
 func teardown() error {
 	if testMysqlBe != nil {
-		db, err := testMysqlBe.db.DB()
-		if err == nil {
-			return db.Close()
-		}
+		return store.NewStore(testMysqlBe.db).Close()
 	}
 
 	return nil
 }
 
-func TestMysqlBackend(t *testing.T) {
-	if testMysqlBe == nil {
-		t.SkipNow()
-	}
+func testID(t *testing.T) string {
+	t.Helper()
+	var id [16]byte
+	_, err := rand.Read(id[:])
+	require.NoError(t, err)
+	return hex.EncodeToString(id[:])
+}
 
+func mysqlTestKey(t *testing.T) string {
+	t.Helper()
+	if testMysqlBe == nil {
+		t.Skip("set TEST_MYSQL_HOST and TEST_MYSQL_DB to run MySQL integration tests")
+	}
+	key := testID(t)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		assert.NoError(t, testMysqlBe.db.WithContext(ctx).Where("`key` = ?", key).Delete(&Dlock{}).Error)
+	})
+	return key
+}
+
+func TestMysqlBackend(t *testing.T) {
 	ctx := context.Background()
-	lockkey := "shared_key"
+	lockkey := mysqlTestKey(t)
+	nonce0, nonce1 := testID(t), testID(t)
 	lease := 15 * time.Second
 
-	ok, err := testMysqlBe.WriteEntry(ctx, lockkey, "node0", lease)
+	ok, err := testMysqlBe.WriteEntry(ctx, lockkey, nonce0, lease)
 	assert.NoError(t, err)
 	assert.True(t, ok)
 
-	ok, err = testMysqlBe.WriteEntry(ctx, lockkey, "node1", lease)
+	ok, err = testMysqlBe.WriteEntry(ctx, lockkey, nonce1, lease)
 	assert.NoError(t, err)
 	assert.False(t, ok)
 
-	ok, err = testMysqlBe.DelEntry(ctx, lockkey, "node1")
+	ok, err = testMysqlBe.DelEntry(ctx, lockkey, nonce1)
 	assert.NoError(t, err)
 	assert.False(t, ok)
 
-	ok, err = testMysqlBe.DelEntry(ctx, lockkey, "node0")
+	ok, err = testMysqlBe.DelEntry(ctx, lockkey, nonce0)
 	assert.NoError(t, err)
 	assert.True(t, ok)
 }
 
 func TestLockManager(t *testing.T) {
-	if testMysqlBe == nil {
-		t.SkipNow()
-	}
-
+	lockKey := mysqlTestKey(t)
 	lockman := NewLockManager(testMysqlBe)
 
-	lockKey := "dlock_key"
 	lease := 15 * time.Second
 
-	li0 := NewLockIntent(lockKey, "node0", lease)
+	li0 := NewLockIntent(lockKey, testID(t), lease)
 	err := lockman.Acquire(context.Background(), li0)
 	assert.NoError(t, err)
 
 	err = lockman.Acquire(context.Background(), li0)
 	assert.NoError(t, err)
 
-	li1 := NewLockIntent(lockKey, "node1", lease)
+	li1 := NewLockIntent(lockKey, testID(t), lease)
 	err = lockman.Acquire(context.Background(), li1)
 	assert.ErrorIs(t, err, ErrLockAcquisitionFailed)
 
