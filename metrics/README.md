@@ -6,6 +6,18 @@ This package enhances the original [go-metrics](https://github.com/rcrowley/go-m
 
 It is highly recommended to initialize metrics via [config](../config/README.md). However, you could still initialize metrics programmatically.
 
+Call `Init` or `MustInitFromViper` only once during application startup, before creating or using metrics.
+An enabled InfluxDB reporter runs for the lifetime of the process and has no stop mechanism.
+Reinitialization and dynamic disabling are unsupported: initializing again with InfluxDB enabled starts
+another reporter, while calling `Init` with `Enabled: false` does not stop an existing reporter.
+When using `report.InfluxDB` directly, it blocks after successful client initialization and is typically
+run in a goroutine.
+
+Programmatic initialization does not apply `default` tags. Set the reporting interval and HTTP timeout
+explicitly, as shown below. `Timeout` applies to both Ping and write requests; a non-positive value
+disables the HTTP timeout. Configuration decoding through this repository's Viper utility applies the
+`10s` default timeout.
+
 ```go
 package main
 
@@ -25,17 +37,28 @@ func main() {
 			DB:       "metrics_db",
 			Username: "user",
 			Password: "pass",
+			Timeout:  10 * time.Second,
 		},
 	})
 }
 
 ```
+
 ## Percentage Metric Type
 
-The `Percentage` metric type is used for percentage statistic, which ranges in [0,100]. E.g. 99.38 means 99.38%. There are 2 implementations available:
+The `Percentage` interface records samples with `Mark` and returns their marked percentage with `Value`.
+With samples, the value ranges from 0 to 100; for example, 99.38 means 99.38%.
+Without samples, including when all samples in a time window have expired, `Value` returns `NaN`.
+When metrics are disabled, constructors return a no-op implementation whose value is always 0.
 
-- `StandardPercentage`: is used for overall statistics.
-- `TimeWindowPercentage`: is used for statistics in the past period of time based on time window.
+Two constructors are available:
+
+- `NewPercentage`: records overall statistics.
+- `NewTimeWindowPercentage`: records statistics within a time window.
+
+The registration helpers wrap `Percentage` to implement `go-metrics.GaugeFloat64`.
+When a registered percentage returns `NaN`, InfluxDB reporting skips the measurement,
+and `GetMetrics` returns a `nil` value that is encoded as JSON `null`.
 
 See examples below:
 

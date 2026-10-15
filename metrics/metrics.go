@@ -22,20 +22,20 @@ const (
 type Config struct {
 	// switch to turn on or off metrics
 	Enabled bool
-	// interval to report metrics to influxdb
+	// Interval to report metrics to InfluxDB; must be positive when reporting is enabled.
+	// Direct calls to Init must set this explicitly; Init does not apply default tags.
 	ReportInterval time.Duration `default:"10s"`
 	// settings for influxdb to be reported to
 	InfluxDb *report.InfluxDBConfig
 }
 
 // MustInitFromViper inits metrics from viper settings.
-// This should be called before any metric (e.g. timer, histogram) created.
-// Because `metrics.Enabled` in go-ethereum is `false` by default, which leads to noop
-// metric created for static variables in any package.
+// Call it only once during application startup, before creating or using metrics.
+// Like Init, it does not support reinitialization or dynamic disabling.
 //
-// Note that viper must be initialized before this, otherwise metrics
-// settings may not be loaded correctly. Besides, this init will panic
-// and exit if any error happens.
+// Viper must be initialized first. Configuration decoding errors are logged with
+// logrus.Fatal and terminate the process; recover cannot catch this error path.
+// Init may panic on an invalid reporting interval, as described in its documentation.
 func MustInitFromViper() {
 	var config Config
 	viper.MustUnmarshalKey("metrics", &config)
@@ -44,7 +44,19 @@ func MustInitFromViper() {
 }
 
 // Init inits metrics with provided metrics configurations.
+// Call it only once during application startup, before creating or using metrics.
+// An enabled InfluxDB reporter runs for the lifetime of the process and cannot be
+// stopped through this API. Reinitialization and dynamic disabling are unsupported:
+// another enabled call starts another reporter, and disabling does not stop an existing one.
+// It panics if InfluxDB reporting is enabled and ReportInterval is not positive.
+// Reporter startup is asynchronous; returning does not guarantee that its client
+// was initialized successfully. Client creation failures are logged and stop the
+// reporter without terminating the process.
 func Init(config Config) {
+	if config.Enabled && config.InfluxDb != nil && config.ReportInterval <= 0 {
+		panic("metrics: ReportInterval must be positive when InfluxDB reporting is enabled")
+	}
+
 	metrics.UseNilMetrics = !config.Enabled
 
 	if !config.Enabled {

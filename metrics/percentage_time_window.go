@@ -7,10 +7,10 @@ import (
 )
 
 // NewTimeWindowPercentage constructs a new time window Percentage.
+// It panics if slotInterval is not positive, numSlots is less than two, or their
+// product exceeds time.Duration's range, even when metrics are disabled.
 func NewTimeWindowPercentage(slotInterval time.Duration, numSlots int) Percentage {
-	if slotInterval == 0 {
-		panic("slotInterval is zero")
-	}
+	validateTimeWindow(slotInterval, numSlots)
 
 	if numSlots <= 1 {
 		panic("numSlots too small")

@@ -20,7 +20,8 @@ type InfluxDBConfig struct {
 	// authenticated password
 	Password string
 
-	// Timeout for influxdb writes, defaults to no timeout.
+	// HTTP request timeout for both Ping and writes. The default tag supplies 10s when this field is zero.
+	// Direct configuration does not apply default tags; non-positive values disable the timeout.
 	Timeout time.Duration `default:"10s"`
 
 	// namespace for metrics reporting
@@ -35,19 +36,35 @@ type influxdbReporter struct {
 	client client.Client
 }
 
-func (r *influxdbReporter) makeClient() (err error) {
-	r.client, err = client.NewHTTPClient(client.HTTPConfig{
+func (r *influxdbReporter) makeClient() error {
+	newClient, err := client.NewHTTPClient(client.HTTPConfig{
 		Addr:     r.config.Host,
 		Username: r.config.Username,
 		Password: r.config.Password,
 		Timeout:  r.config.Timeout,
 	})
+	if err != nil {
+		return err
+	}
 
-	return
+	// Release the old client's idle connections before replacing its pool.
+	if r.client != nil {
+		r.client.Close()
+	}
+	r.client = newClient
+	return nil
 }
 
 // InfluxDB reports metrics to specified InfluxDB for the given metrics.Registry at each d interval.
+// After successful client initialization, it blocks and reports for the lifetime
+// of the process; callers typically run it in a goroutine. It has no stop mechanism.
+// It panics if d is not positive.
+// If client creation fails, it logs the error and returns.
 func InfluxDB(config InfluxDBConfig, reg metrics.Registry, d time.Duration) {
+	if d <= 0 {
+		panic("metrics/report: reporting interval must be positive")
+	}
+
 	reporter := influxdbReporter{
 		config: config,
 		reg:    reg,
@@ -62,6 +79,8 @@ func InfluxDB(config InfluxDBConfig, reg metrics.Registry, d time.Duration) {
 }
 
 // InfluxDBOnce reports metrics to an InfluxDB for the given metrics.Registry.
+// Measurements that cannot be encoded are skipped.
+// A nil error does not guarantee that every registered metric was reported.
 func InfluxDBOnce(config InfluxDBConfig, reg metrics.Registry) error {
 	reporter := influxdbReporter{
 		config: config,
@@ -88,7 +107,8 @@ func (r *influxdbReporter) run(d time.Duration) {
 	pingTicker := time.NewTicker(time.Second * 5)
 	defer pingTicker.Stop()
 
-	health := health.NewCounter()
+	// Track write results only: a successful Ping does not imply successful reporting.
+	reportHealth := health.NewCounter()
 
 	for {
 		var err error
@@ -108,9 +128,10 @@ func (r *influxdbReporter) run(d time.Duration) {
 					logrus.WithError(err).Info("Failed to recreate InfluxDB client")
 				}
 			}
+			continue
 		}
 
-		recovered, unhealthy, unrecovered, failures := health.OnError(err)
+		recovered, unhealthy, unrecovered, failures := reportHealth.OnError(err)
 		switch {
 		case unhealthy:
 			logrus.Error("InfluxDB reporter becomes unhealthy")
@@ -145,6 +166,8 @@ func (r *influxdbReporter) send(timestamp int64) error {
 			return
 		}
 
+		// Skip measurements that cannot be encoded (e.g. NaN or Inf field values)
+		// so invalid metrics do not prevent valid metrics from being reported.
 		if p, err := client.NewPoint(measurement, r.config.Tags, fields, now); err == nil {
 			bps.AddPoint(p)
 		}
