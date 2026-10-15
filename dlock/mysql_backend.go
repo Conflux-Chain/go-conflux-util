@@ -2,6 +2,7 @@ package dlock
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 	"time"
 
@@ -80,8 +81,8 @@ func (m *MySQLBackend) initializeSchema(ctx context.Context) error {
 	return nil
 }
 
-// ValidateSchema verifies identifier types, millisecond timestamps and a full
-// unique key index. It never modifies existing tables.
+// ValidateSchema verifies required columns, defaults and a full unique key
+// index. It never modifies existing tables.
 func (m *MySQLBackend) ValidateSchema(ctx context.Context) error {
 	if m.db.Dialector.Name() != "mysql" {
 		return ErrMySQLRequired
@@ -91,13 +92,18 @@ func (m *MySQLBackend) ValidateSchema(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	var columns []struct{ Name, Type, Nullable string }
-	err = db.Raw(`SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, IS_NULLABLE AS nullable
+	var columns []struct {
+		Name, Type, Nullable, Extra string
+		Default                     sql.NullString `gorm:"column:column_default"`
+	}
+	err = db.Raw(`SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, IS_NULLABLE AS nullable,
+ EXTRA AS extra, COLUMN_DEFAULT AS column_default
  FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?`, schema, table).Scan(&columns).Error
 	if err != nil {
 		return err
 	}
 	expected := map[string]string{
+		"id": "bigint unsigned", "version": "bigint unsigned",
 		"key": "varbinary(764)", "nonce": "longblob",
 		"expired_at": "datetime(3)", "created_at": "datetime(3)", "updated_at": "datetime(3)",
 	}
@@ -108,9 +114,15 @@ func (m *MySQLBackend) ValidateSchema(ctx context.Context) error {
 		}
 		got := column.Type
 		nullable := column.Nullable == "YES"
-		required := column.Name == "key" || column.Name == "nonce" || column.Name == "expired_at"
+		required := column.Name != "created_at" && column.Name != "updated_at"
 		if strings.ToLower(got) != want || (required && nullable) {
 			return errors.Wrapf(ErrIncompatibleSchema, "column %s requires %s", column.Name, want)
+		}
+		if column.Name == "version" && (!column.Default.Valid || column.Default.String != "0") {
+			return errors.Wrap(ErrIncompatibleSchema, "version requires default 0")
+		}
+		if column.Name == "id" && !strings.Contains(column.Extra, "auto_increment") {
+			return errors.Wrap(ErrIncompatibleSchema, "id requires auto_increment")
 		}
 		delete(expected, column.Name)
 	}

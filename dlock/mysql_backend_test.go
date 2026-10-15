@@ -87,6 +87,26 @@ func TestMySQLSchemaValidation(t *testing.T) {
 	}
 }
 
+func TestMySQLRequiredColumns(t *testing.T) {
+	for _, alteration := range []string{
+		"DROP COLUMN version",
+		"MODIFY version varchar(32) NOT NULL DEFAULT '0'",
+		"MODIFY version int unsigned NOT NULL DEFAULT 0",
+		"MODIFY version bigint unsigned NULL DEFAULT 0",
+		"ALTER version DROP DEFAULT",
+		"ALTER version SET DEFAULT 1",
+		"DROP COLUMN id",
+		"MODIFY id int unsigned NOT NULL AUTO_INCREMENT",
+		"MODIFY id bigint unsigned NOT NULL",
+	} {
+		t.Run(alteration, func(t *testing.T) {
+			be := mysqlTestTable(t)
+			require.NoError(t, be.db.Exec("ALTER TABLE ? "+alteration, clause.Table{Name: be.db.Statement.Table}).Error)
+			assert.ErrorIs(t, be.ValidateSchema(context.Background()), ErrIncompatibleSchema)
+		})
+	}
+}
+
 func mysqlTestDatabase(t *testing.T) store.Config {
 	t.Helper()
 	mysqlTestKey(t)
