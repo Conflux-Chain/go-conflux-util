@@ -59,6 +59,7 @@ func (r *influxdbReporter) makeClient() error {
 // After successful client initialization, it blocks and reports for the lifetime
 // of the process; callers typically run it in a goroutine. It has no stop mechanism.
 // It panics if d is not positive.
+// If client creation fails, it logs the error and returns.
 func InfluxDB(config InfluxDBConfig, reg metrics.Registry, d time.Duration) {
 	if d <= 0 {
 		panic("metrics/report: reporting interval must be positive")

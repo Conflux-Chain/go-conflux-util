@@ -33,9 +33,9 @@ type Config struct {
 // Call it only once during application startup, before creating or using metrics.
 // Like Init, it does not support reinitialization or dynamic disabling.
 //
-// Note that viper must be initialized before this, otherwise metrics
-// settings may not be loaded correctly. Besides, this init will panic
-// and exit if any error happens.
+// Viper must be initialized first. Configuration decoding errors are logged with
+// logrus.Fatal and terminate the process; recover cannot catch this error path.
+// Init may panic on an invalid reporting interval, as described in its documentation.
 func MustInitFromViper() {
 	var config Config
 	viper.MustUnmarshalKey("metrics", &config)
@@ -49,6 +49,9 @@ func MustInitFromViper() {
 // stopped through this API. Reinitialization and dynamic disabling are unsupported:
 // another enabled call starts another reporter, and disabling does not stop an existing one.
 // It panics if InfluxDB reporting is enabled and ReportInterval is not positive.
+// Reporter startup is asynchronous; returning does not guarantee that its client
+// was initialized successfully. Client creation failures are logged and stop the
+// reporter without terminating the process.
 func Init(config Config) {
 	if config.Enabled && config.InfluxDb != nil && config.ReportInterval <= 0 {
 		panic("metrics: ReportInterval must be positive when InfluxDB reporting is enabled")
