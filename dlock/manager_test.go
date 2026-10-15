@@ -95,3 +95,34 @@ func TestManagerBoundsCustomBackend(t *testing.T) {
 		t.Fatal("uncertain lease remained usable")
 	}
 }
+
+func TestValidationBeforeBackend(t *testing.T) {
+	f := &fakeBackend{}
+	m, _ := NewLockManager(f)
+	cases := []struct {
+		key string
+		ttl time.Duration
+	}{
+		{"", time.Second}, {string(make([]byte, 192)), time.Second}, {"key", 0}, {"key", -time.Second}, {"key", time.Nanosecond}, {"key", time.Microsecond}, {"key", time.Second + time.Nanosecond},
+	}
+	for _, c := range cases {
+		if _, err := m.Acquire(context.Background(), c.key, c.ttl); !errors.Is(err, ErrInvalidInput) {
+			t.Fatal(c, err)
+		}
+	}
+	if f.calls != 0 {
+		t.Fatal("invalid input reached backend")
+	}
+	if _, err := m.Acquire(nil, "key", time.Second); !errors.Is(err, ErrInvalidInput) {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := m.Acquire(ctx, "key", time.Second); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	var nilBackend *fakeBackend
+	if _, err := NewLockManager(nilBackend); err != ErrInvalidInput {
+		t.Fatal(err)
+	}
+}

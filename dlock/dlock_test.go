@@ -5,6 +5,7 @@ package dlock
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"os"
 	"testing"
@@ -153,5 +154,65 @@ func TestWaitConsumesAcquireBudget(t *testing.T) {
 	}
 	if err = <-done; err != ErrLeaseExpired {
 		t.Fatal("wait returned usable expired lease", err)
+	}
+}
+
+func TestConcurrentAcquire(t *testing.T) {
+	ctx := context.Background()
+	for _, expired := range []bool{false, true} {
+		key := uniqueKey(t)
+		if expired {
+			if _, err := testMysqlBe.Acquire(ctx, key, time.Second); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := testMysqlBe.db.Exec("UPDATE dlocks SET expired_at=UTC_TIMESTAMP(6)-INTERVAL 1 SECOND WHERE `key`=?", []byte(key)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		results := make(chan error, 16)
+		start := make(chan struct{})
+		for i := 0; i < 16; i++ {
+			go func() { <-start; _, err := testMysqlBe.Acquire(ctx, key, time.Second); results <- err }()
+		}
+		close(start)
+		wins := 0
+		for i := 0; i < 16; i++ {
+			err := <-results
+			if err == nil {
+				wins++
+			} else if err != ErrLockAcquisitionFailed {
+				t.Fatal("infrastructure error must not be hidden", err)
+			}
+		}
+		if wins != 1 {
+			t.Fatalf("expected one winner, got %d", wins)
+		}
+	}
+}
+func TestDirectBackendValidation(t *testing.T) {
+	for _, ttl := range []time.Duration{0, -1, time.Microsecond, time.Second + 1} {
+		if _, err := testMysqlBe.Acquire(context.Background(), uniqueKey(t), ttl); err != ErrInvalidInput {
+			t.Fatal(err)
+		}
+		if _, err := testMysqlBe.Renew(context.Background(), Grant{Key: "k", Token: [32]byte{1}}, ttl); err != ErrInvalidInput {
+			t.Fatal(err)
+		}
+	}
+	key := uniqueKey(t)
+	if _, err := testMysqlBe.Acquire(context.Background(), key+string(make([]byte, 192)), time.Second); err != ErrInvalidInput {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := testMysqlBe.Acquire(ctx, key, time.Second); err != context.Canceled {
+		t.Fatal(err)
+	}
+	closed, err := sql.Open("mysql", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed.Close()
+	if _, err = (&MySQLBackend{db: closed}).Acquire(context.Background(), key, time.Second); err == nil || err == ErrLockAcquisitionFailed {
+		t.Fatal("database error normalized", err)
 	}
 }

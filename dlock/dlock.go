@@ -75,6 +75,9 @@ func (m *LockManager) Acquire(ctx context.Context, key string, ttl time.Duration
 	if err != nil {
 		return nil, err
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if g.Key != key || g.Token == ([32]byte{}) || !time.Now().Before(g.ValidUntil) {
 		return nil, ErrLeaseExpired
 	}
@@ -133,6 +136,10 @@ func (l *Lease) Renew(ctx context.Context, ttl time.Duration) error {
 	oldDeadline := l.grant.ValidUntil
 	g, err := m.backend.Renew(ctx, l.grant, ttl)
 	if err != nil {
+		l.terminal = true
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		l.terminal = true
 		return err
 	}

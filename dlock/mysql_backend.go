@@ -147,7 +147,7 @@ func (m *MySQLBackend) Acquire(ctx context.Context, key string, ttl time.Duratio
 			return Grant{}, err
 		}
 	}
-	return finish(Grant{Key: key, Token: token}, start, ttl)
+	return finish(ctx, Grant{Key: key, Token: token}, start, ttl)
 }
 func (m *MySQLBackend) Renew(ctx context.Context, g Grant, ttl time.Duration) (Grant, error) {
 	if err := validate(ctx, g.Key, ttl); err != nil {
@@ -174,9 +174,12 @@ func (m *MySQLBackend) Renew(ctx context.Context, g Grant, ttl time.Duration) (G
 	if !time.Now().Before(g.ValidUntil) {
 		return Grant{}, ErrLeaseExpired
 	}
-	return finish(g, start, ttl)
+	return finish(ctx, g, start, ttl)
 }
-func finish(g Grant, start time.Time, ttl time.Duration) (Grant, error) {
+func finish(ctx context.Context, g Grant, start time.Time, ttl time.Duration) (Grant, error) {
+	if err := ctx.Err(); err != nil {
+		return Grant{}, err
+	}
 	g.ValidUntil = deadline(start, ttl)
 	if !time.Now().Before(g.ValidUntil) {
 		return Grant{}, ErrLeaseExpired
