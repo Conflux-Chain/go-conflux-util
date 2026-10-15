@@ -25,6 +25,7 @@ var (
 // `TEST_MYSQL_USER`: MySQL database username;
 // `TEST_MYSQL_PWD`:  MySQL database password;
 // `TEST_MYSQL_DB`:   dedicated MySQL test database, never a production database.
+// `TEST_MYSQL_REQUIRED=1` fails setup instead of skipping if configuration is absent.
 func TestMain(m *testing.M) {
 	if err := setup(); err != nil {
 		panic(errors.WithMessage(err, "failed to setup"))
@@ -43,6 +44,9 @@ func setup() error {
 	host := os.Getenv("TEST_MYSQL_HOST")
 	database := os.Getenv("TEST_MYSQL_DB")
 	if len(host) == 0 || len(database) == 0 {
+		if os.Getenv("TEST_MYSQL_REQUIRED") == "1" || host != "" || database != "" {
+			return errors.New("MySQL tests require both TEST_MYSQL_HOST and TEST_MYSQL_DB")
+		}
 		return nil
 	}
 

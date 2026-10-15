@@ -133,3 +133,12 @@ Fixed sets of keys bound table growth, but continually changing keys can accumul
 rows after holders exit. If needed, arrange bounded database cleanup that deletes
 only rows still expired at deletion time, without removing renewed leases. Atomic
 conditional writes and automatic cleanup are not implemented by this package.
+
+## Tests
+
+Manager unit tests run without a database. For MySQL integration tests, set
+`TEST_MYSQL_HOST`, `TEST_MYSQL_DB`, `TEST_MYSQL_USER` and `TEST_MYSQL_PWD`, then run
+`TEST_MYSQL_REQUIRED=1 go test -race -count=1 ./dlock`. Use a dedicated disposable
+MySQL 8.0 instance: the suite creates and drops isolated tables and databases,
+so the test account needs those privileges. CI supplies this environment and
+requires the integration tests; incomplete configuration fails instead of skipping.
