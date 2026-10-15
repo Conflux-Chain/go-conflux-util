@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -170,4 +171,30 @@ func TestManagerPoolOwnership(t *testing.T) {
 	pool, err = testMysqlBe.db.DB()
 	require.NoError(t, err)
 	assert.NoError(t, pool.Ping())
+}
+
+func TestConcurrentInitialization(t *testing.T) {
+	conf := mysqlTestDatabase(t)
+	const workers = 24
+	start := make(chan struct{})
+	results := make(chan error, workers)
+	var group sync.WaitGroup
+	for range workers {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			<-start
+			manager, err := NewLockManagerFromConfig(conf)
+			if err == nil {
+				err = manager.backend.(*MySQLBackend).ValidateSchema(context.Background())
+				assert.NoError(t, manager.Close())
+			}
+			results <- err
+		}()
+	}
+	close(start)
+	group.Wait()
+	for range workers {
+		require.NoError(t, <-results)
+	}
 }

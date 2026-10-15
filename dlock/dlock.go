@@ -114,12 +114,7 @@ func NewLockManagerFromConfig(conf store.Config) (*LockManager, error) {
 	backend := NewMySQLBackend(db)
 	manager := NewLockManager(backend)
 	manager.ownedStore = store.NewStore(db)
-	if !db.Migrator().HasTable(&Dlock{}) {
-		err = db.Migrator().CreateTable(&Dlock{})
-	}
-	if err == nil {
-		err = backend.ValidateSchema(context.Background())
-	}
+	err = backend.initializeSchema(context.Background())
 	if err != nil {
 		manager.Close()
 		return nil, err

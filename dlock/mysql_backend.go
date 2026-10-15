@@ -50,6 +50,36 @@ func NewMySQLBackend(db *gorm.DB) *MySQLBackend {
 	return &MySQLBackend{db: db}
 }
 
+// initializeSchema tolerates concurrent creation, but never migrates existing
+// tables. Only known metadata-lock conflicts are retried, with a fixed bound.
+func (m *MySQLBackend) initializeSchema(ctx context.Context) error {
+	db := m.db.WithContext(ctx)
+	for attempt := 0; attempt < 3; attempt++ {
+		if db.Migrator().HasTable(&Dlock{}) {
+			return m.ValidateSchema(ctx)
+		}
+		err := db.Migrator().CreateTable(&Dlock{})
+		if err == nil {
+			return m.ValidateSchema(ctx)
+		}
+		var mysqlErr *mysql.MySQLError
+		if !errors.As(err, &mysqlErr) {
+			return err
+		}
+		switch mysqlErr.Number {
+		case 1050: // A competing initializer created the table.
+			return m.ValidateSchema(ctx)
+		case 1205, 1213: // Lock wait timeout or metadata-lock deadlock.
+			if attempt == 2 {
+				return errors.Wrap(err, "retry lock table initialization")
+			}
+		default:
+			return err
+		}
+	}
+	return nil
+}
+
 // ValidateSchema verifies identifier types, millisecond timestamps and a full
 // unique key index. It never modifies existing tables.
 func (m *MySQLBackend) ValidateSchema(ctx context.Context) error {
