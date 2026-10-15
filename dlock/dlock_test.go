@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
@@ -16,10 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	testMySQLBackend *MySQLBackend
-	testMySQLManager *LockManager
-)
+var testMySQLBackend *MySQLBackend
 
 // Set the following environment variables before running tests:
 // `TEST_MYSQL_HOST`: MySQL database host;
@@ -52,12 +48,12 @@ func setup() error {
 	}
 
 	config := testMySQLConfig()
-	var err error
-	testMySQLManager, err = NewLockManagerFromConfig(config)
-	if err == nil {
-		testMySQLBackend = testMySQLManager.backend.(*MySQLBackend)
+	db, err := config.OpenOrCreate(&Dlock{})
+	if err != nil {
+		return err
 	}
-	return err
+	testMySQLBackend = NewMySQLBackend(db)
+	return nil
 }
 
 func testMySQLConfig() store.Config {
@@ -75,8 +71,8 @@ func testMySQLConfig() store.Config {
 }
 
 func teardown() error {
-	if testMySQLManager != nil {
-		return testMySQLManager.Close()
+	if testMySQLBackend != nil {
+		return store.NewStore(testMySQLBackend.db).Close()
 	}
 
 	return nil
@@ -149,52 +145,4 @@ func TestLockManager(t *testing.T) {
 
 	err = manager.Release(context.Background(), intent0)
 	assert.NoError(t, err)
-}
-
-func TestManagerPoolOwnership(t *testing.T) {
-	key := mysqlTestKey(t)
-	config := testMySQLConfig()
-	config.Sqlite = &store.SqliteConfig{} // MySQL must still take precedence.
-	manager, err := NewLockManagerFromConfig(config)
-	require.NoError(t, err)
-	t.Cleanup(func() { assert.NoError(t, manager.Close()) })
-	pool, err := manager.backend.(*MySQLBackend).db.DB()
-	require.NoError(t, err)
-	require.NoError(t, manager.Acquire(context.Background(), NewLockIntent(key, testID(t), time.Second)))
-	assert.NoError(t, manager.Close())
-	assert.NoError(t, manager.Close())
-	assert.Error(t, pool.Ping())
-
-	external := NewLockManager(testMySQLBackend)
-	assert.NoError(t, external.Close())
-	assert.NoError(t, external.Close())
-	pool, err = testMySQLBackend.db.DB()
-	require.NoError(t, err)
-	assert.NoError(t, pool.Ping())
-}
-
-func TestConcurrentInitialization(t *testing.T) {
-	config := mysqlTestDatabase(t)
-	const workers = 24
-	start := make(chan struct{})
-	results := make(chan error, workers)
-	var group sync.WaitGroup
-	for range workers {
-		group.Add(1)
-		go func() {
-			defer group.Done()
-			<-start
-			manager, err := NewLockManagerFromConfig(config)
-			if err == nil {
-				err = manager.backend.(*MySQLBackend).ValidateSchema(context.Background())
-				assert.NoError(t, manager.Close())
-			}
-			results <- err
-		}()
-	}
-	close(start)
-	group.Wait()
-	for range workers {
-		require.NoError(t, <-results)
-	}
 }

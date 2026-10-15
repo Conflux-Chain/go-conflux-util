@@ -21,20 +21,26 @@ store:
     database: "app"
 ```
 
-After loading the configuration, create a manager. It creates the `dlocks` table
-and owns its database connection pool:
+Initialize the database and lock table at the application's entry point using
+`store.Config.OpenOrCreate`. The application owns the connection pool and closes
+it after all database users have stopped. Pass the initialized database to DLock:
 
 ```go
-manager, err := dlock.OpenLockManagerFromViper()
+config := store.MustNewConfigFromViper()
+db, err := config.OpenOrCreate(&dlock.Dlock{})
 if err != nil {
     return err
 }
-defer manager.Close()
+defer store.NewStore(db).Close()
+
+ctx := context.Background()
+backend := dlock.NewMySQLBackend(db)
+manager := dlock.NewLockManager(backend)
 ```
 
-`NewLockManagerFromConfig(conf)` accepts a `store.Config` directly.
-`NewLockManagerFromViper()` is also available if initialization failures should
-exit the process.
+The `Dlock` model defines the table structure through GORM tags. DLock performs
+lock operations; database opening, table creation and connection pool management
+belong to the application.
 
 Generate a nonce and check acquisition before starting protected work. These
 snippets assume an enclosing function returning `error`; see
@@ -89,12 +95,8 @@ with `errors.Is`.
 `Release` returns `ErrLockNotHeld` when no lock matches the key and nonce. Other
 errors retain the underlying storage or context error and support `errors.Is`.
 
-To use a caller-owned backend, construct the manager with
-`dlock.NewLockManager(backend)`. Its resources remain under caller ownership;
-closing the manager does not close them. For caller-owned MySQL connections,
-create the `dlock.Dlock` table with GORM, construct the backend with
-`dlock.NewMySQLBackend(db)`, and call `backend.ValidateSchema(ctx)` before passing
-it to `NewLockManager`.
+For custom storage, implement the `Backend` interface and pass it to
+`dlock.NewLockManager(backend)`. The application manages the backend's resources.
 
 ## Usage notes
 

@@ -8,26 +8,32 @@ import (
 	"time"
 
 	"github.com/Conflux-Chain/go-conflux-util/dlock"
+	"github.com/Conflux-Chain/go-conflux-util/store"
 )
 
 func ExampleLockManager_AcquireWithDeadline() {
-	manager, err := dlock.OpenLockManagerFromViper()
+	// The application initializes the database and owns its connection pool.
+	config := store.MustNewConfigFromViper()
+	db, err := config.OpenOrCreate(&dlock.Dlock{})
 	if err != nil {
 		log.Print(err)
 		return
 	}
 	defer func() {
-		if err := manager.Close(); err != nil {
-			log.Printf("close lock manager: %v", err)
+		if err := store.NewStore(db).Close(); err != nil {
+			log.Printf("close database: %v", err)
 		}
 	}()
+
+	ctx := context.Background()
+	backend := dlock.NewMySQLBackend(db)
+	manager := dlock.NewLockManager(backend)
 
 	var nonce [16]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
 		log.Print(err)
 		return
 	}
-	ctx := context.Background()
 	intent := dlock.NewLockIntent("dlock_key", fmt.Sprintf("%x", nonce), 15*time.Second)
 	deadline, err := manager.AcquireWithDeadline(ctx, intent)
 	if err != nil {

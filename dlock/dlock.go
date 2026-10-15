@@ -3,13 +3,9 @@ package dlock
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
-	"github.com/Conflux-Chain/go-conflux-util/store"
-	"github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 const leasePrecision = time.Millisecond
@@ -20,9 +16,7 @@ var (
 	ErrInvalidLockIntent     = errors.New("lock intent must not be nil")
 	ErrEmptyNonce            = errors.New("lock nonce must not be empty")
 	ErrInvalidLease          = errors.New("lock lease must be positive")
-	ErrMySQLRequired         = errors.New("dlock requires MySQL configuration")
 	ErrInvalidLockKey        = errors.New("MySQL lock key exceeds 764 bytes")
-	ErrIncompatibleSchema    = errors.New("incompatible dlocks schema; migrate before use")
 )
 
 // Backend defines the interface for the underlying storage backend of the distributed lock.
@@ -51,66 +45,12 @@ func NewLockIntent(key, nonce string, lease time.Duration) *LockIntent {
 
 // LockManager manages distributed locks using a backend storage system.
 type LockManager struct {
-	backend    Backend
-	ownedStore *store.Store
-	closeOnce  sync.Once
-	closeErr   error
+	backend Backend
 }
 
-// NewLockManager uses a caller-owned backend. Close does not close its resources.
+// NewLockManager uses a caller-owned backend. The caller manages its resources.
 func NewLockManager(backend Backend) *LockManager {
 	return &LockManager{backend: backend}
-}
-
-// NewLockManagerFromViper opens a MySQL manager and exits the process on failure.
-// Use OpenLockManagerFromViper to handle initialization errors.
-func NewLockManagerFromViper() *LockManager {
-	manager, err := OpenLockManagerFromViper()
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to initialize distributed lock manager")
-	}
-	return manager
-}
-
-// OpenLockManagerFromViper opens a MySQL manager using the store configuration.
-func OpenLockManagerFromViper() (*LockManager, error) {
-	var config store.Config
-	if err := viper.UnmarshalKey("store", &config); err != nil {
-		return nil, err
-	}
-	return NewLockManagerFromConfig(config)
-}
-
-// NewLockManagerFromConfig opens a MySQL manager with the supplied pool settings.
-// MySQL takes precedence if both MySQL and SQLite are configured.
-// The caller must Close the returned manager when it is no longer in use.
-func NewLockManagerFromConfig(config store.Config) (*LockManager, error) {
-	if config.Mysql == nil {
-		return nil, ErrMySQLRequired
-	}
-	db, err := config.OpenOrCreate()
-	if err != nil {
-		return nil, err
-	}
-	backend := NewMySQLBackend(db)
-	manager := NewLockManager(backend)
-	manager.ownedStore = store.NewStore(db)
-	if err := backend.initializeSchema(context.Background()); err != nil {
-		manager.Close()
-		return nil, err
-	}
-	return manager, nil
-}
-
-// Close releases only the database pool opened by a configuration constructor.
-// Repeated calls return the first close result. Stop using the manager first.
-func (manager *LockManager) Close() error {
-	manager.closeOnce.Do(func() {
-		if manager.ownedStore != nil {
-			manager.closeErr = manager.ownedStore.Close()
-		}
-	})
-	return manager.closeErr
 }
 
 // Acquire tries to acquire a distributed lock with the given key and lease duration.
