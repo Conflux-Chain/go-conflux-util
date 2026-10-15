@@ -16,21 +16,21 @@ import (
 func TestMySQLAcquisitionWaitBudget(t *testing.T) {
 	for _, expired := range []bool{false, true} {
 		t.Run(fmt.Sprintf("expired=%t", expired), func(t *testing.T) {
-			be := mysqlTestTable(t)
+			backend := mysqlTestTable(t)
 			key, nonce := testID(t), testID(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			var workers sync.WaitGroup
 			defer func() { cancel(); workers.Wait() }()
-			require.NoError(t, be.db.Create(&Dlock{Key: key, Nonce: testID(t), ExpiredAt: time.Now().Add(-time.Hour)}).Error)
-			tx := be.db.WithContext(ctx).Begin()
+			require.NoError(t, backend.db.Create(&Dlock{Key: key, Nonce: testID(t), ExpiredAt: time.Now().Add(-time.Hour)}).Error)
+			tx := backend.db.WithContext(ctx).Begin()
 			require.NoError(t, tx.Error)
 			defer tx.Rollback()
-			require.NoError(t, tx.Exec("SELECT * FROM ? WHERE `key` = ? FOR UPDATE", clause.Table{Name: be.db.Statement.Table}, key).Error)
+			require.NoError(t, tx.Exec("SELECT * FROM ? WHERE `key` = ? FOR UPDATE", clause.Table{Name: backend.db.Statement.Table}, key).Error)
 			lease := 5 * time.Second
 			if expired {
 				lease = 200 * time.Millisecond
 			}
-			require.NoError(t, be.db.Connection(func(db *gorm.DB) error {
+			require.NoError(t, backend.db.Connection(func(db *gorm.DB) error {
 				db = db.Session(&gorm.Session{})
 				var connectionID uint64
 				require.NoError(t, db.Raw("SELECT CONNECTION_ID()").Scan(&connectionID).Error)
@@ -47,7 +47,7 @@ func TestMySQLAcquisitionWaitBudget(t *testing.T) {
 				}()
 				require.Eventually(t, func() bool {
 					var waiting int64
-					err := be.db.Raw(`SELECT COUNT(*) FROM performance_schema.data_lock_waits w
+					err := backend.db.Raw(`SELECT COUNT(*) FROM performance_schema.data_lock_waits w
       JOIN performance_schema.threads t ON t.THREAD_ID = w.REQUESTING_THREAD_ID
       WHERE t.PROCESSLIST_ID = ?`, connectionID).Scan(&waiting).Error
 					return err == nil && waiting > 0
@@ -64,7 +64,7 @@ func TestMySQLAcquisitionWaitBudget(t *testing.T) {
 					assert.ErrorIs(t, got.err, ErrLockAcquisitionFailed)
 					assert.True(t, got.deadline.IsZero())
 					var count int64
-					require.NoError(t, be.db.Model(&Dlock{}).Where("`key` = ?", key).Count(&count).Error)
+					require.NoError(t, backend.db.Model(&Dlock{}).Where("`key` = ?", key).Count(&count).Error)
 					assert.Zero(t, count, "discard the expired acquisition")
 				} else {
 					require.NoError(t, got.err)
@@ -72,7 +72,7 @@ func TestMySQLAcquisitionWaitBudget(t *testing.T) {
 					assert.False(t, got.deadline.After(observedWait.Add(lease-time.Millisecond)))
 					before := time.Now()
 					var remaining int64
-					require.NoError(t, be.db.Raw("SELECT TIMESTAMPDIFF(MICROSECOND,UTC_TIMESTAMP(3),expired_at) FROM ? WHERE `key` = ?", clause.Table{Name: be.db.Statement.Table}, key).Scan(&remaining).Error)
+					require.NoError(t, backend.db.Raw("SELECT TIMESTAMPDIFF(MICROSECOND,UTC_TIMESTAMP(3),expired_at) FROM ? WHERE `key` = ?", clause.Table{Name: backend.db.Statement.Table}, key).Scan(&remaining).Error)
 					assert.LessOrEqual(t, got.deadline.Sub(before), time.Duration(remaining)*time.Microsecond)
 				}
 				return nil
@@ -86,19 +86,19 @@ func TestMySQLAcquisitionWaitBudget(t *testing.T) {
 func TestMySQLDelayedWriteDoesNotReleaseSuccessor(t *testing.T) {
 	for _, update := range []bool{false, true} {
 		t.Run(fmt.Sprintf("update=%t", update), func(t *testing.T) {
-			be := mysqlTestTable(t)
+			backend := mysqlTestTable(t)
 			key, nonceA, nonceB := testID(t), testID(t), testID(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			var workers sync.WaitGroup
 			defer func() { cancel(); workers.Wait() }()
 			if update {
-				require.NoError(t, be.db.Create(&Dlock{Key: key, Nonce: testID(t), ExpiredAt: time.Now().Add(-time.Hour)}).Error)
+				require.NoError(t, backend.db.Create(&Dlock{Key: key, Nonce: testID(t), ExpiredAt: time.Now().Add(-time.Hour)}).Error)
 			}
 			written, release := make(chan struct{}), make(chan struct{})
 			callback := "dlock_delay_" + testID(t)
 			delay := func(tx *gorm.DB) {
 				values, ok := tx.Statement.Dest.(map[string]interface{})
-				if tx.Statement.Table != be.db.Statement.Table || !ok || values["nonce"] != nonceA || tx.Error != nil || tx.RowsAffected == 0 {
+				if tx.Statement.Table != backend.db.Statement.Table || !ok || values["nonce"] != nonceA || tx.Error != nil || tx.RowsAffected == 0 {
 					return
 				}
 				close(written)
@@ -108,11 +108,11 @@ func TestMySQLDelayedWriteDoesNotReleaseSuccessor(t *testing.T) {
 				}
 			}
 			if update {
-				require.NoError(t, be.db.Callback().Update().After("gorm:commit_or_rollback_transaction").Register(callback, delay))
-				t.Cleanup(func() { assert.NoError(t, be.db.Callback().Update().Remove(callback)) })
+				require.NoError(t, backend.db.Callback().Update().After("gorm:commit_or_rollback_transaction").Register(callback, delay))
+				t.Cleanup(func() { assert.NoError(t, backend.db.Callback().Update().Remove(callback)) })
 			} else {
-				require.NoError(t, be.db.Callback().Create().After("gorm:commit_or_rollback_transaction").Register(callback, delay))
-				t.Cleanup(func() { assert.NoError(t, be.db.Callback().Create().Remove(callback)) })
+				require.NoError(t, backend.db.Callback().Create().After("gorm:commit_or_rollback_transaction").Register(callback, delay))
+				t.Cleanup(func() { assert.NoError(t, backend.db.Callback().Create().Remove(callback)) })
 			}
 			type result struct {
 				ok  bool
@@ -122,7 +122,7 @@ func TestMySQLDelayedWriteDoesNotReleaseSuccessor(t *testing.T) {
 			workers.Add(1)
 			go func() {
 				defer workers.Done()
-				ok, err := be.WriteEntry(ctx, key, nonceA, 200*time.Millisecond)
+				ok, err := backend.WriteEntry(ctx, key, nonceA, 200*time.Millisecond)
 				results <- result{ok, err}
 			}()
 			select {
@@ -132,7 +132,7 @@ func TestMySQLDelayedWriteDoesNotReleaseSuccessor(t *testing.T) {
 			}
 			// The lease begins before the callback; this timer deliberately expires it.
 			<-time.After(300 * time.Millisecond)
-			ok, err := be.WriteEntry(ctx, key, nonceB, time.Minute)
+			ok, err := backend.WriteEntry(ctx, key, nonceB, time.Minute)
 			require.NoError(t, err)
 			require.True(t, ok)
 			close(release)
@@ -140,7 +140,7 @@ func TestMySQLDelayedWriteDoesNotReleaseSuccessor(t *testing.T) {
 			assert.False(t, got.ok)
 			assert.ErrorIs(t, got.err, ErrLockAcquisitionFailed)
 			var row Dlock
-			require.NoError(t, be.db.First(&row, "`key` = ?", key).Error)
+			require.NoError(t, backend.db.First(&row, "`key` = ?", key).Error)
 			assert.Equal(t, nonceB, row.Nonce)
 		})
 	}

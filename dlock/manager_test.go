@@ -46,27 +46,27 @@ func TestManagerErrorMapping(t *testing.T) {
 			if tc.backendErr == context.Canceled {
 				cancel()
 			}
-			li := NewLockIntent("key", "nonce", time.Second)
+			intent := NewLockIntent("key", "nonce", time.Second)
 			writes, deletes := 0, 0
 			manager := NewLockManager(fakeBackend{
 				write: func(gotCtx context.Context, key, nonce string, lease time.Duration) (bool, error) {
 					writes++
 					assert.Equal(t, ctx, gotCtx)
-					assert.Equal(t, li.Key, key)
-					assert.Equal(t, li.Nonce, nonce)
-					assert.Equal(t, li.Lease, lease)
+					assert.Equal(t, intent.Key, key)
+					assert.Equal(t, intent.Nonce, nonce)
+					assert.Equal(t, intent.Lease, lease)
 					return tc.ok, tc.backendErr
 				},
 				del: func(gotCtx context.Context, key, nonce string) (bool, error) {
 					deletes++
 					assert.Equal(t, ctx, gotCtx)
-					assert.Equal(t, li.Key, key)
-					assert.Equal(t, li.Nonce, nonce)
+					assert.Equal(t, intent.Key, key)
+					assert.Equal(t, intent.Nonce, nonce)
 					return tc.ok, tc.backendErr
 				},
 			})
-			assert.ErrorIs(t, manager.Acquire(ctx, li), tc.acquireError)
-			assert.ErrorIs(t, manager.Release(ctx, li), tc.releaseError)
+			assert.ErrorIs(t, manager.Acquire(ctx, intent), tc.acquireError)
+			assert.ErrorIs(t, manager.Release(ctx, intent), tc.releaseError)
 			assert.Equal(t, 1, writes)
 			assert.Equal(t, 1, deletes)
 		})
@@ -114,8 +114,8 @@ func TestInvalidLease(t *testing.T) {
 }
 
 func TestManagerRequiresMySQL(t *testing.T) {
-	for _, conf := range []store.Config{{}, store.NewMemoryConfig()} {
-		manager, err := NewLockManagerFromConfig(conf)
+	for _, config := range []store.Config{{}, store.NewMemoryConfig()} {
+		manager, err := NewLockManagerFromConfig(config)
 		assert.Nil(t, manager)
 		assert.ErrorIs(t, err, ErrMySQLRequired)
 	}

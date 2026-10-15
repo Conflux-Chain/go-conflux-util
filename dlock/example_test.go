@@ -11,13 +11,13 @@ import (
 )
 
 func ExampleLockManager_AcquireWithDeadline() {
-	lockMan, err := dlock.OpenLockManagerFromViper()
+	manager, err := dlock.OpenLockManagerFromViper()
 	if err != nil {
 		log.Print(err)
 		return
 	}
 	defer func() {
-		if err := lockMan.Close(); err != nil {
+		if err := manager.Close(); err != nil {
 			log.Printf("close lock manager: %v", err)
 		}
 	}()
@@ -29,7 +29,7 @@ func ExampleLockManager_AcquireWithDeadline() {
 	}
 	ctx := context.Background()
 	intent := dlock.NewLockIntent("dlock_key", fmt.Sprintf("%x", nonce), 15*time.Second)
-	deadline, err := lockMan.AcquireWithDeadline(ctx, intent)
+	deadline, err := manager.AcquireWithDeadline(ctx, intent)
 	if err != nil {
 		log.Print(err)
 		return
@@ -37,7 +37,7 @@ func ExampleLockManager_AcquireWithDeadline() {
 	defer func() {
 		releaseCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		if err := lockMan.Release(releaseCtx, intent); err != nil {
+		if err := manager.Release(releaseCtx, intent); err != nil {
 			log.Printf("release lock: %v", err)
 		}
 	}()
@@ -51,11 +51,17 @@ func ExampleLockManager_AcquireWithDeadline() {
 	}
 
 	// Renew before expiry using the original context and the same intent.
-	deadline, err = lockMan.AcquireWithDeadline(ctx, intent)
+	deadline, err = manager.AcquireWithDeadline(ctx, intent)
 	if err != nil {
 		log.Print(err)
 		return
 	}
-	// Cancel the old work context and create a new one from ctx and deadline
-	// before continuing work under the renewed lease.
+	cancelWork()
+	workCtx, cancelWork = context.WithDeadline(ctx, deadline)
+	defer cancelWork()
+	if err := workCtx.Err(); err != nil {
+		log.Print(err)
+		return
+	}
+	// Continue protected work using the renewed workCtx.
 }

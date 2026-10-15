@@ -17,11 +17,11 @@ import (
 )
 
 var (
-	testMysqlBe      *MySQLBackend
-	testMysqlManager *LockManager
+	testMySQLBackend *MySQLBackend
+	testMySQLManager *LockManager
 )
 
-// Please set the following environments before running tests:
+// Set the following environment variables before running tests:
 // `TEST_MYSQL_HOST`: MySQL database host;
 // `TEST_MYSQL_USER`: MySQL database username;
 // `TEST_MYSQL_PWD`:  MySQL database password;
@@ -29,7 +29,7 @@ var (
 // `TEST_MYSQL_REQUIRED=1` fails setup instead of skipping if configuration is absent.
 func TestMain(m *testing.M) {
 	if err := setup(); err != nil {
-		panic(errors.WithMessage(err, "failed to setup"))
+		panic(errors.WithMessage(err, "failed to set up"))
 	}
 
 	code := m.Run()
@@ -51,17 +51,17 @@ func setup() error {
 		return nil
 	}
 
-	conf := testMySQLConfig()
+	config := testMySQLConfig()
 	var err error
-	testMysqlManager, err = NewLockManagerFromConfig(conf)
+	testMySQLManager, err = NewLockManagerFromConfig(config)
 	if err == nil {
-		testMysqlBe = testMysqlManager.backend.(*MySQLBackend)
+		testMySQLBackend = testMySQLManager.backend.(*MySQLBackend)
 	}
 	return err
 }
 
 func testMySQLConfig() store.Config {
-	conf := store.Config{
+	config := store.Config{
 		Mysql: &store.MysqlConfig{
 			Host:     os.Getenv("TEST_MYSQL_HOST"),
 			Database: os.Getenv("TEST_MYSQL_DB"),
@@ -70,13 +70,13 @@ func testMySQLConfig() store.Config {
 		},
 	}
 
-	defaults.SetDefaults(&conf)
-	return conf
+	defaults.SetDefaults(&config)
+	return config
 }
 
 func teardown() error {
-	if testMysqlManager != nil {
-		return testMysqlManager.Close()
+	if testMySQLManager != nil {
+		return testMySQLManager.Close()
 	}
 
 	return nil
@@ -92,70 +92,70 @@ func testID(t *testing.T) string {
 
 func mysqlTestKey(t *testing.T) string {
 	t.Helper()
-	if testMysqlBe == nil {
+	if testMySQLBackend == nil {
 		t.Skip("set TEST_MYSQL_HOST and TEST_MYSQL_DB to run MySQL integration tests")
 	}
 	key := testID(t)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		assert.NoError(t, testMysqlBe.db.WithContext(ctx).Where("`key` = ?", key).Delete(&Dlock{}).Error)
+		assert.NoError(t, testMySQLBackend.db.WithContext(ctx).Where("`key` = ?", key).Delete(&Dlock{}).Error)
 	})
 	return key
 }
 
-func TestMysqlBackend(t *testing.T) {
+func TestMySQLBackend(t *testing.T) {
 	ctx := context.Background()
-	lockkey := mysqlTestKey(t)
+	lockKey := mysqlTestKey(t)
 	nonce0, nonce1 := testID(t), testID(t)
 	lease := 15 * time.Second
 
-	ok, err := testMysqlBe.WriteEntry(ctx, lockkey, nonce0, lease)
+	ok, err := testMySQLBackend.WriteEntry(ctx, lockKey, nonce0, lease)
 	assert.NoError(t, err)
 	assert.True(t, ok)
 
-	ok, err = testMysqlBe.WriteEntry(ctx, lockkey, nonce1, lease)
+	ok, err = testMySQLBackend.WriteEntry(ctx, lockKey, nonce1, lease)
 	assert.NoError(t, err)
 	assert.False(t, ok)
 
-	ok, err = testMysqlBe.DelEntry(ctx, lockkey, nonce1)
+	ok, err = testMySQLBackend.DelEntry(ctx, lockKey, nonce1)
 	assert.NoError(t, err)
 	assert.False(t, ok)
 
-	ok, err = testMysqlBe.DelEntry(ctx, lockkey, nonce0)
+	ok, err = testMySQLBackend.DelEntry(ctx, lockKey, nonce0)
 	assert.NoError(t, err)
 	assert.True(t, ok)
 }
 
 func TestLockManager(t *testing.T) {
 	lockKey := mysqlTestKey(t)
-	lockman := NewLockManager(testMysqlBe)
+	manager := NewLockManager(testMySQLBackend)
 
 	lease := 15 * time.Second
 
-	li0 := NewLockIntent(lockKey, testID(t), lease)
-	err := lockman.Acquire(context.Background(), li0)
+	intent0 := NewLockIntent(lockKey, testID(t), lease)
+	err := manager.Acquire(context.Background(), intent0)
 	assert.NoError(t, err)
 
-	err = lockman.Acquire(context.Background(), li0)
+	err = manager.Acquire(context.Background(), intent0)
 	assert.NoError(t, err)
 
-	li1 := NewLockIntent(lockKey, testID(t), lease)
-	err = lockman.Acquire(context.Background(), li1)
+	intent1 := NewLockIntent(lockKey, testID(t), lease)
+	err = manager.Acquire(context.Background(), intent1)
 	assert.ErrorIs(t, err, ErrLockAcquisitionFailed)
 
-	err = lockman.Release(context.Background(), li1)
+	err = manager.Release(context.Background(), intent1)
 	assert.ErrorIs(t, err, ErrLockNotHeld)
 
-	err = lockman.Release(context.Background(), li0)
+	err = manager.Release(context.Background(), intent0)
 	assert.NoError(t, err)
 }
 
 func TestManagerPoolOwnership(t *testing.T) {
 	key := mysqlTestKey(t)
-	conf := testMySQLConfig()
-	conf.Sqlite = &store.SqliteConfig{} // MySQL must still take precedence.
-	manager, err := NewLockManagerFromConfig(conf)
+	config := testMySQLConfig()
+	config.Sqlite = &store.SqliteConfig{} // MySQL must still take precedence.
+	manager, err := NewLockManagerFromConfig(config)
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, manager.Close()) })
 	pool, err := manager.backend.(*MySQLBackend).db.DB()
@@ -165,16 +165,16 @@ func TestManagerPoolOwnership(t *testing.T) {
 	assert.NoError(t, manager.Close())
 	assert.Error(t, pool.Ping())
 
-	external := NewLockManager(testMysqlBe)
+	external := NewLockManager(testMySQLBackend)
 	assert.NoError(t, external.Close())
 	assert.NoError(t, external.Close())
-	pool, err = testMysqlBe.db.DB()
+	pool, err = testMySQLBackend.db.DB()
 	require.NoError(t, err)
 	assert.NoError(t, pool.Ping())
 }
 
 func TestConcurrentInitialization(t *testing.T) {
-	conf := mysqlTestDatabase(t)
+	config := mysqlTestDatabase(t)
 	const workers = 24
 	start := make(chan struct{})
 	results := make(chan error, workers)
@@ -184,7 +184,7 @@ func TestConcurrentInitialization(t *testing.T) {
 		go func() {
 			defer group.Done()
 			<-start
-			manager, err := NewLockManagerFromConfig(conf)
+			manager, err := NewLockManagerFromConfig(config)
 			if err == nil {
 				err = manager.backend.(*MySQLBackend).ValidateSchema(context.Background())
 				assert.NoError(t, manager.Close())

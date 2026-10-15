@@ -15,7 +15,6 @@ import (
 const leasePrecision = time.Millisecond
 
 var (
-	// Custom Errors
 	ErrLockNotHeld           = errors.New("lock not held")
 	ErrLockAcquisitionFailed = errors.New("failed to acquire lock")
 	ErrInvalidLockIntent     = errors.New("lock intent must not be nil")
@@ -37,7 +36,7 @@ type Backend interface {
 	DelEntry(ctx context.Context, key, nonce string) (bool, error)
 }
 
-// The lock intent to acquire a distributed lock.
+// LockIntent identifies a lock holder and its requested lease.
 type LockIntent struct {
 	Key string // The unique identifier for the lock.
 	// Nonce must be nonempty and unique to one holding period. Reuse it only for
@@ -50,27 +49,6 @@ func NewLockIntent(key, nonce string, lease time.Duration) *LockIntent {
 	return &LockIntent{Key: key, Nonce: nonce, Lease: lease}
 }
 
-func (li *LockIntent) validate() error {
-	if li == nil {
-		return ErrInvalidLockIntent
-	}
-	return validateNonce(li.Nonce)
-}
-
-func validateNonce(nonce string) error {
-	if nonce == "" {
-		return ErrEmptyNonce
-	}
-	return nil
-}
-
-func validateLease(lease time.Duration) error {
-	if lease <= 0 {
-		return ErrInvalidLease
-	}
-	return nil
-}
-
 // LockManager manages distributed locks using a backend storage system.
 type LockManager struct {
 	backend    Backend
@@ -80,8 +58,8 @@ type LockManager struct {
 }
 
 // NewLockManager uses a caller-owned backend. Close does not close its resources.
-func NewLockManager(be Backend) *LockManager {
-	return &LockManager{backend: be}
+func NewLockManager(backend Backend) *LockManager {
+	return &LockManager{backend: backend}
 }
 
 // NewLockManagerFromViper opens a MySQL manager and exits the process on failure.
@@ -96,29 +74,28 @@ func NewLockManagerFromViper() *LockManager {
 
 // OpenLockManagerFromViper opens a MySQL manager using the store configuration.
 func OpenLockManagerFromViper() (*LockManager, error) {
-	var conf store.Config
-	if err := viper.UnmarshalKey("store", &conf); err != nil {
+	var config store.Config
+	if err := viper.UnmarshalKey("store", &config); err != nil {
 		return nil, err
 	}
-	return NewLockManagerFromConfig(conf)
+	return NewLockManagerFromConfig(config)
 }
 
 // NewLockManagerFromConfig opens a MySQL manager with the supplied pool settings.
 // MySQL takes precedence if both MySQL and SQLite are configured.
 // The caller must Close the returned manager when it is no longer in use.
-func NewLockManagerFromConfig(conf store.Config) (*LockManager, error) {
-	if conf.Mysql == nil {
+func NewLockManagerFromConfig(config store.Config) (*LockManager, error) {
+	if config.Mysql == nil {
 		return nil, ErrMySQLRequired
 	}
-	db, err := conf.OpenOrCreate()
+	db, err := config.OpenOrCreate()
 	if err != nil {
 		return nil, err
 	}
 	backend := NewMySQLBackend(db)
 	manager := NewLockManager(backend)
 	manager.ownedStore = store.NewStore(db)
-	err = backend.initializeSchema(context.Background())
-	if err != nil {
+	if err := backend.initializeSchema(context.Background()); err != nil {
 		manager.Close()
 		return nil, err
 	}
@@ -127,20 +104,20 @@ func NewLockManagerFromConfig(conf store.Config) (*LockManager, error) {
 
 // Close releases only the database pool opened by a configuration constructor.
 // Repeated calls return the first close result. Stop using the manager first.
-func (l *LockManager) Close() error {
-	l.closeOnce.Do(func() {
-		if l.ownedStore != nil {
-			l.closeErr = l.ownedStore.Close()
+func (manager *LockManager) Close() error {
+	manager.closeOnce.Do(func() {
+		if manager.ownedStore != nil {
+			manager.closeErr = manager.ownedStore.Close()
 		}
 	})
-	return l.closeErr
+	return manager.closeErr
 }
 
 // Acquire tries to acquire a distributed lock with the given key and lease duration.
 // It returns nil only while a conservative lease budget remains. Use
 // AcquireWithDeadline to bound protected work by that budget.
-func (l *LockManager) Acquire(ctx context.Context, li *LockIntent) error {
-	_, err := l.AcquireWithDeadline(ctx, li)
+func (manager *LockManager) Acquire(ctx context.Context, intent *LockIntent) error {
+	_, err := manager.AcquireWithDeadline(ctx, intent)
 	return err
 }
 
@@ -149,31 +126,70 @@ func (l *LockManager) Acquire(ctx context.Context, li *LockIntent) error {
 // for timestamp precision. It assumes the database clock does not jump forward.
 // Stop work by this deadline, or earlier if renewal fails. No deadline is returned
 // on failure; a successful write with an exhausted budget is conditionally released.
-func (l *LockManager) AcquireWithDeadline(ctx context.Context, li *LockIntent) (time.Time, error) {
+func (manager *LockManager) AcquireWithDeadline(ctx context.Context, intent *LockIntent) (time.Time, error) {
 	start := time.Now()
-	if err := li.validate(); err != nil {
+	if err := intent.validate(); err != nil {
 		return time.Time{}, err
 	}
-	if err := validateLease(li.Lease); err != nil {
+	if err := validateLease(intent.Lease); err != nil {
 		return time.Time{}, err
 	}
-	deadline := start.Add(li.Lease - leasePrecision)
-	if time.Since(start) >= li.Lease-leasePrecision {
+	deadline := start.Add(intent.Lease - leasePrecision)
+	if time.Since(start) >= intent.Lease-leasePrecision {
 		return time.Time{}, ErrLockAcquisitionFailed
 	}
-	ok, err := l.backend.WriteEntry(ctx, li.Key, li.Nonce, li.Lease)
+	ok, err := manager.backend.WriteEntry(ctx, intent.Key, intent.Nonce, intent.Lease)
 	if err != nil {
 		return time.Time{}, errors.WithMessage(err, "failed to write lock entry")
 	}
 
-	if !ok { // unabled to acquire lock
+	if !ok {
 		return time.Time{}, ErrLockAcquisitionFailed
 	}
 
-	if err := finishAcquisition(ctx, l.backend, li.Key, li.Nonce, start, li.Lease); err != nil {
+	if err := finishAcquisition(ctx, manager.backend, intent.Key, intent.Nonce, start, intent.Lease); err != nil {
 		return time.Time{}, err
 	}
 	return deadline, nil
+}
+
+// Release attempts to release an existing lock.
+// It returns nil error if the lock was successfully released.
+func (manager *LockManager) Release(ctx context.Context, intent *LockIntent) error {
+	if err := intent.validate(); err != nil {
+		return err
+	}
+	ok, err := manager.backend.DelEntry(ctx, intent.Key, intent.Nonce)
+	if err != nil {
+		return errors.WithMessage(err, "failed to delete lock entry")
+	}
+
+	if !ok {
+		return ErrLockNotHeld
+	}
+
+	return nil
+}
+
+func (intent *LockIntent) validate() error {
+	if intent == nil {
+		return ErrInvalidLockIntent
+	}
+	return validateNonce(intent.Nonce)
+}
+
+func validateNonce(nonce string) error {
+	if nonce == "" {
+		return ErrEmptyNonce
+	}
+	return nil
+}
+
+func validateLease(lease time.Duration) error {
+	if lease <= 0 {
+		return ErrInvalidLease
+	}
+	return nil
 }
 
 // finishAcquisition confirms a successful write still has a usable lease, or
@@ -193,22 +209,4 @@ func finishAcquisition(ctx context.Context, backend Backend, key, nonce string, 
 		return fmt.Errorf("%w; failed to discard lease: %w", err, cleanupErr)
 	}
 	return err
-}
-
-// Release attempts to release an existing lock.
-// It returns nil error if the lock was successfully released.
-func (l *LockManager) Release(ctx context.Context, li *LockIntent) error {
-	if err := li.validate(); err != nil {
-		return err
-	}
-	ok, err := l.backend.DelEntry(ctx, li.Key, li.Nonce)
-	if err != nil {
-		return errors.WithMessage(err, "failed to delete lock entry")
-	}
-
-	if !ok { // lock not held
-		return ErrLockNotHeld
-	}
-
-	return nil
 }
