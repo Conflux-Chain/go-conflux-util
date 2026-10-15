@@ -104,3 +104,54 @@ func TestRejectTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestFractionalLeases(t *testing.T) {
+	ctx := context.Background()
+	for _, ttl := range []time.Duration{100 * time.Millisecond, 500 * time.Millisecond, time.Second} {
+		key := uniqueKey(t)
+		g, err := testMysqlBe.Acquire(ctx, key, ttl)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = testMysqlBe.Acquire(ctx, key, ttl); err != ErrLockAcquisitionFailed {
+			t.Fatal("early takeover", err)
+		}
+		time.Sleep(ttl + 5*time.Millisecond)
+		if _, err = testMysqlBe.Renew(ctx, g, time.Second); err != ErrLeaseExpired {
+			t.Fatal("resurrected expired grant", err)
+		}
+		if _, err = testMysqlBe.Acquire(ctx, key, time.Second); err != nil {
+			t.Fatal("failed expired takeover", err)
+		}
+	}
+}
+func TestWaitConsumesAcquireBudget(t *testing.T) {
+	ctx := context.Background()
+	key := uniqueKey(t)
+	g, err := testMysqlBe.Acquire(ctx, key, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = testMysqlBe.db.Exec("UPDATE dlocks SET expired_at=UTC_TIMESTAMP(6)-INTERVAL 1 SECOND WHERE `key`=?", []byte(key))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := testMysqlBe.db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	var token []byte
+	if err = tx.QueryRow("SELECT token FROM dlocks WHERE `key`=? FOR UPDATE", []byte(key)).Scan(&token); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { _, e := testMysqlBe.Acquire(ctx, g.Key, 50*time.Millisecond); done <- e }()
+	time.Sleep(120 * time.Millisecond)
+	if err = tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err = <-done; err != ErrLeaseExpired {
+		t.Fatal("wait returned usable expired lease", err)
+	}
+}

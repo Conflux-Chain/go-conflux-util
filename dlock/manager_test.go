@@ -62,3 +62,36 @@ func TestLeaseGeneration(t *testing.T) {
 		t.Fatal("terminal lease reached backend")
 	}
 }
+
+type delayedBackend struct {
+	fakeBackend
+	delay time.Duration
+}
+
+func (f *delayedBackend) Acquire(ctx context.Context, key string, ttl time.Duration) (Grant, error) {
+	time.Sleep(f.delay)
+	return f.fakeBackend.Acquire(ctx, key, ttl)
+}
+func (f *delayedBackend) Renew(ctx context.Context, g Grant, ttl time.Duration) (Grant, error) {
+	time.Sleep(f.delay)
+	return f.fakeBackend.Renew(ctx, g, ttl)
+}
+func TestManagerBoundsCustomBackend(t *testing.T) {
+	f := &delayedBackend{delay: 30 * time.Millisecond}
+	m, _ := NewLockManager(f)
+	if l, err := m.Acquire(context.Background(), "key", 10*time.Millisecond); l != nil || !errors.Is(err, ErrLeaseExpired) {
+		t.Fatalf("usable expired grant: %v %v", l, err)
+	}
+	f.delay = 0
+	l, err := m.Acquire(context.Background(), "key", 20*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.delay = 30 * time.Millisecond
+	if err = l.Renew(context.Background(), time.Second); !errors.Is(err, ErrLeaseExpired) {
+		t.Fatal("renew finished after previous deadline", err)
+	}
+	if l.Remaining() != 0 {
+		t.Fatal("uncertain lease remained usable")
+	}
+}

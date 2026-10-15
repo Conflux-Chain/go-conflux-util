@@ -177,7 +177,7 @@ func (m *MySQLBackend) Renew(ctx context.Context, g Grant, ttl time.Duration) (G
 	return finish(g, start, ttl)
 }
 func finish(g Grant, start time.Time, ttl time.Duration) (Grant, error) {
-	g.ValidUntil = start.Add(ttl)
+	g.ValidUntil = deadline(start, ttl)
 	if !time.Now().Before(g.ValidUntil) {
 		return Grant{}, ErrLeaseExpired
 	}

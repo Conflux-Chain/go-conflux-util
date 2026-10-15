@@ -70,12 +70,17 @@ func (m *LockManager) Acquire(ctx context.Context, key string, ttl time.Duration
 	if m.closed {
 		return nil, ErrClosed
 	}
+	start := time.Now()
 	g, err := m.backend.Acquire(ctx, key, ttl)
 	if err != nil {
 		return nil, err
 	}
 	if g.Key != key || g.Token == ([32]byte{}) || !time.Now().Before(g.ValidUntil) {
 		return nil, ErrLeaseExpired
+	}
+	g, err = bound(g, start, ttl)
+	if err != nil {
+		return nil, err
 	}
 	return &Lease{manager: m, grant: g}, nil
 }
@@ -124,6 +129,8 @@ func (l *Lease) Renew(ctx context.Context, ttl time.Duration) error {
 	if m.closed {
 		return ErrClosed
 	}
+	start := time.Now()
+	oldDeadline := l.grant.ValidUntil
 	g, err := m.backend.Renew(ctx, l.grant, ttl)
 	if err != nil {
 		l.terminal = true
@@ -132,6 +139,15 @@ func (l *Lease) Renew(ctx context.Context, ttl time.Duration) error {
 	if g.Key != l.grant.Key || g.Token != l.grant.Token || !time.Now().Before(g.ValidUntil) {
 		l.terminal = true
 		return ErrLeaseExpired
+	}
+	if !time.Now().Before(oldDeadline) {
+		l.terminal = true
+		return ErrLeaseExpired
+	}
+	g, err = bound(g, start, ttl)
+	if err != nil {
+		l.terminal = true
+		return err
 	}
 	l.grant = g
 	return nil
@@ -159,4 +175,22 @@ func validate(ctx context.Context, key string, ttl time.Duration) error {
 		return ErrInvalidInput
 	}
 	return ctx.Err()
+}
+
+// deadline retains Go's monotonic clock. The margin is not a fencing guarantee.
+func deadline(start time.Time, ttl time.Duration) time.Time {
+	margin := ttl / 100
+	if margin < time.Microsecond {
+		margin = time.Microsecond
+	}
+	return start.Add(ttl - margin)
+}
+func bound(g Grant, start time.Time, ttl time.Duration) (Grant, error) {
+	if d := deadline(start, ttl); d.Before(g.ValidUntil) {
+		g.ValidUntil = d
+	}
+	if !time.Now().Before(g.ValidUntil) {
+		return Grant{}, ErrLeaseExpired
+	}
+	return g, nil
 }
