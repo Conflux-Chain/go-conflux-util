@@ -3,10 +3,14 @@
 package dlock
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"gorm.io/gorm/clause"
+	"gorm.io/gorm/logger"
+	stdlog "log"
 	"os"
 	"testing"
 	"time"
@@ -214,5 +218,56 @@ func TestDirectBackendValidation(t *testing.T) {
 	closed.Close()
 	if _, err = (&MySQLBackend{db: closed}).Acquire(context.Background(), key, time.Second); err == nil || err == ErrLockAcquisitionFailed {
 		t.Fatal("database error normalized", err)
+	}
+}
+
+func TestGORMIsolationAndExternalPool(t *testing.T) {
+	var output bytes.Buffer
+	log := logger.New(stdlog.New(&output, "", 0), logger.Config{LogLevel: logger.Info})
+	db, err := gorm.Open(mysql.New(mysql.Config{Conn: testMysqlBe.db, SkipInitializeWithVersion: true}), &gorm.Config{Logger: log, DryRun: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	derived := db.Clauses(clause.OnConflict{DoNothing: true}).Where("1=0").Table("wrong_table")
+	be, err := NewMySQLBackend(derived)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := NewLockManager(be)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err := m.Acquire(context.Background(), uniqueKey(t), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = l.Renew(context.Background(), time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if err = l.Release(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if output.Len() != 0 {
+		t.Fatal("lock SQL reached GORM logger", output.String())
+	}
+	if err = m.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err = testMysqlBe.db.Ping(); err != nil {
+		t.Fatal("shared pool closed", err)
+	}
+}
+func TestOwnedPoolFailureCloses(t *testing.T) {
+	db, err := sql.Open("mysql", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err = ownPool(ctx, db); err == nil {
+		t.Fatal("cancelled construction succeeded")
+	}
+	if err = db.Ping(); err == nil {
+		t.Fatal("failed initialization leaked pool")
 	}
 }

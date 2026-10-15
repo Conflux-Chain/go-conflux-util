@@ -3,6 +3,9 @@ package dlock
 import (
 	"context"
 	"errors"
+	"github.com/Conflux-Chain/go-conflux-util/store"
+	"github.com/spf13/viper"
+	"sync"
 	"testing"
 	"time"
 )
@@ -124,5 +127,46 @@ func TestValidationBeforeBackend(t *testing.T) {
 	var nilBackend *fakeBackend
 	if _, err := NewLockManager(nilBackend); err != ErrInvalidInput {
 		t.Fatal(err)
+	}
+}
+
+func TestCloseOwnershipAndConcurrency(t *testing.T) {
+	m, _ := NewLockManager(&fakeBackend{})
+	closes := 0
+	m.closeFn = func() error { closes++; return nil }
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := m.Close(); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	if closes != 1 {
+		t.Fatal("pool closed more than once")
+	}
+	if _, err := m.Acquire(context.Background(), "key", time.Second); err != ErrClosed {
+		t.Fatal(err)
+	}
+	if _, err := NewLockManagerFromConfig(context.Background(), store.Config{}); err != ErrUnsupported {
+		t.Fatal(err)
+	}
+}
+func TestViperFactoryRejectsFallbackAndDecodeError(t *testing.T) {
+	viper.Reset()
+	defer viper.Reset()
+	if _, err := NewLockManagerFromViper(); err != ErrUnsupported {
+		t.Fatal(err)
+	}
+	viper.Set("store.sqlite.path", ":memory:")
+	if _, err := NewLockManagerFromViper(); err != ErrUnsupported {
+		t.Fatal(err)
+	}
+	viper.Set("store.maxopenconns", "invalid")
+	if _, err := NewLockManagerFromViper(); err == nil {
+		t.Fatal("decode error ignored")
 	}
 }
