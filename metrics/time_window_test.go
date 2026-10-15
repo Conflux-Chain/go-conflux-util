@@ -77,3 +77,36 @@ func TestTimeWindowAdd(t *testing.T) {
 	testT = startT.Add(time.Second * 6)
 	assert.Equal(t, 4, timeWin.data(testT))
 }
+
+func TestSlotTimeBoundaries(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	s := slot[int]{endTime: start.Add(time.Second), expireAt: start.Add(2 * time.Second)}
+
+	for _, tc := range []struct {
+		name   string
+		offset time.Duration
+		want   bool
+	}{
+		{"before", -time.Nanosecond, false},
+		{"at", 0, true},
+		{"after", time.Nanosecond, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, s.outdated(s.endTime.Add(tc.offset)))
+			assert.Equal(t, tc.want, s.expired(s.expireAt.Add(tc.offset)))
+		})
+	}
+}
+
+func TestTimeWindowBoundarySample(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	window := NewSimpleTimeWindow[int](time.Second, 2)
+	window.add(start.Add(500*time.Millisecond), 1)
+	window.add(start.Add(time.Second), 10)
+
+	assert.Equal(t, 2, window.slots.Len())
+	assert.Equal(t, 11, window.data(start.Add(2*time.Second-time.Nanosecond)))
+	assert.Equal(t, 10, window.data(start.Add(2*time.Second)))
+	assert.Equal(t, 10, window.data(start.Add(2250*time.Millisecond)))
+	assert.Equal(t, 0, window.data(start.Add(3*time.Second)))
+}

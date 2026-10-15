@@ -72,14 +72,14 @@ type slot[T any] struct {
 	expireAt time.Time // expiry time to remove
 }
 
-// check if slot expired (can be purged)
+// expired reports whether now has reached the slot's expiry time.
 func (s slot[T]) expired(now time.Time) bool {
-	return s.expireAt.Before(now)
+	return !s.expireAt.After(now)
 }
 
-// check if slot outdated (not open for update)
+// outdated reports whether now has reached the exclusive end of the slot's update interval.
 func (s slot[T]) outdated(now time.Time) bool {
-	return s.endTime.Before(now)
+	return !s.endTime.After(now)
 }
 
 // TimeWindow slices time window into slots and maintains slot expiry and creation
