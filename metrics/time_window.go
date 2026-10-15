@@ -43,8 +43,9 @@ type SlotAggregator[T any] interface {
 	Sub(acc, v T) T
 }
 
-// Cloneable is used by time window to return cloned value of pointer type for thread safe.
+// Cloneable lets a time window return independent snapshots of reference data.
 type Cloneable[T any] interface {
+	// Clone must not modify v or share mutable storage with it in the returned value.
 	Clone(v T) T
 }
 
@@ -102,6 +103,9 @@ type TimeWindow[T any] struct {
 
 // NewTimeWindow creates a new time window.
 // It panics if slotInterval or numSlots is not positive, or their product exceeds time.Duration's range.
+// If val is provided, only val[0] is used as the initial aggregate; it does not
+// expire with the slots. It is not copied: ownership of any mutable storage is
+// transferred to the window, and callers must stop accessing it through other references.
 func NewTimeWindow[T any](slotInterval time.Duration, numSlots int, aggregator SlotAggregator[T], val ...T) *TimeWindow[T] {
 	validateTimeWindow(slotInterval, numSlots)
 
@@ -121,12 +125,15 @@ func NewTimeWindow[T any](slotInterval time.Duration, numSlots int, aggregator S
 
 // NewSimpleTimeWindow creates a new time window with default SimpleSlotData aggregator.
 // It has the same parameter requirements as NewTimeWindow.
+// The optional val has the same initial-aggregate semantics as NewTimeWindow.
 func NewSimpleTimeWindow[T SimpleSlotData](slotInterval time.Duration, numSlots int, val ...T) *TimeWindow[T] {
 	return NewTimeWindow(slotInterval, numSlots, simpleSlotAggregator[T]{}, val...)
 }
 
-// NewTimeWindowCloneable create a new time window that supports to return cloned data.
+// NewTimeWindowCloneable creates a time window whose Data method returns independent snapshots.
 // It has the same parameter requirements as NewTimeWindow.
+// Only Data results are cloned; the optional val has the same ownership and
+// initial-aggregate semantics as NewTimeWindow.
 func NewTimeWindowCloneable[T any](slotInterval time.Duration, numSlots int, aggregator SlotAggregatorCloneable[T], val ...T) *TimeWindow[T] {
 	tw := NewTimeWindow(slotInterval, numSlots, aggregator, val...)
 	tw.dataCloneable = aggregator
@@ -164,7 +171,10 @@ func (tw *TimeWindow[T]) add(now time.Time, sample T) {
 	tw.aggData = tw.aggregator.Add(tw.aggData, sample)
 }
 
-// Data returns the aggregation data within the time window scope
+// Data returns the initial aggregate plus the data in unexpired slots.
+// Without NewTimeWindowCloneable, reference data shares storage with the window:
+// callers must not modify it or access it concurrently with Add or another Data call,
+// which may expire slots. Use NewTimeWindowCloneable when independent snapshots are needed.
 func (tw *TimeWindow[T]) Data() T {
 	tw.mu.Lock()
 	defer tw.mu.Unlock()
