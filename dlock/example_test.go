@@ -10,7 +10,7 @@ import (
 	"github.com/Conflux-Chain/go-conflux-util/dlock"
 )
 
-func ExampleLockManager_Acquire() {
+func ExampleLockManager_AcquireWithDeadline() {
 	lockMan, err := dlock.OpenLockManagerFromViper()
 	if err != nil {
 		log.Print(err)
@@ -29,7 +29,8 @@ func ExampleLockManager_Acquire() {
 	}
 	ctx := context.Background()
 	intent := dlock.NewLockIntent("dlock_key", fmt.Sprintf("%x", nonce), 15*time.Second)
-	if err := lockMan.Acquire(ctx, intent); err != nil {
+	deadline, err := lockMan.AcquireWithDeadline(ctx, intent)
+	if err != nil {
 		log.Print(err)
 		return
 	}
@@ -41,10 +42,20 @@ func ExampleLockManager_Acquire() {
 		}
 	}()
 
-	// Perform bounded, cancellable work while the lease is valid.
-	// Renew before expiry with the same intent; stop work if renewal fails.
-	if err := lockMan.Acquire(ctx, intent); err != nil {
+	workCtx, cancelWork := context.WithDeadline(ctx, deadline)
+	defer cancelWork()
+	// Pass workCtx to protected operations and stop by deadline.
+	if err := workCtx.Err(); err != nil {
 		log.Print(err)
 		return
 	}
+
+	// Renew before expiry using the original context and the same intent.
+	deadline, err = lockMan.AcquireWithDeadline(ctx, intent)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	// Cancel the old work context and create a new one from ctx and deadline
+	// before continuing work under the renewed lease.
 }

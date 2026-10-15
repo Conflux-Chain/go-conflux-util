@@ -224,7 +224,7 @@ func TestMySQLLeasePrecision(t *testing.T) {
 		setTime(1700000000200)
 		var now time.Time
 		require.NoError(t, be.db.Raw("SELECT UTC_TIMESTAMP(3)").Scan(&now).Error)
-		for _, lease := range []time.Duration{time.Nanosecond, time.Millisecond, 1500 * time.Microsecond, 1250 * time.Millisecond, time.Duration(1<<63 - 1)} {
+		for _, lease := range []time.Duration{time.Second + time.Nanosecond, 1501500 * time.Microsecond, 1250 * time.Millisecond, time.Duration(1<<63 - 1)} {
 			key := testID(t)
 			ok, err := be.WriteEntry(context.Background(), key, testID(t), lease)
 			require.NoError(t, err)

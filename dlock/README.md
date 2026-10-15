@@ -46,7 +46,8 @@ if _, err := rand.Read(nonce[:]); err != nil {
     return err
 }
 intent := dlock.NewLockIntent("dlock_key", fmt.Sprintf("%x", nonce), 15*time.Second)
-if err := lockMan.Acquire(ctx, intent); err != nil {
+deadline, err := lockMan.AcquireWithDeadline(ctx, intent)
+if err != nil {
     return err
 }
 defer func() {
@@ -57,14 +58,29 @@ defer func() {
     }
 }()
 
-// Perform bounded, cancellable work while the lease is valid.
-// Renew before expiry with the same intent; stop work if renewal fails.
-if err := lockMan.Acquire(ctx, intent); err != nil {
+workCtx, cancelWork := context.WithDeadline(ctx, deadline)
+defer cancelWork()
+// Pass workCtx to protected operations and stop by deadline.
+if err := workCtx.Err(); err != nil {
     return err
 }
+
+// Renew before expiry using the original context and the same intent.
+deadline, err = lockMan.AcquireWithDeadline(ctx, intent)
+if err != nil {
+    return err
+}
+// Cancel the old work context and create a new one from ctx and deadline
+// before continuing work under the renewed lease.
 ```
 
-`Acquire` returns `ErrLockAcquisitionFailed` when another holder owns the lock.
+`AcquireWithDeadline` returns a conservative local deadline, measured from before
+storage access with Go's monotonic clock. Acquisition time and a 1ms precision
+reserve reduce the usable lease. `Acquire` applies the same checks and returns
+only an error. Both return `ErrLockAcquisitionFailed` on contention or exhausted
+lease budget, including leases of 1ms or less. Failed acquisitions must never be
+used for protected work. Cleanup uses key+nonce; cleanup errors remain observable
+with `errors.Is`.
 `Release` returns `ErrLockNotHeld` when no lock matches the key and nonce. Other
 errors retain the underlying storage or context error and support `errors.Is`.
 
@@ -79,12 +95,14 @@ it to `NewLockManager`.
 
 - Generate a unique, nonempty nonce for each holding period. Reuse it only for
   renewals; use a new nonce after release or lease loss. Do not share nonces
-  between instances.
+  between instances. Serialize acquisition, renewal and release for each intent.
 - MySQL keys and nonces compare by bytes, including case and trailing spaces.
   Keys may contain at most 764 bytes.
 - Leases must be positive and are rounded up to milliseconds. Timestamps are
   stored and compared in UTC using the MySQL server's clock, independently of
-  connection time zones. Client clock readings are not authoritative.
+  connection time zones. Local deadlines assume a stable database clock; forward
+  clock jumps can expire a lease earlier. Use a pool in autocommit mode, outside
+  caller-managed transactions, so success includes committing the lock write.
 - Renewals are explicit. Schedule them before expiry with sufficient margin for
   database delays, and stop protected work if renewal fails or lease validity is
   uncertain. If acquisition returns an error, do not start protected work.

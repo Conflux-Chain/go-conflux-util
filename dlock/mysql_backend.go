@@ -46,7 +46,8 @@ type MySQLBackend struct {
 }
 
 // NewMySQLBackend uses a caller-owned MySQL database. Create or explicitly migrate
-// Dlock, then call ValidateSchema before using the backend.
+// Dlock, then call ValidateSchema before using the backend. Use an autocommit
+// pool, not a caller-managed transaction: success must include committing writes.
 func NewMySQLBackend(db *gorm.DB) *MySQLBackend {
 	return &MySQLBackend{db: db}
 }
@@ -187,13 +188,23 @@ func validateMySQLIdentifiers(key, nonce string) error {
 
 // Implement WriteEntry - try to acquire a lock
 func (m *MySQLBackend) WriteEntry(
-	ctx context.Context, key, nonce string, lease time.Duration) (bool, error) {
+	ctx context.Context, key, nonce string, lease time.Duration) (ok bool, err error) {
+	start := time.Now()
 	if err := validateMySQLIdentifiers(key, nonce); err != nil {
 		return false, err
 	}
 	if err := validateLease(lease); err != nil {
 		return false, err
 	}
+	if time.Since(start) >= lease-time.Millisecond {
+		return false, ErrLockAcquisitionFailed
+	}
+	defer func() {
+		if ok && err == nil {
+			err = checkAcquiredLease(ctx, m, key, nonce, start, lease)
+			ok = err == nil
+		}
+	}()
 	ctxDb := m.db.WithContext(ctx)
 	leaseMillis := lease.Milliseconds()
 	if lease%time.Millisecond != 0 {

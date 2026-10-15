@@ -2,6 +2,7 @@ package dlock
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -134,24 +135,61 @@ func (l *LockManager) Close() error {
 }
 
 // Acquire tries to acquire a distributed lock with the given key and lease duration.
-// It returns nil error if the lease was successfully obtained.
+// It returns nil only while a conservative lease budget remains. Use
+// AcquireWithDeadline to bound protected work by that budget.
 func (l *LockManager) Acquire(ctx context.Context, li *LockIntent) error {
+	_, err := l.AcquireWithDeadline(ctx, li)
+	return err
+}
+
+// AcquireWithDeadline acquires or renews a lease and returns a local monotonic
+// deadline. The budget starts before storage access and reserves one millisecond
+// for timestamp precision. It assumes the database clock does not jump forward.
+// Stop work by this deadline, or earlier if renewal fails. No deadline is returned
+// on failure; a successful write with an exhausted budget is conditionally released.
+func (l *LockManager) AcquireWithDeadline(ctx context.Context, li *LockIntent) (time.Time, error) {
+	start := time.Now()
 	if err := li.validate(); err != nil {
-		return err
+		return time.Time{}, err
 	}
 	if err := validateLease(li.Lease); err != nil {
-		return err
+		return time.Time{}, err
+	}
+	deadline := start.Add(li.Lease - time.Millisecond)
+	if time.Since(start) >= li.Lease-time.Millisecond {
+		return time.Time{}, ErrLockAcquisitionFailed
 	}
 	ok, err := l.backend.WriteEntry(ctx, li.Key, li.Nonce, li.Lease)
 	if err != nil {
-		return errors.WithMessage(err, "failed to write lock entry")
+		return time.Time{}, errors.WithMessage(err, "failed to write lock entry")
 	}
 
 	if !ok { // unabled to acquire lock
-		return ErrLockAcquisitionFailed
+		return time.Time{}, ErrLockAcquisitionFailed
 	}
 
-	return nil
+	if err := checkAcquiredLease(ctx, l.backend, li.Key, li.Nonce, start, li.Lease); err != nil {
+		return time.Time{}, err
+	}
+	return deadline, nil
+}
+
+// checkAcquiredLease includes response/commit latency in the validity budget.
+// Cleanup uses a fresh bounded context because acquisition may have been canceled.
+func checkAcquiredLease(ctx context.Context, backend Backend, key, nonce string, start time.Time, lease time.Duration) error {
+	err := ctx.Err()
+	if err == nil && time.Since(start) < lease-time.Millisecond {
+		return nil
+	}
+	if err == nil {
+		err = ErrLockAcquisitionFailed
+	}
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+	defer cancel()
+	if _, cleanupErr := backend.DelEntry(cleanupCtx, key, nonce); cleanupErr != nil {
+		return fmt.Errorf("%w; failed to discard lease: %w", err, cleanupErr)
+	}
+	return err
 }
 
 // Release attempts to release an existing lock.
