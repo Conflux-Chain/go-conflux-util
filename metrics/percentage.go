@@ -7,8 +7,11 @@ import (
 	"github.com/rcrowley/go-metrics"
 )
 
-// Percentage implements the GaugeFloat64 interface for percentage statistic.
-// The value will be in range [0, 100], e.g. 99.38 means 99.38%.
+// Percentage records samples through Mark and exposes their marked percentage through Value.
+// With samples, Value is in [0, 100], e.g. 99.38 means 99.38%. Without samples,
+// including when all time-window samples have expired, Value returns NaN.
+// Constructors return a no-op implementation whose Value is always 0 when metrics are disabled.
+// Registration helpers adapt Percentage to metrics.GaugeFloat64 through a wrapper.
 type Percentage interface {
 	Mark(marked bool)
 

@@ -46,10 +46,19 @@ func main() {
 
 ## Percentage Metric Type
 
-The `Percentage` metric type is used for percentage statistic, which ranges in [0,100]. E.g. 99.38 means 99.38%. There are 2 implementations available:
+The `Percentage` interface records samples with `Mark` and returns their marked percentage with `Value`.
+With samples, the value ranges from 0 to 100; for example, 99.38 means 99.38%.
+Without samples, including when all samples in a time window have expired, `Value` returns `NaN`.
+When metrics are disabled, constructors return a no-op implementation whose value is always 0.
 
-- `StandardPercentage`: is used for overall statistics.
-- `TimeWindowPercentage`: is used for statistics in the past period of time based on time window.
+Two constructors are available:
+
+- `NewPercentage`: records overall statistics.
+- `NewTimeWindowPercentage`: records statistics within a time window.
+
+The registration helpers wrap `Percentage` to implement `go-metrics.GaugeFloat64`.
+When a registered percentage returns `NaN`, InfluxDB reporting skips the measurement,
+and `GetMetrics` returns a `nil` value that is encoded as JSON `null`.
 
 See examples below:
 
