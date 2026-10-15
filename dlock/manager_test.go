@@ -68,3 +68,26 @@ func TestManagerErrorMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestInvalidOwnershipInputs(t *testing.T) {
+	ctx := context.Background()
+	manager := NewLockManager(fakeBackend{}) // Any backend call would panic.
+	for _, tc := range []struct {
+		intent *LockIntent
+		err    error
+	}{
+		{nil, ErrInvalidLockIntent},
+		{NewLockIntent("key", "", time.Second), ErrEmptyNonce},
+	} {
+		assert.ErrorIs(t, manager.Acquire(ctx, tc.intent), tc.err)
+		assert.ErrorIs(t, manager.Release(ctx, tc.intent), tc.err)
+	}
+
+	backend := NewMySQLBackend(nil) // Validation must precede database access.
+	ok, err := backend.WriteEntry(ctx, "key", "", time.Second)
+	assert.False(t, ok)
+	assert.ErrorIs(t, err, ErrEmptyNonce)
+	ok, err = backend.DelEntry(ctx, "key", "")
+	assert.False(t, ok)
+	assert.ErrorIs(t, err, ErrEmptyNonce)
+}

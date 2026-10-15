@@ -46,6 +46,9 @@ func NewMySQLBackend(db *gorm.DB) *MySQLBackend {
 // Implement WriteEntry - try to acquire a lock
 func (m *MySQLBackend) WriteEntry(
 	ctx context.Context, key, nonce string, lease time.Duration) (bool, error) {
+	if err := validateNonce(nonce); err != nil {
+		return false, err
+	}
 	ctxDb := m.db.WithContext(ctx)
 	expAtGormExpr := gorm.Expr("NOW() + INTERVAL ? SECOND", lease.Seconds())
 	nowTsGormExpr := gorm.Expr("CURRENT_TIMESTAMP")
@@ -79,6 +82,9 @@ func (m *MySQLBackend) WriteEntry(
 
 // Implement DelEntry - release a lock
 func (m *MySQLBackend) DelEntry(ctx context.Context, key, nonce string) (bool, error) {
+	if err := validateNonce(nonce); err != nil {
+		return false, err
+	}
 	res := m.db.WithContext(ctx).Where("`key` = ? AND nonce = ?", key, nonce).Delete(&Dlock{})
 	return res.RowsAffected > 0, res.Error
 }

@@ -11,6 +11,12 @@ lockMan := dlock.NewLockManager(backend)
 
 Alternatively, you can construct a lock manager with a convenient MySQL backend by using configuration files or environment variables.
 
+A nonce identifies one independent holding period. Generate a unique, nonempty
+nonce for every acquisition after release or lease loss, and reuse it only for
+renewals during that holding period. Do not share nonces between instances.
+The package rejects empty nonces but cannot detect historical reuse: a delayed
+release with a reused nonce could delete a later holder's lock.
+
 ```go
 // Construct a lock manager with a MySQL backend from configurations loaded by viper
 lockMan = dlock.NewLockManagerFromViper()

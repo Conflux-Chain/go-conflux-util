@@ -12,6 +12,8 @@ var (
 	// Custom Errors
 	ErrLockNotHeld           = errors.New("lock not held")
 	ErrLockAcquisitionFailed = errors.New("failed to acquire lock")
+	ErrInvalidLockIntent     = errors.New("lock intent must not be nil")
+	ErrEmptyNonce            = errors.New("lock nonce must not be empty")
 )
 
 // Backend defines the interface for the underlying storage backend of the distributed lock.
@@ -27,13 +29,29 @@ type Backend interface {
 
 // The lock intent to acquire a distributed lock.
 type LockIntent struct {
-	Key   string        // The unique identifier for the lock.
-	Nonce string        // The lock can only be released with the correct nonce.
+	Key string // The unique identifier for the lock.
+	// Nonce must be nonempty and unique to one holding period. Reuse it only for
+	// renewals; generate a new value when acquiring after release or lease loss.
+	Nonce string
 	Lease time.Duration // The length of the lease duration.
 }
 
 func NewLockIntent(key, nonce string, lease time.Duration) *LockIntent {
 	return &LockIntent{Key: key, Nonce: nonce, Lease: lease}
+}
+
+func (li *LockIntent) validate() error {
+	if li == nil {
+		return ErrInvalidLockIntent
+	}
+	return validateNonce(li.Nonce)
+}
+
+func validateNonce(nonce string) error {
+	if nonce == "" {
+		return ErrEmptyNonce
+	}
+	return nil
 }
 
 // LockManager manages distributed locks using a backend storage system.
@@ -55,6 +73,9 @@ func NewLockManagerFromViper() *LockManager {
 // Acquire tries to acquire a distributed lock with the given key and lease duration.
 // It returns nil error if the lease was successfully obtained.
 func (l *LockManager) Acquire(ctx context.Context, li *LockIntent) error {
+	if err := li.validate(); err != nil {
+		return err
+	}
 	ok, err := l.backend.WriteEntry(ctx, li.Key, li.Nonce, li.Lease)
 	if err != nil {
 		return errors.WithMessage(err, "failed to write lock entry")
@@ -70,6 +91,9 @@ func (l *LockManager) Acquire(ctx context.Context, li *LockIntent) error {
 // Release attempts to release an existing lock.
 // It returns nil error if the lock was successfully released.
 func (l *LockManager) Release(ctx context.Context, li *LockIntent) error {
+	if err := li.validate(); err != nil {
+		return err
+	}
 	ok, err := l.backend.DelEntry(ctx, li.Key, li.Nonce)
 	if err != nil {
 		return errors.WithMessage(err, "failed to delete lock entry")
