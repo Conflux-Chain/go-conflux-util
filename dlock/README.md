@@ -32,19 +32,52 @@ The package rejects empty nonces but cannot detect historical reuse: a delayed
 release with a reused nonce could delete a later holder's lock.
 
 ```go
-// Construct a lock manager with a MySQL backend from configurations loaded by viper
-lockMan = dlock.NewLockManagerFromViper()
+// Handle initialization errors and close the internally owned pool when done.
+lockMan, err := dlock.OpenLockManagerFromViper()
+if err != nil {
+    return err
+}
+defer lockMan.Close()
 ```
 
-To acquire and release a lock, you can use:
+The legacy `NewLockManagerFromViper()` exits the process on initialization failure.
+`NewLockManagerFromConfig(conf)` accepts an existing `store.Config` and returns an
+error. Managers created with `NewLockManager(backend)` leave backend resources
+under caller ownership.
+
+To acquire a lock, generate a nonce for this holding period and check the result
+before starting protected work. These snippets assume an enclosing function
+returning `error`; see [the compilable example](example_test.go) for imports and
+complete error handling.
 
 ```go
-intent := NewLockIntent("dlock_key", 15 * time.Second)
-// Acquire a lock with key name "dlock_key" for 15 seconds
-lockMan.Acquire(context.Background(), intent)
-// Release the lock immediately
-lockMan.Release(context.Background(), intent)
+var nonce [16]byte
+if _, err := rand.Read(nonce[:]); err != nil {
+    return err
+}
+intent := dlock.NewLockIntent("dlock_key", fmt.Sprintf("%x", nonce), 15*time.Second)
+if err := lockMan.Acquire(ctx, intent); err != nil {
+    return err
+}
+// Only arrange release after acquisition succeeds. Use a fresh context so that
+// cancellation of the work does not prevent the release attempt.
+defer func() {
+    releaseCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+    defer cancel()
+    if err := lockMan.Release(releaseCtx, intent); err != nil {
+        log.Printf("release lock: %v", err)
+    }
+}()
+
+// Renew before expiry using the same intent; stop protected work on any error.
+if err := lockMan.Acquire(ctx, intent); err != nil {
+    return err
+}
 ```
+
+This package does not run a renewal goroutine. Keep work bounded and cancellable,
+and choose a renewal schedule with sufficient margin for database delays. Once
+released or lease validity is lost, use a new nonce for another holding period.
 
 ## MySQL schema and upgrades
 
