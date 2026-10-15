@@ -121,3 +121,15 @@ Retain the full unique `uidx_key` index on `key`. If it is missing, add
 replace any conflicting prefix or composite index explicitly. Run schema
 validation before restarting. Formerly folded identifiers are not recoverable
 from the stored row; review application key names when changing comparison rules.
+
+## Contention and capacity
+
+Each acquisition or renewal reads a row before attempting a write, normally
+requiring at least two SQL round trips; a competing holder may still cause an
+unsuccessful update. Hot keys amplify database load, so size the pool and renewal
+frequency for the expected contention. There is no background expiry cleanup:
+expired rows remain until the key is reused or the matching nonce releases them.
+Fixed sets of keys bound table growth, but continually changing keys can accumulate
+rows after holders exit. If needed, arrange bounded database cleanup that deletes
+only rows still expired at deletion time, without removing renewed leases. Atomic
+conditional writes and automatic cleanup are not implemented by this package.
