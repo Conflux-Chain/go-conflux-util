@@ -2,6 +2,7 @@ package dlock
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/Conflux-Chain/go-conflux-util/store"
@@ -67,10 +68,13 @@ func validateLease(lease time.Duration) error {
 
 // LockManager manages distributed locks using a backend storage system.
 type LockManager struct {
-	backend Backend
+	backend    Backend
+	ownedStore *store.Store
+	closeOnce  sync.Once
+	closeErr   error
 }
 
-// NewLockManager creates a new LockManager with the provided backend.
+// NewLockManager uses a caller-owned backend. Close does not close its resources.
 func NewLockManager(be Backend) *LockManager {
 	return &LockManager{backend: be}
 }
@@ -96,6 +100,7 @@ func OpenLockManagerFromViper() (*LockManager, error) {
 
 // NewLockManagerFromConfig opens a MySQL manager with the supplied pool settings.
 // MySQL takes precedence if both MySQL and SQLite are configured.
+// The caller must Close the returned manager when it is no longer in use.
 func NewLockManagerFromConfig(conf store.Config) (*LockManager, error) {
 	if conf.Mysql == nil {
 		return nil, ErrMySQLRequired
@@ -104,7 +109,20 @@ func NewLockManagerFromConfig(conf store.Config) (*LockManager, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewLockManager(NewMySQLBackend(db)), nil
+	manager := NewLockManager(NewMySQLBackend(db))
+	manager.ownedStore = store.NewStore(db)
+	return manager, nil
+}
+
+// Close releases only the database pool opened by a configuration constructor.
+// Repeated calls return the first close result. Stop using the manager first.
+func (l *LockManager) Close() error {
+	l.closeOnce.Do(func() {
+		if l.ownedStore != nil {
+			l.closeErr = l.ownedStore.Close()
+		}
+	})
+	return l.closeErr
 }
 
 // Acquire tries to acquire a distributed lock with the given key and lease duration.

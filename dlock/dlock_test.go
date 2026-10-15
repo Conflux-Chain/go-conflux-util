@@ -45,20 +45,25 @@ func setup() error {
 		return nil
 	}
 
+	conf := testMySQLConfig()
+	db := conf.MustOpenOrCreate(&Dlock{})
+	testMysqlBe = NewMySQLBackend(db)
+
+	return nil
+}
+
+func testMySQLConfig() store.Config {
 	conf := store.Config{
 		Mysql: &store.MysqlConfig{
-			Host:     host,
-			Database: database,
+			Host:     os.Getenv("TEST_MYSQL_HOST"),
+			Database: os.Getenv("TEST_MYSQL_DB"),
 			Username: os.Getenv("TEST_MYSQL_USER"),
 			Password: os.Getenv("TEST_MYSQL_PWD"),
 		},
 	}
 
 	defaults.SetDefaults(&conf)
-	db := conf.MustOpenOrCreate(&Dlock{})
-	testMysqlBe = NewMySQLBackend(db)
-
-	return nil
+	return conf
 }
 
 func teardown() error {
@@ -136,4 +141,26 @@ func TestLockManager(t *testing.T) {
 
 	err = lockman.Release(context.Background(), li0)
 	assert.NoError(t, err)
+}
+
+func TestManagerPoolOwnership(t *testing.T) {
+	key := mysqlTestKey(t)
+	conf := testMySQLConfig()
+	conf.Sqlite = &store.SqliteConfig{} // MySQL must still take precedence.
+	manager, err := NewLockManagerFromConfig(conf)
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, manager.Close()) })
+	pool, err := manager.backend.(*MySQLBackend).db.DB()
+	require.NoError(t, err)
+	require.NoError(t, manager.Acquire(context.Background(), NewLockIntent(key, testID(t), time.Second)))
+	assert.NoError(t, manager.Close())
+	assert.NoError(t, manager.Close())
+	assert.Error(t, pool.Ping())
+
+	external := NewLockManager(testMysqlBe)
+	assert.NoError(t, external.Close())
+	assert.NoError(t, external.Close())
+	pool, err = testMysqlBe.db.DB()
+	require.NoError(t, err)
+	assert.NoError(t, pool.Ping())
 }
