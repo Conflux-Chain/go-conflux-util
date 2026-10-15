@@ -87,6 +87,41 @@ func TestMySQLSchemaValidation(t *testing.T) {
 	}
 }
 
+func mysqlTestDatabase(t *testing.T) store.Config {
+	t.Helper()
+	mysqlTestKey(t)
+	conf := testMySQLConfig()
+	conf.Mysql.Database = "dlock_" + testID(t)
+	name := clause.Table{Name: conf.Mysql.Database}
+	require.NoError(t, testMysqlBe.db.Exec("CREATE DATABASE ?", name).Error)
+	t.Cleanup(func() { assert.NoError(t, testMysqlBe.db.Exec("DROP DATABASE ?", name).Error) })
+	return conf
+}
+
+func TestMySQLQualifiedSchema(t *testing.T) {
+	original := mysqlTestTable(t)
+	conf := mysqlTestDatabase(t)
+	table := original.db.Statement.Table
+	target := original.db.Table(conf.Mysql.Database + "." + table).Session(&gorm.Session{})
+	require.NoError(t, target.Migrator().CreateTable(&Dlock{}))
+	be := NewMySQLBackend(target)
+	ctx := context.Background()
+	require.NoError(t, be.ValidateSchema(ctx))
+	require.NoError(t, target.Exec("ALTER TABLE ? DROP INDEX uidx_key", clause.Table{Name: conf.Mysql.Database + "." + table}).Error)
+	assert.ErrorIs(t, be.ValidateSchema(ctx), ErrIncompatibleSchema)
+	require.NoError(t, target.Exec("ALTER TABLE ? ADD UNIQUE INDEX uidx_key (`key`)", clause.Table{Name: conf.Mysql.Database + "." + table}).Error)
+	require.NoError(t, original.db.Exec("ALTER TABLE ? DROP INDEX uidx_key, MODIFY nonce longtext", clause.Table{Name: table}).Error)
+	require.NoError(t, be.ValidateSchema(ctx), "default schema must not affect target validation")
+	require.NoError(t, original.db.Exec("DROP TABLE ?", clause.Table{Name: table}).Error)
+	require.NoError(t, be.ValidateSchema(ctx), "no default table is required")
+	assertFirstAcquisitionContention(t, be)
+
+	// Column checks must resolve the same target as index checks.
+	require.NoError(t, target.Exec("ALTER TABLE ? MODIFY nonce longtext", clause.Table{Name: conf.Mysql.Database + "." + table}).Error)
+	assert.ErrorIs(t, be.ValidateSchema(ctx), ErrIncompatibleSchema)
+	assert.ErrorIs(t, NewMySQLBackend(original.db.Table(table+" AS alias")).ValidateSchema(ctx), ErrIncompatibleSchema)
+}
+
 func TestMySQLExplicitMigration(t *testing.T) {
 	mysqlTestKey(t)
 	conf := testMySQLConfig()
@@ -265,56 +300,61 @@ func TestMySQLFirstAcquisitionContention(t *testing.T) {
 		t.Run(fmt.Sprintf("translate_errors=%t", translate), func(t *testing.T) {
 			be := mysqlTestTable(t)
 			be.db.Config.TranslateError = translate
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			var workers sync.WaitGroup
-			defer func() { cancel(); workers.Wait() }()
-			queried := make(chan struct{}, 2)
-			release := make(chan struct{})
-			callback := "dlock_contention_" + testID(t)
-			require.NoError(t, be.db.Callback().Query().After("gorm:query").Register(callback, func(tx *gorm.DB) {
-				if tx.Statement.Table == be.db.Statement.Table && errors.Is(tx.Error, gorm.ErrRecordNotFound) {
-					queried <- struct{}{}
-					select {
-					case <-release:
-					case <-ctx.Done():
-						tx.AddError(ctx.Err())
-					}
-				}
-			}))
-			t.Cleanup(func() { assert.NoError(t, be.db.Callback().Query().Remove(callback)) })
-			results := make(chan error, 2)
-			key := testID(t)
-			for range 2 {
-				intent := NewLockIntent(key, testID(t), time.Minute)
-				workers.Add(1)
-				go func() {
-					defer workers.Done()
-					results <- NewLockManager(be).Acquire(ctx, intent)
-				}()
-			}
-			for range 2 {
-				select {
-				case <-queried:
-				case <-ctx.Done():
-					t.Fatal("both acquisitions must observe a missing row before inserting")
-				}
-			}
-			close(release)
-			successes := 0
-			for range 2 {
-				err := <-results
-				if err == nil {
-					successes++
-				} else {
-					assert.ErrorIs(t, err, ErrLockAcquisitionFailed)
-				}
-			}
-			assert.Equal(t, 1, successes)
-			var rows int64
-			require.NoError(t, be.db.Model(&Dlock{}).Count(&rows).Error)
-			assert.EqualValues(t, 1, rows)
+			assertFirstAcquisitionContention(t, be)
 		})
 	}
+}
+
+func assertFirstAcquisitionContention(t *testing.T, be *MySQLBackend) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	var workers sync.WaitGroup
+	defer func() { cancel(); workers.Wait() }()
+	queried := make(chan struct{}, 2)
+	release := make(chan struct{})
+	callback := "dlock_contention_" + testID(t)
+	require.NoError(t, be.db.Callback().Query().After("gorm:query").Register(callback, func(tx *gorm.DB) {
+		if tx.Statement.Table == be.db.Statement.Table && errors.Is(tx.Error, gorm.ErrRecordNotFound) {
+			queried <- struct{}{}
+			select {
+			case <-release:
+			case <-ctx.Done():
+				tx.AddError(ctx.Err())
+			}
+		}
+	}))
+	t.Cleanup(func() { assert.NoError(t, be.db.Callback().Query().Remove(callback)) })
+	results := make(chan error, 2)
+	key := testID(t)
+	for range 2 {
+		intent := NewLockIntent(key, testID(t), time.Minute)
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			results <- NewLockManager(be).Acquire(ctx, intent)
+		}()
+	}
+	for range 2 {
+		select {
+		case <-queried:
+		case <-ctx.Done():
+			t.Fatal("both acquisitions must observe a missing row before inserting")
+		}
+	}
+	close(release)
+	successes := 0
+	for range 2 {
+		err := <-results
+		if err == nil {
+			successes++
+		} else {
+			assert.ErrorIs(t, err, ErrLockAcquisitionFailed)
+		}
+	}
+	assert.Equal(t, 1, successes)
+	var rows int64
+	require.NoError(t, be.db.Model(&Dlock{}).Count(&rows).Error)
+	assert.EqualValues(t, 1, rows)
 }
 
 func TestMySQLCancellation(t *testing.T) {

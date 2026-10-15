@@ -9,6 +9,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const maxKeyBytes = 764
@@ -56,7 +57,13 @@ func (m *MySQLBackend) ValidateSchema(ctx context.Context) error {
 		return ErrMySQLRequired
 	}
 	db := m.db.WithContext(ctx)
-	columns, err := db.Migrator().ColumnTypes(&Dlock{})
+	schema, table, err := m.schemaTable(ctx)
+	if err != nil {
+		return err
+	}
+	var columns []struct{ Name, Type, Nullable string }
+	err = db.Raw(`SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, IS_NULLABLE AS nullable
+ FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?`, schema, table).Scan(&columns).Error
 	if err != nil {
 		return err
 	}
@@ -65,35 +72,31 @@ func (m *MySQLBackend) ValidateSchema(ctx context.Context) error {
 		"expired_at": "datetime(3)", "created_at": "datetime(3)", "updated_at": "datetime(3)",
 	}
 	for _, column := range columns {
-		want, exists := expected[column.Name()]
+		want, exists := expected[column.Name]
 		if !exists {
 			continue
 		}
-		got, _ := column.ColumnType()
-		nullable, _ := column.Nullable()
-		required := column.Name() == "key" || column.Name() == "nonce" || column.Name() == "expired_at"
+		got := column.Type
+		nullable := column.Nullable == "YES"
+		required := column.Name == "key" || column.Name == "nonce" || column.Name == "expired_at"
 		if strings.ToLower(got) != want || (required && nullable) {
-			return errors.Wrapf(ErrIncompatibleSchema, "column %s requires %s", column.Name(), want)
+			return errors.Wrapf(ErrIncompatibleSchema, "column %s requires %s", column.Name, want)
 		}
-		delete(expected, column.Name())
+		delete(expected, column.Name)
 	}
 	if len(expected) != 0 {
 		return errors.Wrap(ErrIncompatibleSchema, "missing lock columns")
-	}
-	table := db.Statement.Table
-	if table == "" {
-		table = (Dlock{}).TableName()
 	}
 	// GetIndexes does not expose prefix lengths. Prefix indexes conflate keys;
 	// composite indexes can admit duplicate keys. Require a full single-column key.
 	var indexes int64
 	err = db.Raw(`SELECT COUNT(*) FROM (
 		SELECT INDEX_NAME FROM information_schema.STATISTICS
-		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+		WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
 		GROUP BY INDEX_NAME
 		HAVING MAX(NON_UNIQUE) = 0 AND COUNT(*) = 1
 		AND MAX(COLUMN_NAME) = 'key' AND MAX(SUB_PART) IS NULL
-	) AS lock_key_indexes`, table).Scan(&indexes).Error
+	) AS lock_key_indexes`, schema, table).Scan(&indexes).Error
 	if err != nil {
 		return err
 	}
@@ -101,6 +104,36 @@ func (m *MySQLBackend) ValidateSchema(ctx context.Context) error {
 		return errors.Wrap(ErrIncompatibleSchema, "missing full unique key index")
 	}
 	return nil
+}
+
+// schemaTable accepts GORM's quoted table or schema.table form. Reject custom
+// expressions rather than validating metadata for a different table.
+func (m *MySQLBackend) schemaTable(ctx context.Context) (schema, table string, err error) {
+	table = m.db.Statement.Table
+	if table == "" {
+		table = (Dlock{}).TableName()
+	}
+	if expr := m.db.Statement.TableExpr; expr != nil {
+		parts := strings.Split(expr.SQL, ".")
+		if len(expr.Vars) != 0 || len(parts) > 2 {
+			return "", "", ErrIncompatibleSchema
+		}
+		for i, part := range parts {
+			name := strings.ReplaceAll(strings.Trim(part, "`"), "``", "`")
+			if name == "" || part != m.db.Statement.Quote(clause.Table{Name: name}) {
+				return "", "", errors.Wrap(ErrIncompatibleSchema, "unsupported table expression")
+			}
+			parts[i] = name
+		}
+		table = parts[len(parts)-1]
+		if len(parts) == 2 {
+			schema = parts[0]
+		}
+	}
+	if schema == "" {
+		err = m.db.WithContext(ctx).Raw("SELECT DATABASE()").Scan(&schema).Error
+	}
+	return
 }
 
 func validateMySQLIdentifiers(key, nonce string) error {
