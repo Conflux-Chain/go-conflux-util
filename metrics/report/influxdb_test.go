@@ -6,7 +6,20 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/rcrowley/go-metrics"
+	"github.com/stretchr/testify/assert"
 )
+
+func TestInfluxDBRejectsNonPositiveInterval(t *testing.T) {
+	for _, interval := range []time.Duration{0, -time.Second} {
+		t.Run(interval.String(), func(t *testing.T) {
+			assert.PanicsWithValue(t, "metrics/report: reporting interval must be positive", func() {
+				InfluxDB(InfluxDBConfig{Host: "http://127.0.0.1:8086"}, metrics.NewRegistry(), interval)
+			})
+		})
+	}
+}
 
 func TestMakeClientClosesOldConnections(t *testing.T) {
 	closed := make(chan struct{}, 1)
