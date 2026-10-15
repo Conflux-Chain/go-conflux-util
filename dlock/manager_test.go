@@ -91,3 +91,20 @@ func TestInvalidOwnershipInputs(t *testing.T) {
 	assert.False(t, ok)
 	assert.ErrorIs(t, err, ErrEmptyNonce)
 }
+
+func TestInvalidLease(t *testing.T) {
+	ctx := context.Background()
+	manager := NewLockManager(fakeBackend{})
+	backend := NewMySQLBackend(nil)
+	for _, lease := range []time.Duration{0, -time.Nanosecond, -time.Second} {
+		assert.ErrorIs(t, manager.Acquire(ctx, NewLockIntent("key", "nonce", lease)), ErrInvalidLease)
+		ok, err := backend.WriteEntry(ctx, "key", "nonce", lease)
+		assert.False(t, ok)
+		assert.ErrorIs(t, err, ErrInvalidLease)
+	}
+
+	manager = NewLockManager(fakeBackend{
+		del: func(context.Context, string, string) (bool, error) { return true, nil },
+	})
+	assert.NoError(t, manager.Release(ctx, NewLockIntent("key", "nonce", 0)))
+}

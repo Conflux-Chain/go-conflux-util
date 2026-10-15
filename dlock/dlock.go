@@ -14,6 +14,7 @@ var (
 	ErrLockAcquisitionFailed = errors.New("failed to acquire lock")
 	ErrInvalidLockIntent     = errors.New("lock intent must not be nil")
 	ErrEmptyNonce            = errors.New("lock nonce must not be empty")
+	ErrInvalidLease          = errors.New("lock lease must be positive")
 )
 
 // Backend defines the interface for the underlying storage backend of the distributed lock.
@@ -54,6 +55,13 @@ func validateNonce(nonce string) error {
 	return nil
 }
 
+func validateLease(lease time.Duration) error {
+	if lease <= 0 {
+		return ErrInvalidLease
+	}
+	return nil
+}
+
 // LockManager manages distributed locks using a backend storage system.
 type LockManager struct {
 	backend Backend
@@ -74,6 +82,9 @@ func NewLockManagerFromViper() *LockManager {
 // It returns nil error if the lease was successfully obtained.
 func (l *LockManager) Acquire(ctx context.Context, li *LockIntent) error {
 	if err := li.validate(); err != nil {
+		return err
+	}
+	if err := validateLease(li.Lease); err != nil {
 		return err
 	}
 	ok, err := l.backend.WriteEntry(ctx, li.Key, li.Nonce, li.Lease)

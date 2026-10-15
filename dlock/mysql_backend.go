@@ -49,6 +49,9 @@ func (m *MySQLBackend) WriteEntry(
 	if err := validateNonce(nonce); err != nil {
 		return false, err
 	}
+	if err := validateLease(lease); err != nil {
+		return false, err
+	}
 	ctxDb := m.db.WithContext(ctx)
 	expAtGormExpr := gorm.Expr("NOW() + INTERVAL ? SECOND", lease.Seconds())
 	nowTsGormExpr := gorm.Expr("CURRENT_TIMESTAMP")
