@@ -16,7 +16,8 @@ import (
 )
 
 var (
-	testMysqlBe *MySQLBackend
+	testMysqlBe      *MySQLBackend
+	testMysqlManager *LockManager
 )
 
 // Please set the following environments before running tests:
@@ -46,10 +47,12 @@ func setup() error {
 	}
 
 	conf := testMySQLConfig()
-	db := conf.MustOpenOrCreate(&Dlock{})
-	testMysqlBe = NewMySQLBackend(db)
-
-	return nil
+	var err error
+	testMysqlManager, err = NewLockManagerFromConfig(conf)
+	if err == nil {
+		testMysqlBe = testMysqlManager.backend.(*MySQLBackend)
+	}
+	return err
 }
 
 func testMySQLConfig() store.Config {
@@ -67,8 +70,8 @@ func testMySQLConfig() store.Config {
 }
 
 func teardown() error {
-	if testMysqlBe != nil {
-		return store.NewStore(testMysqlBe.db).Close()
+	if testMysqlManager != nil {
+		return testMysqlManager.Close()
 	}
 
 	return nil

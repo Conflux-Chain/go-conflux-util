@@ -19,6 +19,8 @@ var (
 	ErrEmptyNonce            = errors.New("lock nonce must not be empty")
 	ErrInvalidLease          = errors.New("lock lease must be positive")
 	ErrMySQLRequired         = errors.New("dlock requires MySQL configuration")
+	ErrInvalidLockKey        = errors.New("MySQL lock key exceeds 764 bytes")
+	ErrIncompatibleSchema    = errors.New("incompatible dlocks schema; migrate before use")
 )
 
 // Backend defines the interface for the underlying storage backend of the distributed lock.
@@ -105,12 +107,23 @@ func NewLockManagerFromConfig(conf store.Config) (*LockManager, error) {
 	if conf.Mysql == nil {
 		return nil, ErrMySQLRequired
 	}
-	db, err := conf.OpenOrCreate(&Dlock{})
+	db, err := conf.OpenOrCreate()
 	if err != nil {
 		return nil, err
 	}
-	manager := NewLockManager(NewMySQLBackend(db))
+	backend := NewMySQLBackend(db)
+	manager := NewLockManager(backend)
 	manager.ownedStore = store.NewStore(db)
+	if !db.Migrator().HasTable(&Dlock{}) {
+		err = db.Migrator().CreateTable(&Dlock{})
+	}
+	if err == nil {
+		err = backend.ValidateSchema(context.Background())
+	}
+	if err != nil {
+		manager.Close()
+		return nil, err
+	}
 	return manager, nil
 }
 
