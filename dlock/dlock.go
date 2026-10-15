@@ -12,6 +12,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const leasePrecision = time.Millisecond
+
 var (
 	// Custom Errors
 	ErrLockNotHeld           = errors.New("lock not held")
@@ -155,8 +157,8 @@ func (l *LockManager) AcquireWithDeadline(ctx context.Context, li *LockIntent) (
 	if err := validateLease(li.Lease); err != nil {
 		return time.Time{}, err
 	}
-	deadline := start.Add(li.Lease - time.Millisecond)
-	if time.Since(start) >= li.Lease-time.Millisecond {
+	deadline := start.Add(li.Lease - leasePrecision)
+	if time.Since(start) >= li.Lease-leasePrecision {
 		return time.Time{}, ErrLockAcquisitionFailed
 	}
 	ok, err := l.backend.WriteEntry(ctx, li.Key, li.Nonce, li.Lease)
@@ -168,17 +170,18 @@ func (l *LockManager) AcquireWithDeadline(ctx context.Context, li *LockIntent) (
 		return time.Time{}, ErrLockAcquisitionFailed
 	}
 
-	if err := checkAcquiredLease(ctx, l.backend, li.Key, li.Nonce, start, li.Lease); err != nil {
+	if err := finishAcquisition(ctx, l.backend, li.Key, li.Nonce, start, li.Lease); err != nil {
 		return time.Time{}, err
 	}
 	return deadline, nil
 }
 
-// checkAcquiredLease includes response/commit latency in the validity budget.
-// Cleanup uses a fresh bounded context because acquisition may have been canceled.
-func checkAcquiredLease(ctx context.Context, backend Backend, key, nonce string, start time.Time, lease time.Duration) error {
+// finishAcquisition confirms a successful write still has a usable lease, or
+// conditionally releases it. Cleanup uses a fresh bounded context because
+// acquisition may have been canceled.
+func finishAcquisition(ctx context.Context, backend Backend, key, nonce string, start time.Time, lease time.Duration) error {
 	err := ctx.Err()
-	if err == nil && time.Since(start) < lease-time.Millisecond {
+	if err == nil && time.Since(start) < lease-leasePrecision {
 		return nil
 	}
 	if err == nil {

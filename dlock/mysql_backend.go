@@ -188,7 +188,7 @@ func validateMySQLIdentifiers(key, nonce string) error {
 
 // Implement WriteEntry - try to acquire a lock
 func (m *MySQLBackend) WriteEntry(
-	ctx context.Context, key, nonce string, lease time.Duration) (ok bool, err error) {
+	ctx context.Context, key, nonce string, lease time.Duration) (bool, error) {
 	start := time.Now()
 	if err := validateMySQLIdentifiers(key, nonce); err != nil {
 		return false, err
@@ -196,15 +196,9 @@ func (m *MySQLBackend) WriteEntry(
 	if err := validateLease(lease); err != nil {
 		return false, err
 	}
-	if time.Since(start) >= lease-time.Millisecond {
+	if time.Since(start) >= lease-leasePrecision {
 		return false, ErrLockAcquisitionFailed
 	}
-	defer func() {
-		if ok && err == nil {
-			err = checkAcquiredLease(ctx, m, key, nonce, start, lease)
-			ok = err == nil
-		}
-	}()
 	ctxDb := m.db.WithContext(ctx)
 	leaseMillis := lease.Milliseconds()
 	if lease%time.Millisecond != 0 {
@@ -212,37 +206,40 @@ func (m *MySQLBackend) WriteEntry(
 	}
 	expAtGormExpr := gorm.Expr("UTC_TIMESTAMP(3) + INTERVAL ? MICROSECOND", leaseMillis*1000)
 	nowTsGormExpr := gorm.Expr("UTC_TIMESTAMP(3)")
-	verGormExpr := gorm.Expr("version + 1")
 
 	found, err := store.NewStore(ctxDb).Get(&Dlock{}, "`key` = ?", key)
 	if err != nil {
 		return false, err
 	}
 
+	values := map[string]interface{}{
+		"nonce":      nonce,
+		"expired_at": expAtGormExpr,
+		"updated_at": nowTsGormExpr,
+	}
+	var result *gorm.DB
 	if found { // Try to update if expired or nonce matches.
-		res := ctxDb.Model(&Dlock{}).
+		values["version"] = gorm.Expr("version + 1")
+		result = ctxDb.Model(&Dlock{}).
 			Where("`key` = ? AND (expired_at <= UTC_TIMESTAMP(3) OR nonce = ?)", key, nonce).
-			Updates(map[string]interface{}{
-				"nonce":      nonce,
-				"version":    verGormExpr,
-				"expired_at": expAtGormExpr,
-				"updated_at": nowTsGormExpr,
-			})
-		return res.RowsAffected > 0, res.Error
+			Updates(values)
 	} else { // Attempt to insert a new lock
-		res := ctxDb.Model(&Dlock{}).Create(map[string]interface{}{
-			"key":        key,
-			"nonce":      nonce,
-			"expired_at": expAtGormExpr,
-			"created_at": nowTsGormExpr,
-			"updated_at": nowTsGormExpr,
-		})
+		values["key"] = key
+		values["created_at"] = nowTsGormExpr
+		result = ctxDb.Model(&Dlock{}).Create(values)
 		var mysqlErr *mysql.MySQLError
-		if errors.Is(res.Error, gorm.ErrDuplicatedKey) || (errors.As(res.Error, &mysqlErr) && mysqlErr.Number == 1062) {
+		if errors.Is(result.Error, gorm.ErrDuplicatedKey) || (errors.As(result.Error, &mysqlErr) && mysqlErr.Number == 1062) {
 			return false, nil
 		}
-		return res.Error == nil, res.Error
 	}
+	if result.Error != nil {
+		return false, result.Error
+	}
+	if found && result.RowsAffected == 0 {
+		return false, nil
+	}
+	err = finishAcquisition(ctx, m, key, nonce, start, lease)
+	return err == nil, err
 }
 
 // Implement DelEntry - release a lock
