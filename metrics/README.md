@@ -13,6 +13,11 @@ another reporter, while calling `Init` with `Enabled: false` does not stop an ex
 When using `report.InfluxDB` directly, it blocks after successful client initialization and is typically
 run in a goroutine.
 
+Programmatic initialization does not apply `default` tags. Set the reporting interval and HTTP timeout
+explicitly, as shown below. `Timeout` applies to both Ping and write requests; a non-positive value
+disables the HTTP timeout. Configuration decoding through this repository's Viper utility applies the
+`10s` default timeout.
+
 ```go
 package main
 
@@ -32,11 +37,13 @@ func main() {
 			DB:       "metrics_db",
 			Username: "user",
 			Password: "pass",
+			Timeout:  10 * time.Second,
 		},
 	})
 }
 
 ```
+
 ## Percentage Metric Type
 
 The `Percentage` metric type is used for percentage statistic, which ranges in [0,100]. E.g. 99.38 means 99.38%. There are 2 implementations available:

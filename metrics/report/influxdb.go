@@ -20,7 +20,8 @@ type InfluxDBConfig struct {
 	// authenticated password
 	Password string
 
-	// Timeout for influxdb writes, defaults to no timeout.
+	// HTTP request timeout for both Ping and writes. The default tag supplies 10s when this field is zero.
+	// Direct configuration does not apply default tags; non-positive values disable the timeout.
 	Timeout time.Duration `default:"10s"`
 
 	// namespace for metrics reporting
