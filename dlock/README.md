@@ -1,6 +1,20 @@
 # Distributed Lock
 
-The distributed lock ensures atomicity in a distributed environment, such as leader election for achieving high availability.
+This package coordinates lease-based ownership through a storage backend. It does
+not make business operations atomic or guarantee that only one process continues
+executing after a lease expires.
+
+For example, holder A may pause until its lease expires, holder B may acquire the
+lock, and A may then resume. Both can still operate on the protected resource.
+Renew before expiry and stop protected work if renewal fails or lease validity is
+uncertain; renewal cannot eliminate process pauses or undo in-flight operations.
+After an ambiguous acquisition error, do not start protected work: the database
+may have applied a write even if its response was lost.
+
+If stale writes must be rejected, the protected resource must enforce a persistent,
+monotonically increasing fencing token. This package does not provide one.
+`Dlock.Version` is internal update bookkeeping: it is not returned by Acquire and
+resets when a deleted row is recreated, so it cannot serve as a fencing token.
 
 To create a distributed lock, you need to specify a storage backend. We provide the `MySQLBackend` which handles reading and writing lock information in a MySQL table. Alternatively, you can implement your own storage backend using Redis, etcd, ZooKeeper, or other options.
 
