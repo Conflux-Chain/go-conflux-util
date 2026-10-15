@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 	stdlog "log"
@@ -269,5 +270,68 @@ func TestOwnedPoolFailureCloses(t *testing.T) {
 	}
 	if err = db.Ping(); err == nil {
 		t.Fatal("failed initialization leaked pool")
+	}
+}
+
+func TestBoundedCleanup(t *testing.T) {
+	ctx := context.Background()
+	key := uniqueKey(t)
+	for i := 0; i < 5; i++ {
+		k := fmt.Sprintf("%s%d", key, i)
+		if _, err := testMysqlBe.Acquire(ctx, k, time.Second); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := testMysqlBe.db.Exec("UPDATE dlocks SET expired_at=UTC_TIMESTAMP(6)-INTERVAL 1 DAY WHERE `key`=?", []byte(k)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	live, err := testMysqlBe.Acquire(ctx, key+"live", time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = testMysqlBe.Renew(ctx, live, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	m, _ := NewLockManager(testMysqlBe)
+	for i := 0; i < 3; i++ {
+		n, err := m.CleanupExpired(ctx, 2)
+		if err != nil || n < 0 || n > 2 {
+			t.Fatal(n, err)
+		}
+	}
+	if _, err = testMysqlBe.Acquire(ctx, live.Key, time.Second); err != ErrLockAcquisitionFailed {
+		t.Fatal("cleanup removed live lease", err)
+	}
+	if _, err = m.CleanupExpired(ctx, MaxCleanupBatch+1); err != ErrInvalidInput {
+		t.Fatal(err)
+	}
+	custom, _ := NewLockManager(&fakeBackend{})
+	if _, err = custom.CleanupExpired(ctx, 1); err != ErrUnsupported {
+		t.Fatal(err)
+	}
+}
+func BenchmarkMySQLHotContention(b *testing.B) {
+	ctx := context.Background()
+	key := uniqueKey(b)
+	g, err := testMysqlBe.Acquire(ctx, key, time.Hour)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer testMysqlBe.Release(ctx, g)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err = testMysqlBe.Acquire(ctx, key, time.Second); err != ErrLockAcquisitionFailed {
+			b.Fatal(err)
+		}
+	}
+}
+func BenchmarkMySQLDynamicKeys(b *testing.B) {
+	ctx := context.Background()
+	prefix := uniqueKey(b)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := testMysqlBe.Acquire(ctx, fmt.Sprintf("%s%d", prefix, i), time.Hour); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
