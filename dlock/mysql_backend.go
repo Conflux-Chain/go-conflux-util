@@ -124,8 +124,8 @@ func (m *MySQLBackend) WriteEntry(
 	if lease%time.Millisecond != 0 {
 		leaseMillis++
 	}
-	expAtGormExpr := gorm.Expr("NOW(3) + INTERVAL ? MICROSECOND", leaseMillis*1000)
-	nowTsGormExpr := gorm.Expr("NOW(3)")
+	expAtGormExpr := gorm.Expr("UTC_TIMESTAMP(3) + INTERVAL ? MICROSECOND", leaseMillis*1000)
+	nowTsGormExpr := gorm.Expr("UTC_TIMESTAMP(3)")
 	verGormExpr := gorm.Expr("version + 1")
 
 	found, err := store.NewStore(ctxDb).Get(&Dlock{}, "`key` = ?", key)
@@ -135,7 +135,7 @@ func (m *MySQLBackend) WriteEntry(
 
 	if found { // Try to update if expired or nonce matches.
 		res := ctxDb.Model(&Dlock{}).
-			Where("`key` = ? AND (expired_at <= NOW(3) OR nonce = ?)", key, nonce).
+			Where("`key` = ? AND (expired_at <= UTC_TIMESTAMP(3) OR nonce = ?)", key, nonce).
 			Updates(map[string]interface{}{
 				"nonce":      nonce,
 				"version":    verGormExpr,

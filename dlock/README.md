@@ -82,8 +82,9 @@ it to `NewLockManager`.
   between instances.
 - MySQL keys and nonces compare by bytes, including case and trailing spaces.
   Keys may contain at most 764 bytes.
-- Leases must be positive and are rounded up to milliseconds. Expiration uses
-  the MySQL server's clock, so client clock readings are not authoritative.
+- Leases must be positive and are rounded up to milliseconds. Timestamps are
+  stored and compared in UTC using the MySQL server's clock, independently of
+  connection time zones. Client clock readings are not authoritative.
 - Renewals are explicit. Schedule them before expiry with sufficient margin for
   database delays, and stop protected work if renewal fails or lease validity is
   uncertain. If acquisition returns an error, do not start protected work.

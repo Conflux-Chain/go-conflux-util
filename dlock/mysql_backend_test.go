@@ -168,7 +168,7 @@ func TestMySQLLeasePrecision(t *testing.T) {
 	withMySQLClock(t, be, func(be *MySQLBackend, setTime func(int64)) {
 		setTime(1700000000200)
 		var now time.Time
-		require.NoError(t, be.db.Raw("SELECT NOW(3)").Scan(&now).Error)
+		require.NoError(t, be.db.Raw("SELECT UTC_TIMESTAMP(3)").Scan(&now).Error)
 		for _, lease := range []time.Duration{time.Nanosecond, time.Millisecond, 1500 * time.Microsecond, 1250 * time.Millisecond, time.Duration(1<<63 - 1)} {
 			key := testID(t)
 			ok, err := be.WriteEntry(context.Background(), key, testID(t), lease)
@@ -203,6 +203,32 @@ func TestMySQLExpiryBoundary(t *testing.T) {
 			assert.Equal(t, offset >= 0, ok, "deadline offset %d ms", offset)
 		}
 	})
+}
+
+func TestMySQLSessionTimeZones(t *testing.T) {
+	be := mysqlTestTable(t)
+	for _, zones := range [][2]string{{"+00:00", "+08:00"}, {"+08:00", "-07:00"}} {
+		withMySQLClock(t, be, func(a *MySQLBackend, setA func(int64)) {
+			require.NoError(t, a.db.Exec("SET time_zone = ?", zones[0]).Error)
+			defer func() { assert.NoError(t, a.db.Exec("SET time_zone = DEFAULT").Error) }()
+			withMySQLClock(t, be, func(b *MySQLBackend, setB func(int64)) {
+				require.NoError(t, b.db.Exec("SET time_zone = ?", zones[1]).Error)
+				defer func() { assert.NoError(t, b.db.Exec("SET time_zone = DEFAULT").Error) }()
+				const start = int64(1700000000200)
+				key, nonceA, nonceB := testID(t), testID(t), testID(t)
+				setA(start)
+				ok, err := a.WriteEntry(context.Background(), key, nonceA, time.Second)
+				require.NoError(t, err)
+				require.True(t, ok)
+				for _, offset := range []int64{0, 999, 1000} {
+					setB(start + offset)
+					ok, err = b.WriteEntry(context.Background(), key, nonceB, time.Second)
+					require.NoError(t, err)
+					assert.Equal(t, offset == 1000, ok, "time zones %v, offset %d", zones, offset)
+				}
+			})
+		})
+	}
 }
 
 func TestMySQLRenewalAndStaleOwner(t *testing.T) {
