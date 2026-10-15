@@ -27,9 +27,9 @@ type Dlock struct {
 	// Version number incremented with each update.
 	Version uint `gorm:"default:0;not null"`
 	// When the lock expires.
-	ExpiredAt time.Time `gorm:"not null"`
+	ExpiredAt time.Time `gorm:"precision:3;not null"`
 	// CRUD timestamp.
-	CreatedAt, UpdatedAt time.Time
+	CreatedAt, UpdatedAt time.Time `gorm:"precision:3"`
 }
 
 // TableName overrides the table name
@@ -119,8 +119,12 @@ func (m *MySQLBackend) WriteEntry(
 		return false, err
 	}
 	ctxDb := m.db.WithContext(ctx)
-	expAtGormExpr := gorm.Expr("NOW() + INTERVAL ? SECOND", lease.Seconds())
-	nowTsGormExpr := gorm.Expr("CURRENT_TIMESTAMP")
+	leaseMillis := lease.Milliseconds()
+	if lease%time.Millisecond != 0 {
+		leaseMillis++
+	}
+	expAtGormExpr := gorm.Expr("NOW(3) + INTERVAL ? MICROSECOND", leaseMillis*1000)
+	nowTsGormExpr := gorm.Expr("NOW(3)")
 	verGormExpr := gorm.Expr("version + 1")
 
 	found, err := store.NewStore(ctxDb).Get(&Dlock{}, "`key` = ?", key)
@@ -129,8 +133,8 @@ func (m *MySQLBackend) WriteEntry(
 	}
 
 	if found { // Try to update if expired or nonce matches.
-		res := ctxDb.WithContext(ctx).Model(&Dlock{}).
-			Where("`key` = ? AND (expired_at < NOW() OR nonce = ?)", key, nonce).
+		res := ctxDb.Model(&Dlock{}).
+			Where("`key` = ? AND (expired_at <= NOW(3) OR nonce = ?)", key, nonce).
 			Updates(map[string]interface{}{
 				"nonce":      nonce,
 				"version":    verGormExpr,
@@ -144,6 +148,7 @@ func (m *MySQLBackend) WriteEntry(
 			"nonce":      nonce,
 			"expired_at": expAtGormExpr,
 			"created_at": nowTsGormExpr,
+			"updated_at": nowTsGormExpr,
 		})
 		return res.Error == nil, res.Error
 	}

@@ -37,6 +37,9 @@ lockMan.Release(context.Background(), intent)
 MySQL keys and nonces compare by bytes, including case, accents and trailing
 spaces. Keys may contain at most 764 bytes; nonces must be nonempty. New tables
 use `VARBINARY(764)` keys, `LONGBLOB` nonces and millisecond timestamps.
+Leases must be positive and are rounded up to whole milliseconds. Expiration is
+measured using the MySQL server's millisecond clock; a lock is expired at its
+deadline, including equality. Client clock readings are not authoritative.
 Configuration constructors create missing tables but reject incompatible existing
 tables. With a caller-owned database, create `Dlock` on a new database, or migrate
 an existing table explicitly, then call `backend.ValidateSchema(ctx)` before use.

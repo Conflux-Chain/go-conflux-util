@@ -2,6 +2,7 @@ package dlock
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -9,13 +10,14 @@ import (
 	"github.com/Conflux-Chain/go-conflux-util/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 func mysqlTestTable(t *testing.T) *MySQLBackend {
 	t.Helper()
 	name := "dlock_" + mysqlTestKey(t)
-	db := testMysqlBe.db.Table(name)
+	db := testMysqlBe.db.Table(name).Session(&gorm.Session{})
 	require.NoError(t, db.Migrator().CreateTable(&Dlock{}))
 	t.Cleanup(func() {
 		assert.NoError(t, db.Exec("DROP TABLE IF EXISTS ?", clause.Table{Name: name}).Error)
@@ -138,4 +140,93 @@ func TestSchemaRejectsSQLite(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, store.NewStore(db).Close()) })
 	assert.ErrorIs(t, NewMySQLBackend(db).ValidateSchema(context.Background()), ErrMySQLRequired)
+}
+
+// Pin one connection so MySQL's test clock cannot leak into other pool users.
+func withMySQLClock(t *testing.T, be *MySQLBackend, test func(*MySQLBackend, func(int64))) {
+	t.Helper()
+	require.NoError(t, be.db.Connection(func(db *gorm.DB) error {
+		db = db.Session(&gorm.Session{})
+		defer func() { assert.NoError(t, db.Exec("SET timestamp = DEFAULT").Error) }()
+		setTime := func(milliseconds int64) {
+			t.Helper()
+			timestamp := fmt.Sprintf("%d.%03d", milliseconds/1000, milliseconds%1000)
+			// timestamp is formatted solely from integers; MySQL rejects string
+			// parameters for this numeric session variable.
+			require.NoError(t, db.Exec("SET timestamp = "+timestamp).Error)
+		}
+		test(NewMySQLBackend(db), setTime)
+		return nil
+	}))
+}
+
+func TestMySQLLeasePrecision(t *testing.T) {
+	be := mysqlTestTable(t)
+	withMySQLClock(t, be, func(be *MySQLBackend, setTime func(int64)) {
+		setTime(1700000000200)
+		var now time.Time
+		require.NoError(t, be.db.Raw("SELECT NOW(3)").Scan(&now).Error)
+		for _, lease := range []time.Duration{time.Nanosecond, time.Millisecond, 1500 * time.Microsecond, 1250 * time.Millisecond, time.Duration(1<<63 - 1)} {
+			key := testID(t)
+			ok, err := be.WriteEntry(context.Background(), key, testID(t), lease)
+			require.NoError(t, err)
+			require.True(t, ok)
+			var got Dlock
+			require.NoError(t, be.db.First(&got, "`key` = ?", key).Error)
+			want := now.Add(lease)
+			if lease%time.Millisecond != 0 {
+				want = want.Truncate(time.Millisecond).Add(time.Millisecond)
+			}
+			assert.True(t, got.ExpiredAt.Equal(want), "lease %s: got %s, want %s", lease, got.ExpiredAt, want)
+			assert.True(t, got.CreatedAt.Equal(now))
+			assert.True(t, got.UpdatedAt.Equal(now))
+		}
+	})
+}
+
+func TestMySQLExpiryBoundary(t *testing.T) {
+	be := mysqlTestTable(t)
+	withMySQLClock(t, be, func(be *MySQLBackend, setTime func(int64)) {
+		const start = int64(1700000000200)
+		for _, offset := range []int64{-1, 0, 1} {
+			key, a, b := testID(t), testID(t), testID(t)
+			setTime(start)
+			ok, err := be.WriteEntry(context.Background(), key, a, time.Second)
+			require.NoError(t, err)
+			require.True(t, ok)
+			setTime(start + 1000 + offset)
+			ok, err = be.WriteEntry(context.Background(), key, b, time.Second)
+			require.NoError(t, err)
+			assert.Equal(t, offset >= 0, ok, "deadline offset %d ms", offset)
+		}
+	})
+}
+
+func TestMySQLRenewalAndStaleOwner(t *testing.T) {
+	be := mysqlTestTable(t)
+	withMySQLClock(t, be, func(be *MySQLBackend, setTime func(int64)) {
+		ctx := context.Background()
+		manager := NewLockManager(be)
+		key := testID(t)
+		a := NewLockIntent(key, testID(t), time.Second)
+		b := NewLockIntent(key, testID(t), time.Second)
+		const start = int64(1700000000200)
+		setTime(start)
+		require.NoError(t, manager.Acquire(ctx, a))
+		setTime(start + 500)
+		a.Lease = 2 * time.Second
+		require.NoError(t, manager.Acquire(ctx, a))
+		for _, offset := range []int64{1000, 2499} {
+			setTime(start + offset)
+			require.ErrorIs(t, manager.Acquire(ctx, b), ErrLockAcquisitionFailed)
+		}
+		setTime(start + 2500)
+		require.NoError(t, manager.Acquire(ctx, b))
+		assert.ErrorIs(t, manager.Release(ctx, a), ErrLockNotHeld)
+		assert.ErrorIs(t, manager.Acquire(ctx, a), ErrLockAcquisitionFailed)
+		require.NoError(t, manager.Release(ctx, b))
+		c := NewLockIntent(key, testID(t), time.Second)
+		require.NoError(t, manager.Acquire(ctx, c))
+		assert.ErrorIs(t, manager.Release(ctx, b), ErrLockNotHeld)
+	})
 }
