@@ -1,6 +1,6 @@
 # MySQL leases (v2, breaking API/schema change)
 
-dlock coordinates expiring leases in one authoritative MySQL database. It does
+dlock coordinates expiring leases in one authoritative MySQL 8.0/8.4 database. It does
 **not** guarantee atomicity of business operations or strict mutual exclusion
 after a pause. A previous holder can resume after expiration while another
 holder runs. Cancellation is cooperative. Downstream resources must validate
@@ -36,6 +36,10 @@ defer func() {
 if err := lease.Renew(ctx, 5*time.Second); err != nil { return err }
 // Perform bounded work, honoring lease.ValidUntil() and cancellation.
 ```
+
+Every MySQLBackend must successfully Initialize before any operation; otherwise
+Acquire/Renew/Release/CleanupExpired return ErrSchema. Failed revalidation
+revokes readiness. Never modify the table while participants are running.
 
 Only MySQL GORM handles whose Statement.ConnPool is an independent `*sql.DB`
 are accepted. Transactions, fixed connections and prepared/routed pool wrappers

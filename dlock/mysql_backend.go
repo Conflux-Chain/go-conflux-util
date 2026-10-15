@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io"
+	"sync/atomic"
 	"time"
 
 	driver "github.com/go-sql-driver/mysql"
@@ -12,10 +14,14 @@ import (
 
 // MySQLBackend bypasses GORM statements, callbacks, logging and routing.
 // Only independent *sql.DB pools are supported, never transactions/fixed conns.
-type MySQLBackend struct{ db *sql.DB }
+type MySQLBackend struct {
+	db     *sql.DB
+	random io.Reader
+	ready  atomic.Bool
+}
 
 func NewMySQLBackend(db *gorm.DB) (*MySQLBackend, error) {
-	if db == nil || db.Dialector == nil || db.Dialector.Name() != "mysql" || db.Statement == nil {
+	if db == nil || db.Config == nil || db.Dialector == nil || db.Dialector.Name() != "mysql" || db.Statement == nil {
 		return nil, ErrUnsupported
 	}
 	pool, ok := db.Statement.ConnPool.(*sql.DB)
@@ -32,18 +38,23 @@ const createSchema = "CREATE TABLE IF NOT EXISTS dlocks (" +
 
 // Initialize creates an absent table and validates existing storage. It never
 // alters an existing table. Run before serving requests.
-func (m *MySQLBackend) Initialize(ctx context.Context) error {
+func (m *MySQLBackend) Initialize(ctx context.Context) (err error) {
 	if m == nil || m.db == nil || ctx == nil {
 		return ErrInvalidInput
 	}
+	defer func() {
+		if err != nil {
+			m.ready.Store(false)
+		}
+	}()
 	if _, err := m.db.ExecContext(ctx, createSchema); err != nil {
 		return err
 	}
-	var engine string
-	if err := m.db.QueryRowContext(ctx, "SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='dlocks'").Scan(&engine); err != nil {
+	var engine, tableType string
+	if err := m.db.QueryRowContext(ctx, "SELECT COALESCE(ENGINE,''),TABLE_TYPE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='dlocks'").Scan(&engine, &tableType); err != nil {
 		return err
 	}
-	if engine != "InnoDB" {
+	if engine != "InnoDB" || tableType != "BASE TABLE" {
 		return ErrSchema
 	}
 	rows, err := m.db.QueryContext(ctx, "SELECT COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE,EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='dlocks'")
@@ -72,26 +83,27 @@ func (m *MySQLBackend) Initialize(ctx context.Context) error {
 	if count != 3 {
 		return ErrSchema
 	}
-	rows, err = m.db.QueryContext(ctx, "SELECT INDEX_NAME,NON_UNIQUE,SEQ_IN_INDEX,COLUMN_NAME,COALESCE(SUB_PART,0) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='dlocks'")
+	rows, err = m.db.QueryContext(ctx, "SELECT INDEX_NAME,NON_UNIQUE,SEQ_IN_INDEX,COLUMN_NAME,COALESCE(SUB_PART,0),IS_VISIBLE FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='dlocks'")
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 	type index struct {
-		unique bool
-		cols   []string
-		prefix bool
+		unique  bool
+		cols    []string
+		prefix  bool
+		visible bool
 	}
 	indexes := map[string]*index{}
 	for rows.Next() {
-		var name, col string
+		var name, col, visible string
 		var nonunique, seq, prefix int
-		if err = rows.Scan(&name, &nonunique, &seq, &col, &prefix); err != nil {
+		if err = rows.Scan(&name, &nonunique, &seq, &col, &prefix, &visible); err != nil {
 			return err
 		}
 		v := indexes[name]
 		if v == nil {
-			v = &index{unique: nonunique == 0}
+			v = &index{unique: nonunique == 0, visible: visible == "YES"}
 			indexes[name] = v
 		}
 		v.cols = append(v.cols, col)
@@ -108,13 +120,14 @@ func (m *MySQLBackend) Initialize(ctx context.Context) error {
 			}
 			keyOK = true
 		}
-		if len(v.cols) == 1 && v.cols[0] == "expired_at" && !v.prefix {
+		if len(v.cols) == 1 && v.cols[0] == "expired_at" && !v.prefix && v.visible {
 			expiryOK = true
 		}
 	}
 	if !keyOK || !expiryOK {
 		return ErrSchema
 	}
+	m.ready.Store(true)
 	return nil
 }
 func (m *MySQLBackend) Acquire(ctx context.Context, key string, ttl time.Duration) (Grant, error) {
@@ -124,7 +137,10 @@ func (m *MySQLBackend) Acquire(ctx context.Context, key string, ttl time.Duratio
 	if m == nil || m.db == nil {
 		return Grant{}, ErrInvalidInput
 	}
-	token, err := newToken()
+	if !m.ready.Load() {
+		return Grant{}, ErrSchema
+	}
+	token, err := newToken(m.random)
 	if err != nil {
 		return Grant{}, err
 	}
@@ -155,6 +171,9 @@ func (m *MySQLBackend) Renew(ctx context.Context, g Grant, ttl time.Duration) (G
 	}
 	if m == nil || m.db == nil || g.Token == ([32]byte{}) {
 		return Grant{}, ErrInvalidInput
+	}
+	if !m.ready.Load() {
+		return Grant{}, ErrSchema
 	}
 	start := time.Now()
 	if !start.Before(g.ValidUntil) {
@@ -187,11 +206,14 @@ func finish(ctx context.Context, g Grant, start time.Time, ttl time.Duration) (G
 	return g, nil
 }
 func (m *MySQLBackend) Release(ctx context.Context, g Grant) error {
-	if err := validate(ctx, g.Key, 2*time.Microsecond); err != nil {
+	if err := validateKey(ctx, g.Key); err != nil {
 		return err
 	}
 	if m == nil || m.db == nil || g.Token == ([32]byte{}) {
 		return ErrInvalidInput
+	}
+	if !m.ready.Load() {
+		return ErrSchema
 	}
 	r, err := m.db.ExecContext(ctx, "DELETE FROM dlocks WHERE `key`=? AND token=?", []byte(g.Key), g.Token[:])
 	if err != nil {

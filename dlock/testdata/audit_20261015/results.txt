@@ -1,0 +1,41 @@
+=== RUN   TestAuditDifferentNoncesCanReleaseOrTakeOver
+    repro_test.go:69: wrong nonce "ownera" deleted lock held with OwnerA
+    repro_test.go:72: wrong nonce "ownera" also acquired unexpired lock
+    repro_test.go:69: wrong nonce "OwnerA " deleted lock held with OwnerA
+    repro_test.go:72: wrong nonce "OwnerA " also acquired unexpired lock
+    repro_test.go:69: wrong nonce "ÓwnerA" deleted lock held with OwnerA
+    repro_test.go:72: wrong nonce "ÓwnerA" also acquired unexpired lock
+--- PASS: TestAuditDifferentNoncesCanReleaseOrTakeOver (0.07s)
+=== RUN   TestAuditPositiveSubsecondLeaseExpiresBeforeReturn
+    repro_test.go:89: 100 ms lease, remaining after successful Acquire = -850000 microseconds
+    repro_test.go:96: second acquire after 50 ms: ok=true err=<nil>
+--- PASS: TestAuditPositiveSubsecondLeaseExpiresBeforeReturn (0.02s)
+=== RUN   TestAuditNonpositiveLeaseAccepted
+    repro_test.go:116: lease 0s accepted as successfully acquired
+    repro_test.go:116: lease -1s accepted as successfully acquired
+--- PASS: TestAuditNonpositiveLeaseAccepted (0.01s)
+=== RUN   TestAuditRowWaitReturnsExpiredLock
+    repro_test.go:179: A returned success after 2.213957417s with remaining=-1441297 us; B immediately acquired successfully
+--- PASS: TestAuditRowWaitReturnsExpiredLock (2.23s)
+=== RUN   TestAuditConcurrentFirstInsertIsDatabaseError
+    repro_test.go:215: loser received failed to write lock entry: Error 1062 (23000): Duplicate entry 'insert-race-1792030527464876000' for key 'dlocks.uidx_key'; errors.Is(ErrLockAcquisitionFailed)=false
+--- PASS: TestAuditConcurrentFirstInsertIsDatabaseError (0.02s)
+=== RUN   TestAuditStaleReleaseDeletesNewGeneration
+    repro_test.go:234: delayed release from generation 1 deleted generation 2; node1 acquired
+--- PASS: TestAuditStaleReleaseDeletesNewGeneration (0.01s)
+=== RUN   TestAuditSessionTimeZonesBreakExclusion
+    repro_test.go:243: UTC client A and UTC+8 client B both acquired a 1 minute lease without waiting
+--- PASS: TestAuditSessionTimeZonesBreakExclusion (0.02s)
+=== RUN   TestAuditFactoryAcceptsSQLite
+
+2026/10/15 10:15:27 /Users/conflux/Downloads/workspace/go-conflux-util/dlock/mysql_backend.go:70 near "?": syntax error
+[0.086ms] [rows:0] INSERT INTO `dlocks` (`created_at`,`expired_at`,`key`,`nonce`) VALUES (CURRENT_TIMESTAMP,NOW() + INTERVAL 1 SECOND,"factory","owner") RETURNING `id`
+    repro_test.go:255: factory succeeded but Acquire failed: failed to write lock entry: near "?": syntax error
+--- PASS: TestAuditFactoryAcceptsSQLite (0.00s)
+=== RUN   TestAuditVersionResetsAfterRelease
+    repro_test.go:278: Version decreased across ownership generations: 1 -> 0
+--- PASS: TestAuditVersionResetsAfterRelease (0.01s)
+=== RUN   TestAuditControls
+    repro_test.go:326: distinct nonce exclusion, wrong/stale nonce release rejection, 16-way expired takeover, and context cancellation controls passed
+--- PASS: TestAuditControls (0.03s)
+PASS

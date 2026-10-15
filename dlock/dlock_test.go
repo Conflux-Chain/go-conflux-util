@@ -16,12 +16,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Conflux-Chain/go-conflux-util/store"
 	driver "github.com/go-sql-driver/mysql"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
 var testMysqlBe *MySQLBackend
+var testDSN string
 
 func TestMain(m *testing.M) {
 	if os.Getenv("TEST_MYSQL_HOST") == "" || os.Getenv("TEST_MYSQL_DB") == "" {
@@ -37,7 +39,8 @@ func TestMain(m *testing.M) {
 	cfg.Addr = os.Getenv("TEST_MYSQL_HOST")
 	cfg.DBName = os.Getenv("TEST_MYSQL_DB")
 	cfg.ParseTime = true
-	db, err := gorm.Open(mysql.Open(cfg.FormatDSN()), &gorm.Config{})
+	testDSN = cfg.FormatDSN()
+	db, err := gorm.Open(mysql.Open(testDSN), &gorm.Config{})
 	if err != nil {
 		panic(err)
 	}
@@ -147,12 +150,17 @@ func TestWaitConsumesAcquireBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback()
+	var blocker int64
+	if err = tx.QueryRow("SELECT CONNECTION_ID()").Scan(&blocker); err != nil {
+		t.Fatal(err)
+	}
 	var token []byte
 	if err = tx.QueryRow("SELECT token FROM dlocks WHERE `key`=? FOR UPDATE", []byte(key)).Scan(&token); err != nil {
 		t.Fatal(err)
 	}
 	done := make(chan error, 1)
 	go func() { _, e := testMysqlBe.Acquire(ctx, g.Key, 50*time.Millisecond); done <- e }()
+	waitForRowWait(t, blocker)
 	time.Sleep(120 * time.Millisecond)
 	if err = tx.Commit(); err != nil {
 		t.Fatal(err)
@@ -217,7 +225,9 @@ func TestDirectBackendValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	closed.Close()
-	if _, err = (&MySQLBackend{db: closed}).Acquire(context.Background(), key, time.Second); err == nil || err == ErrLockAcquisitionFailed {
+	closedBackend := &MySQLBackend{db: closed}
+	closedBackend.ready.Store(true)
+	if _, err = closedBackend.Acquire(context.Background(), key, time.Second); err == nil || err == ErrLockAcquisitionFailed {
 		t.Fatal("database error normalized", err)
 	}
 }
@@ -232,6 +242,9 @@ func TestGORMIsolationAndExternalPool(t *testing.T) {
 	derived := db.Clauses(clause.OnConflict{DoNothing: true}).Where("1=0").Table("wrong_table")
 	be, err := NewMySQLBackend(derived)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err = be.Initialize(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	m, err := NewLockManager(be)
@@ -333,5 +346,52 @@ func BenchmarkMySQLDynamicKeys(b *testing.B) {
 		if _, err := testMysqlBe.Acquire(ctx, fmt.Sprintf("%s%d", prefix, i), time.Hour); err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+func TestTokenBytesCannotBeSubstituted(t *testing.T) {
+	ctx := context.Background()
+	g, err := testMysqlBe.Acquire(ctx, uniqueKey(t), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forged := g
+	forged.Token[0] ^= 0x20
+	if err = testMysqlBe.Release(ctx, forged); err != ErrLockNotHeld {
+		t.Fatal("changed token released lease", err)
+	}
+	if _, err = testMysqlBe.Renew(ctx, forged, time.Second); err != ErrLockNotHeld {
+		t.Fatal("changed token renewed lease", err)
+	}
+	if err = testMysqlBe.Release(ctx, g); err != nil {
+		t.Fatal(err)
+	}
+}
+func TestFactoryConfiguredMySQL(t *testing.T) {
+	cfg, err := driver.ParseDSN(testDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conf := store.Config{Mysql: &store.MysqlConfig{Host: cfg.Addr, Username: cfg.User, Password: cfg.Passwd, Database: cfg.DBName}, MaxOpenConns: 2, MaxIdleConns: 1}
+	if cfg.Net == "tcp" {
+		m, err := NewLockManagerFromConfig(context.Background(), conf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pool := m.backend.(*MySQLBackend).db
+		if err = m.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err = pool.Ping(); err == nil {
+			t.Fatal("factory pool leaked")
+		}
+	}
+	conf.Mysql.Location = "not/a/timezone"
+	if _, err = NewLockManagerFromConfig(context.Background(), conf); err == nil {
+		t.Fatal("bad timezone ignored")
+	}
+	conf.Sqlite = &store.SqliteConfig{}
+	if _, err = NewLockManagerFromConfig(context.Background(), conf); err != ErrUnsupported {
+		t.Fatal(err)
 	}
 }

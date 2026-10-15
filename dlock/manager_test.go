@@ -3,8 +3,12 @@ package dlock
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/Conflux-Chain/go-conflux-util/store"
 	"github.com/spf13/viper"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -168,5 +172,40 @@ func TestViperFactoryRejectsFallbackAndDecodeError(t *testing.T) {
 	viper.Set("store.maxopenconns", "invalid")
 	if _, err := NewLockManagerFromViper(); err == nil {
 		t.Fatal("decode error ignored")
+	}
+}
+
+func TestZeroValuesDoNotPanic(t *testing.T) {
+	if _, err := (&LockManager{}).Acquire(context.Background(), "key", time.Second); err != ErrInvalidInput {
+		t.Fatal(err)
+	}
+	if _, err := NewMySQLBackend(&gorm.DB{}); err != ErrUnsupported {
+		t.Fatal(err)
+	}
+	if _, err := NewMySQLBackend(nil); err != ErrUnsupported {
+		t.Fatal(err)
+	}
+	if _, err := NewMySQLBackend(&gorm.DB{Config: &gorm.Config{Dialector: sqlite.Open(":memory:")}}); err != ErrUnsupported {
+		t.Fatal(err)
+	}
+	var l *Lease
+	if l.ValidUntil() != (time.Time{}) || l.Remaining() != 0 {
+		t.Fatal("nil lease had validity")
+	}
+	if l.Release(context.Background()) != ErrInvalidInput || l.Renew(context.Background(), time.Second) != ErrInvalidInput {
+		t.Fatal("nil lease accepted operation")
+	}
+}
+
+func TestLeaseFormattingRedactsToken(t *testing.T) {
+	g := Grant{Key: "sensitive-key", Token: [32]byte{123, 45, 67}, ValidUntil: time.Now()}
+	l := &Lease{grant: g}
+	for _, format := range []string{"%v", "%+v", "%#v"} {
+		for _, v := range []any{g, l} {
+			out := fmt.Sprintf(format, v)
+			if strings.Contains(out, "sensitive-key") || strings.Contains(out, "123") || !strings.Contains(out, "redacted") {
+				t.Fatal("capability leaked", out)
+			}
+		}
 	}
 }

@@ -30,6 +30,9 @@ func (m *MySQLBackend) CleanupExpired(ctx context.Context, limit int) (int64, er
 	if m == nil || m.db == nil || ctx == nil || limit < 1 || limit > MaxCleanupBatch {
 		return 0, ErrInvalidInput
 	}
+	if !m.ready.Load() {
+		return 0, ErrSchema
+	}
 	r, err := m.db.ExecContext(ctx, "DELETE FROM dlocks WHERE expired_at<=UTC_TIMESTAMP(6) ORDER BY expired_at LIMIT ?", limit)
 	if err != nil {
 		return 0, err

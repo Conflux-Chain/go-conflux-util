@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"io"
 	"reflect"
 	"sync"
 	"time"
@@ -46,15 +47,18 @@ type LockManager struct {
 }
 
 func NewLockManager(be Backend) (*LockManager, error) {
-	if be == nil || (reflect.ValueOf(be).Kind() == reflect.Ptr && reflect.ValueOf(be).IsNil()) {
+	if nilBackend(be) {
 		return nil, ErrInvalidInput
 	}
 	return &LockManager{backend: be}, nil
 }
 
-func newToken() ([32]byte, error) {
+func newToken(source io.Reader) ([32]byte, error) {
+	if source == nil {
+		source = rand.Reader
+	}
 	var token [32]byte
-	_, err := rand.Read(token[:])
+	_, err := io.ReadFull(source, token[:])
 	return token, err
 }
 
@@ -62,7 +66,7 @@ func (m *LockManager) Acquire(ctx context.Context, key string, ttl time.Duration
 	if err := validate(ctx, key, ttl); err != nil {
 		return nil, err
 	}
-	if m == nil {
+	if m == nil || m.backend == nil {
 		return nil, ErrInvalidInput
 	}
 	m.mu.RLock()
@@ -177,12 +181,27 @@ func (l *Lease) Release(ctx context.Context) error {
 	}
 	return m.backend.Release(ctx, l.grant)
 }
-func validate(ctx context.Context, key string, ttl time.Duration) error {
-	if ctx == nil || len(key) == 0 || len(key) > 191 || ttl <= time.Microsecond || ttl%time.Microsecond != 0 {
+func validateKey(ctx context.Context, key string) error {
+	if ctx == nil || len(key) == 0 || len(key) > 191 {
 		return ErrInvalidInput
 	}
 	return ctx.Err()
 }
+func validate(ctx context.Context, key string, ttl time.Duration) error {
+	if err := validateKey(ctx, key); err != nil {
+		return err
+	}
+	if ttl <= time.Microsecond || ttl%time.Microsecond != 0 {
+		return ErrInvalidInput
+	}
+	return nil
+}
+
+// String and GoString deliberately hide ownership capabilities from fmt logs.
+func (l *Lease) String() string   { return "dlock.Lease{redacted}" }
+func (l *Lease) GoString() string { return l.String() }
+func (g Grant) String() string    { return "dlock.Grant{redacted}" }
+func (g Grant) GoString() string  { return g.String() }
 
 // deadline retains Go's monotonic clock. The margin is not a fencing guarantee.
 func deadline(start time.Time, ttl time.Duration) time.Time {
@@ -200,4 +219,16 @@ func bound(g Grant, start time.Time, ttl time.Duration) (Grant, error) {
 		return Grant{}, ErrLeaseExpired
 	}
 	return g, nil
+}
+
+func nilBackend(be Backend) bool {
+	if be == nil {
+		return true
+	}
+	value := reflect.ValueOf(be)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+		return value.IsNil()
+	}
+	return false
 }
