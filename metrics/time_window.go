@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"container/list"
+	"math"
 	"sync"
 	"time"
 )
@@ -97,7 +98,10 @@ type TimeWindow[T any] struct {
 }
 
 // NewTimeWindow creates a new time window.
+// It panics if slotInterval or numSlots is not positive, or their product exceeds time.Duration's range.
 func NewTimeWindow[T any](slotInterval time.Duration, numSlots int, aggregator SlotAggregator[T], val ...T) *TimeWindow[T] {
+	validateTimeWindow(slotInterval, numSlots)
+
 	tw := TimeWindow[T]{
 		slots:          list.New(),
 		slotInterval:   slotInterval,
@@ -113,15 +117,29 @@ func NewTimeWindow[T any](slotInterval time.Duration, numSlots int, aggregator S
 }
 
 // NewSimpleTimeWindow creates a new time window with default SimpleSlotData aggregator.
+// It has the same parameter requirements as NewTimeWindow.
 func NewSimpleTimeWindow[T SimpleSlotData](slotInterval time.Duration, numSlots int, val ...T) *TimeWindow[T] {
 	return NewTimeWindow(slotInterval, numSlots, simpleSlotAggregator[T]{}, val...)
 }
 
 // NewTimeWindowCloneable create a new time window that supports to return cloned data.
+// It has the same parameter requirements as NewTimeWindow.
 func NewTimeWindowCloneable[T any](slotInterval time.Duration, numSlots int, aggregator SlotAggregatorCloneable[T], val ...T) *TimeWindow[T] {
 	tw := NewTimeWindow(slotInterval, numSlots, aggregator, val...)
 	tw.dataCloneable = aggregator
 	return tw
+}
+
+func validateTimeWindow(slotInterval time.Duration, numSlots int) {
+	if slotInterval <= 0 {
+		panic("metrics: slotInterval must be positive")
+	}
+	if numSlots <= 0 {
+		panic("metrics: numSlots must be positive")
+	}
+	if slotInterval > time.Duration(math.MaxInt64)/time.Duration(numSlots) {
+		panic("metrics: time window duration overflows time.Duration")
+	}
 }
 
 // Add adds data sample to time window

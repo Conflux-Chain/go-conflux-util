@@ -1,11 +1,45 @@
 package metrics
 
 import (
+	"math"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestTimeWindowParameters(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		interval time.Duration
+		slots    int
+		invalid  bool
+	}{
+		{"zero interval", 0, 2, true},
+		{"negative interval", -time.Second, 2, true},
+		{"zero slots", time.Second, 0, true},
+		{"negative slots", time.Second, -1, true},
+		{"overflow to negative", time.Duration(math.MaxInt64/2 + 1), 2, true},
+		{"overflow to zero", time.Duration(1 << 62), 4, true},
+		{"overflow to positive", time.Duration(math.MaxInt64), 3, true},
+		{"single slot", time.Second, 1, false},
+		{"minimum interval", time.Nanosecond, 2, false},
+		{"maximum duration", time.Duration(math.MaxInt64), 1, false},
+		{"maximum two-slot interval", time.Duration(math.MaxInt64 / 2), 2, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			construct := func() {
+				window := NewSimpleTimeWindow[int](tc.interval, tc.slots)
+				assert.Equal(t, tc.interval*time.Duration(tc.slots), window.windowInterval)
+			}
+			if tc.invalid {
+				assert.Panics(t, construct)
+			} else {
+				assert.NotPanics(t, construct)
+			}
+		})
+	}
+}
 
 func TestTimeWindowAddNewSlot(t *testing.T) {
 	timeWin := NewSimpleTimeWindow[int](time.Second, 5)
