@@ -8,8 +8,11 @@ import (
 )
 
 // SlotAggregator defines operators for slot data aggregation.
+// Add and Sub may modify acc, but must treat v as read-only and must not retain
+// mutable storage shared with v in their results.
 type SlotAggregator[T any] interface {
 	// Add returns the sum acc+v. The init value of acc is the default value of type T.
+	// When acc is the zero value, Add must initialize independent storage for mutable results.
 	// See examples below:
 	//
 	//   type FooData struct { x, y int }
@@ -230,8 +233,12 @@ func (tw *TimeWindow[T]) addOrUpdateSlot(now time.Time, data T) (*slot[T], bool)
 func (tw *TimeWindow[T]) addNewSlot(now time.Time, data T) *slot[T] {
 	slotStartTime := now.Truncate(tw.slotInterval)
 
+	// Let the aggregator initialize slot data without sharing mutable input storage.
+	var slotData T
+	slotData = tw.aggregator.Add(slotData, data)
+
 	newSlot := &slot[T]{
-		data:     data,
+		data:     slotData,
 		endTime:  slotStartTime.Add(tw.slotInterval),
 		expireAt: slotStartTime.Add(tw.windowInterval),
 	}

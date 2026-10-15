@@ -1,12 +1,67 @@
 package metrics
 
 import (
+	"maps"
 	"math"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
+
+type mapSlotAggregator struct{}
+
+func (mapSlotAggregator) Add(acc, v map[string]int) map[string]int {
+	if acc == nil {
+		acc = make(map[string]int)
+	}
+	for key, value := range v {
+		acc[key] += value
+	}
+	return acc
+}
+
+func (mapSlotAggregator) Sub(acc, v map[string]int) map[string]int {
+	for key, value := range v {
+		acc[key] -= value
+	}
+	return acc
+}
+
+func (mapSlotAggregator) Clone(v map[string]int) map[string]int {
+	return maps.Clone(v)
+}
+
+func TestTimeWindowDoesNotMutateMapSample(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		new  func() *TimeWindow[map[string]int]
+	}{
+		{"standard", func() *TimeWindow[map[string]int] {
+			return NewTimeWindow(time.Second, 2, mapSlotAggregator{})
+		}},
+		{"cloneable", func() *TimeWindow[map[string]int] {
+			return NewTimeWindowCloneable(time.Second, 2, mapSlotAggregator{})
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			window := tc.new()
+			start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+			sample := map[string]int{"requests": 1}
+			window.add(start.Add(100*time.Millisecond), sample)
+			window.add(start.Add(200*time.Millisecond), sample)
+			assert.Equal(t, 1, sample["requests"])
+			assert.Equal(t, 2, window.data(start.Add(300 * time.Millisecond))["requests"])
+
+			// Reusing the sample in another slot must also keep the slots independent.
+			window.add(start.Add(1100*time.Millisecond), sample)
+			assert.Equal(t, 1, sample["requests"])
+			assert.Equal(t, 3, window.data(start.Add(1200 * time.Millisecond))["requests"])
+			assert.Equal(t, 1, window.data(start.Add(2 * time.Second))["requests"])
+			assert.Equal(t, 0, window.data(start.Add(3 * time.Second))["requests"])
+		})
+	}
+}
 
 func TestTimeWindowParameters(t *testing.T) {
 	for _, tc := range []struct {
