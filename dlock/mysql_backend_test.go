@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/Conflux-Chain/go-conflux-util/store"
+	"github.com/go-sql-driver/mysql"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -229,4 +232,108 @@ func TestMySQLRenewalAndStaleOwner(t *testing.T) {
 		require.NoError(t, manager.Acquire(ctx, c))
 		assert.ErrorIs(t, manager.Release(ctx, b), ErrLockNotHeld)
 	})
+}
+
+func TestMySQLFirstAcquisitionContention(t *testing.T) {
+	for _, translate := range []bool{false, true} {
+		t.Run(fmt.Sprintf("translate_errors=%t", translate), func(t *testing.T) {
+			be := mysqlTestTable(t)
+			be.db.Config.TranslateError = translate
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			var workers sync.WaitGroup
+			defer func() { cancel(); workers.Wait() }()
+			queried := make(chan struct{}, 2)
+			release := make(chan struct{})
+			callback := "dlock_contention_" + testID(t)
+			require.NoError(t, be.db.Callback().Query().After("gorm:query").Register(callback, func(tx *gorm.DB) {
+				if tx.Statement.Table == be.db.Statement.Table && errors.Is(tx.Error, gorm.ErrRecordNotFound) {
+					queried <- struct{}{}
+					select {
+					case <-release:
+					case <-ctx.Done():
+						tx.AddError(ctx.Err())
+					}
+				}
+			}))
+			t.Cleanup(func() { assert.NoError(t, be.db.Callback().Query().Remove(callback)) })
+			results := make(chan error, 2)
+			key := testID(t)
+			for range 2 {
+				intent := NewLockIntent(key, testID(t), time.Minute)
+				workers.Add(1)
+				go func() {
+					defer workers.Done()
+					results <- NewLockManager(be).Acquire(ctx, intent)
+				}()
+			}
+			for range 2 {
+				select {
+				case <-queried:
+				case <-ctx.Done():
+					t.Fatal("both acquisitions must observe a missing row before inserting")
+				}
+			}
+			close(release)
+			successes := 0
+			for range 2 {
+				err := <-results
+				if err == nil {
+					successes++
+				} else {
+					assert.ErrorIs(t, err, ErrLockAcquisitionFailed)
+				}
+			}
+			assert.Equal(t, 1, successes)
+			var rows int64
+			require.NoError(t, be.db.Model(&Dlock{}).Count(&rows).Error)
+			assert.EqualValues(t, 1, rows)
+		})
+	}
+}
+
+func TestMySQLCancellation(t *testing.T) {
+	be := mysqlTestTable(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	ok, err := be.WriteEntry(ctx, testID(t), testID(t), time.Second)
+	assert.False(t, ok)
+	assert.ErrorIs(t, err, context.Canceled)
+	ok, err = be.DelEntry(ctx, testID(t), testID(t))
+	assert.False(t, ok)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func TestMySQLPreservesDatabaseErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name, ddl string
+		seed, del bool
+	}{
+		{"read", "DROP TABLE ?", false, false},
+		{"insert", "ALTER TABLE ? DROP COLUMN created_at", false, false},
+		{"update", "ALTER TABLE ? DROP COLUMN expired_at", true, false},
+		{"delete", "ALTER TABLE ? DROP COLUMN nonce", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			be := mysqlTestTable(t)
+			ctx := context.Background()
+			key, nonce := testID(t), testID(t)
+			if tc.seed {
+				ok, err := be.WriteEntry(ctx, key, nonce, time.Minute)
+				require.NoError(t, err)
+				require.True(t, ok)
+			}
+			require.NoError(t, be.db.Exec(tc.ddl, clause.Table{Name: be.db.Statement.Table}).Error)
+			var ok bool
+			var err error
+			if tc.del {
+				ok, err = be.DelEntry(ctx, key, nonce)
+			} else {
+				ok, err = be.WriteEntry(ctx, key, nonce, time.Minute)
+			}
+			assert.False(t, ok)
+			var mysqlErr *mysql.MySQLError
+			assert.ErrorAs(t, err, &mysqlErr)
+			assert.NotErrorIs(t, err, ErrLockAcquisitionFailed)
+		})
+	}
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Conflux-Chain/go-conflux-util/store"
+	"github.com/go-sql-driver/mysql"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
 )
@@ -150,6 +151,10 @@ func (m *MySQLBackend) WriteEntry(
 			"created_at": nowTsGormExpr,
 			"updated_at": nowTsGormExpr,
 		})
+		var mysqlErr *mysql.MySQLError
+		if errors.Is(res.Error, gorm.ErrDuplicatedKey) || (errors.As(res.Error, &mysqlErr) && mysqlErr.Number == 1062) {
+			return false, nil
+		}
 		return res.Error == nil, res.Error
 	}
 }
