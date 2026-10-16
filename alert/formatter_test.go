@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -79,5 +80,15 @@ func TestSmtpHtmlFormatterSubject(t *testing.T) {
 			assert.Equal(t, tc.title, parsed.Header.Get("Subject"))
 			assert.Empty(t, parsed.Header.Get("X-Injected"))
 		})
+	}
+}
+
+func TestTelegramMarkdownMentions(t *testing.T) {
+	formatter, err := NewTelegramMarkdownFormatter(nil, []string{"ops_team", "oncall"})
+	require.NoError(t, err)
+	for _, content := range []interface{}{"test", logrus.NewEntry(logrus.New())} {
+		msg, err := formatter.Format(&Notification{Content: content})
+		require.NoError(t, err)
+		assert.Contains(t, msg, `@ops\_team @oncall`)
 	}
 }
