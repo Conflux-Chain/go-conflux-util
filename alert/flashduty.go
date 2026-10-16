@@ -67,7 +67,7 @@ func (c *FlashDutyChannel) adaptSeverity(severity Severity) string {
 	switch severity {
 	case SeverityMedium:
 		return flashduty.MsgLevelWarning
-	case SeverityCritical:
+	case SeverityHigh, SeverityCritical:
 		return flashduty.MsgLevelCritical
 	default:
 		return flashduty.MsgLevelInfo
