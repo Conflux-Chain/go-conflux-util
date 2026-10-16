@@ -31,6 +31,23 @@ func TestTelegramMarkdownFormatterContent(t *testing.T) {
 	}
 }
 
+func TestTelegramMarkdownBackslashes(t *testing.T) {
+	formatter, err := NewTelegramMarkdownFormatter(nil, nil)
+	require.NoError(t, err)
+	for _, tc := range []struct{ input, want string }{
+		{`path\`, `path\\`},
+		{`C:\logs\error`, `C:\\logs\\error`},
+		{`\*`, `\\\*`},
+		{`_*[]()~` + "`" + `>#+-=|{}.!`, `\_\*\[\]\(\)\~` + "\\`" + `\>\#\+\-\=\|\{\}\.\!`},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			msg, err := formatter.Format(&Notification{Title: "alert", Content: tc.input})
+			require.NoError(t, err)
+			assert.Contains(t, msg, "*"+tc.want+"*\n")
+		})
+	}
+}
+
 func TestSmtpHtmlFormatterSubject(t *testing.T) {
 	formatter, err := NewSmtpHtmlFormatter(SmtpConfig{
 		From: "sender@example.com", To: []string{"recipient@example.com"},

@@ -258,7 +258,7 @@ func toString(val interface{}) string {
 }
 
 func escapeMarkdown(v interface{}) string {
-	return bot.EscapeMarkdown(fmt.Sprintf("%v", v))
+	return bot.EscapeMarkdown(strings.ReplaceAll(toString(v), `\`, `\\`))
 }
 
 // truncateStringWithTail is used to immediately truncate the input string to the max length limit.
