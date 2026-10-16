@@ -70,10 +70,9 @@ func TestMySQLAcquisitionWaitBudget(t *testing.T) {
 					require.NoError(t, got.err)
 					assert.True(t, got.deadline.After(time.Now()))
 					assert.False(t, got.deadline.After(observedWait.Add(lease-time.Millisecond)))
-					before := time.Now()
 					var remaining int64
 					require.NoError(t, backend.db.Raw("SELECT TIMESTAMPDIFF(MICROSECOND,UTC_TIMESTAMP(3),expired_at) FROM ? WHERE `key` = ?", clause.Table{Name: backend.db.Statement.Table}, key).Scan(&remaining).Error)
-					assert.LessOrEqual(t, got.deadline.Sub(before), time.Duration(remaining)*time.Microsecond)
+					assert.LessOrEqual(t, time.Until(got.deadline), time.Duration(remaining)*time.Microsecond)
 				}
 				return nil
 			}))
