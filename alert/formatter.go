@@ -7,6 +7,7 @@ import (
 	"text/template"
 	"time"
 	"unicode"
+	"unicode/utf16"
 
 	"github.com/Conflux-Chain/go-conflux-util/alert/dingtalk"
 	"github.com/go-telegram/bot"
@@ -223,6 +224,7 @@ func isWarningSeverity(severity Severity) bool {
 
 type TelegramMarkdownFormatter struct {
 	*markdownFormatter
+	textFormatter *SimpleTextFormatter
 }
 
 func NewTelegramMarkdownFormatter(tags, atUsers []string) (f *TelegramMarkdownFormatter, err error) {
@@ -237,7 +239,6 @@ func NewTelegramMarkdownFormatter(tags, atUsers []string) (f *TelegramMarkdownFo
 		"isHighPrioritySeverity": isHighPrioritySeverity,
 		"isWarningLogLevel":      isWarningLogLevel,
 		"isWarningSeverity":      isWarningSeverity,
-		"truncateStringWithTail": truncateStringWithTail,
 		"mentions":               func() []string { return atUsers },
 	}
 	mf, err := newMarkdownFormatter(
@@ -247,7 +248,44 @@ func NewTelegramMarkdownFormatter(tags, atUsers []string) (f *TelegramMarkdownFo
 		return nil, err
 	}
 
-	return &TelegramMarkdownFormatter{markdownFormatter: mf}, nil
+	tf, err := NewSimpleTextFormatter(tags, atUsers)
+	if err != nil {
+		return nil, err
+	}
+	return &TelegramMarkdownFormatter{markdownFormatter: mf, textFormatter: tf}, nil
+}
+
+func (f *TelegramMarkdownFormatter) Format(note *Notification) (string, error) {
+	msg, err := f.markdownFormatter.Format(note)
+	if err != nil || telegramMarkdownLength(msg) <= maxAlertMsgLength {
+		return msg, err
+	}
+
+	msg, err = f.textFormatter.Format(note)
+	if err != nil {
+		return "", err
+	}
+	return escapeMarkdown(truncateStringWithTail(msg)), nil
+}
+
+// telegramMarkdownLength counts visible UTF-16 units conservatively. The built-in
+// templates use only bold markers and escaped text, not arbitrary Markdown.
+func telegramMarkdownLength(s string) (length int) {
+	escaped := false
+	for _, r := range s {
+		if !escaped {
+			if r == '\\' {
+				escaped = true
+				continue
+			}
+			if r == '*' {
+				continue
+			}
+		}
+		length += utf16.RuneLen(r)
+		escaped = false
+	}
+	return length
 }
 
 func toString(val interface{}) string {
@@ -261,14 +299,19 @@ func escapeMarkdown(v interface{}) string {
 	return bot.EscapeMarkdown(strings.ReplaceAll(toString(v), `\`, `\\`))
 }
 
-// truncateStringWithTail is used to immediately truncate the input string to the max length limit.
-// A tail "..." is then added to the end of the string, if the string was longer than max length.
+// truncateStringWithTail bounds plain text in UTF-16 units, including the tail,
+// without splitting a Unicode character. Markdown escaping must happen after it.
 func truncateStringWithTail(s string) string {
-	if len(s) > maxAlertMsgLength {
-		// trim the string and add "..."
-		return s[:maxAlertMsgLength] + "..."
+	length, cut := 0, len(s)
+	for i, r := range s {
+		length += utf16.RuneLen(r)
+		if length > maxAlertMsgLength-len("...") && cut == len(s) {
+			cut = i
+		}
+		if length > maxAlertMsgLength {
+			return s[:cut] + "..."
+		}
 	}
-
 	return s
 }
 

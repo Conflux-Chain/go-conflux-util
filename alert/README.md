@@ -51,6 +51,10 @@ the entire SMTP session; errors remain identifiable with `errors.Is` against
 `context.Canceled` or `context.DeadlineExceeded`.
 Webhook URLs must point directly to the final endpoint; redirects are rejected.
 
+The built-in Telegram formatter preserves Markdown for short notifications.
+Oversized notifications use a single plain-text message, truncated at a Unicode
+character boundary with an ellipsis within a conservative 4096 UTF-16-unit limit.
+
 ```go
 ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 defer cancel()
