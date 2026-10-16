@@ -77,7 +77,7 @@ func (c *PagerDutyChannel) Send(ctx context.Context, note *Notification) error {
 }
 
 func (c *PagerDutyChannel) assemblePayloadDefault(note *Notification) *pagerduty.V2Payload {
-	payload := note.Content.(*pagerduty.V2Payload)
+	payload := *note.Content.(*pagerduty.V2Payload)
 
 	// Use the title of the notification as the summary by default.
 	if len(payload.Summary) == 0 {
@@ -99,7 +99,7 @@ func (c *PagerDutyChannel) assemblePayloadDefault(note *Notification) *pagerduty
 		payload.Group = strings.Join(c.tags, ",")
 	}
 
-	return payload
+	return &payload
 }
 
 func (c *PagerDutyChannel) assemblePayloadFromLogEntry(note *Notification) *pagerduty.V2Payload {

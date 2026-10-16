@@ -3,10 +3,9 @@ package alert
 import (
 	"context"
 	"crypto/tls"
-	"io"
+	stderr "errors"
 	"net"
 	"net/smtp"
-	"time"
 
 	"github.com/pkg/errors"
 )
@@ -56,107 +55,74 @@ func (c *SmtpChannel) Send(ctx context.Context, note *Notification) error {
 	return c.SendProtoMsg(ctx, msg)
 }
 
-// SendProtoMsg sends protocol message using the SMTP channel
+// SendProtoMsg sends protocol message using the SMTP channel.
+// Callers should provide a context with a deadline to bound the entire session.
 func (c *SmtpChannel) SendProtoMsg(ctx context.Context, msg string) error {
-	// Dial the SMTP server
-	client, err := c.dial(ctx)
+	dialer := tls.Dialer{}
+	conn, err := dialer.DialContext(ctx, "tcp", c.Config.Host)
 	if err != nil {
 		return errors.WithMessage(err, "failed to dial smtp server")
 	}
 
-	// Close the client when done
-	defer client.Close()
+	return c.sendOnConn(ctx, conn, msg)
+}
 
-	// Authenticate with the SMTP server if it supports authentication
+// sendOnConn owns conn and watches cancellation before reading the SMTP greeting.
+func (c *SmtpChannel) sendOnConn(ctx context.Context, conn net.Conn, msg string) (err error) {
+	// Close the underlying socket on cancellation: tls.Conn.Close can wait for
+	// a close-notify write, delaying interruption of a blocked SMTP read.
+	socket := conn
+	if tlsConn, ok := conn.(*tls.Conn); ok {
+		socket = tlsConn.NetConn()
+	}
+	stop := context.AfterFunc(ctx, func() { socket.Close() })
+	defer func() {
+		stop()
+		socket.Close()
+		conn.Close()
+		if err != nil && ctx.Err() != nil {
+			err = stderr.Join(err, ctx.Err())
+		}
+	}()
+
+	host, _, err := net.SplitHostPort(c.Config.Host)
+	if err != nil {
+		return errors.WithMessage(err, "invalid smtp address")
+	}
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return errors.WithMessage(err, "failed to initialize smtp client")
+	}
+
+	// Authenticate with the SMTP server if it supports authentication.
 	if ok, _ := client.Extension("AUTH"); ok {
-		auth := smtp.PlainAuth("", c.Config.From, c.Config.Password, c.Config.Host)
-		if err := c.doWithDeadlineCheck(ctx, func() error { return client.Auth(auth) }); err != nil {
+		auth := smtp.PlainAuth("", c.Config.From, c.Config.Password, host)
+		if err := client.Auth(auth); err != nil {
 			return errors.WithMessage(err, "failed to authenticate smtp server")
 		}
 	}
 
-	// Set the sender
-	if err := c.doWithDeadlineCheck(ctx, func() error { return client.Mail(c.Config.From) }); err != nil {
+	if err := client.Mail(c.Config.From); err != nil {
 		return errors.WithMessage(err, "failed to set sender")
 	}
-
-	// Add the recipients
 	for _, addr := range c.Config.To {
-		if err := c.doWithDeadlineCheck(ctx, func() error { return client.Rcpt(addr) }); err != nil {
+		if err := client.Rcpt(addr); err != nil {
 			return errors.WithMessagef(err, "failed to add recipient %s", addr)
 		}
 	}
 
-	// Write the message
-	var w io.WriteCloser
-	if err := c.doWithDeadlineCheck(ctx, func() error { w, err = client.Data(); return err }); err != nil {
+	w, err := client.Data()
+	if err != nil {
 		return errors.WithMessage(err, "failed to open data writer")
 	}
-
-	if err := c.doWithDeadlineCheck(ctx, func() error { _, err = w.Write([]byte(msg)); return err }); err != nil {
+	if _, err := w.Write([]byte(msg)); err != nil {
 		return errors.WithMessage(err, "failed to write data")
 	}
-
-	// Close the writer
 	if err := w.Close(); err != nil {
 		return errors.WithMessage(err, "failed to close data writer")
 	}
-
-	// Quit the SMTP session
-	if err := c.doWithDeadlineCheck(ctx, func() error { return client.Quit() }); err != nil {
+	if err := client.Quit(); err != nil {
 		return errors.WithMessage(err, "failed to quit smtp session")
 	}
-
 	return nil
-}
-
-// doWithDeadlineCheck checks if the deadline has been exceeded before performing an operation
-func (c *SmtpChannel) doWithDeadlineCheck(ctx context.Context, op func() error) error {
-	if deadlineExceeded(ctx) {
-		return context.DeadlineExceeded
-	}
-
-	if err := op(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// deadlineExceeded checks if the deadline of the context has been exceeded
-func deadlineExceeded(ctx context.Context) bool {
-	if _, ok := ctx.Deadline(); ok {
-		select {
-		case <-ctx.Done():
-			return true
-		default:
-		}
-	}
-	return false
-}
-
-// dial dials the SMTP server and returns a new SMTP client
-func (c *SmtpChannel) dial(ctx context.Context) (*smtp.Client, error) {
-	var dialer *net.Dialer
-
-	// Check if a deadline has been set
-	deadline, ok := ctx.Deadline()
-	if ok { // deadline set?
-		timeout := time.Until(deadline)
-		if timeout < 0 { // timeout exceeded
-			return nil, context.DeadlineExceeded
-		}
-		dialer = &net.Dialer{Timeout: timeout}
-	} else {
-		dialer = new(net.Dialer)
-	}
-
-	// Dial the SMTP server
-	conn, err := tls.DialWithDialer(dialer, "tcp", c.Config.Host, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create a new SMTP client
-	return smtp.NewClient(conn, c.Config.Host)
 }

@@ -3,10 +3,13 @@ package alert
 import (
 	"bytes"
 	"fmt"
+	htmltemplate "html/template"
+	"io"
 	"strings"
 	"text/template"
 	"time"
 	"unicode"
+	"unicode/utf16"
 
 	"github.com/Conflux-Chain/go-conflux-util/alert/dingtalk"
 	"github.com/go-telegram/bot"
@@ -23,15 +26,19 @@ type Formatter interface {
 	Format(note *Notification) (string, error)
 }
 
+type templateExecutor interface {
+	Execute(io.Writer, interface{}) error
+}
+
 type tplFormatter struct {
 	tags []string
 
-	defaultTpl  *template.Template
-	logEntryTpl *template.Template
+	defaultTpl  templateExecutor
+	logEntryTpl templateExecutor
 }
 
 func newTplFormatter(
-	tags []string, defaultTpl, logEntryTpl *template.Template) *tplFormatter {
+	tags []string, defaultTpl, logEntryTpl templateExecutor) *tplFormatter {
 	return &tplFormatter{
 		tags: tags, defaultTpl: defaultTpl, logEntryTpl: logEntryTpl,
 	}
@@ -223,6 +230,7 @@ func isWarningSeverity(severity Severity) bool {
 
 type TelegramMarkdownFormatter struct {
 	*markdownFormatter
+	textFormatter *SimpleTextFormatter
 }
 
 func NewTelegramMarkdownFormatter(tags, atUsers []string) (f *TelegramMarkdownFormatter, err error) {
@@ -237,7 +245,6 @@ func NewTelegramMarkdownFormatter(tags, atUsers []string) (f *TelegramMarkdownFo
 		"isHighPrioritySeverity": isHighPrioritySeverity,
 		"isWarningLogLevel":      isWarningLogLevel,
 		"isWarningSeverity":      isWarningSeverity,
-		"truncateStringWithTail": truncateStringWithTail,
 		"mentions":               func() []string { return atUsers },
 	}
 	mf, err := newMarkdownFormatter(
@@ -247,7 +254,44 @@ func NewTelegramMarkdownFormatter(tags, atUsers []string) (f *TelegramMarkdownFo
 		return nil, err
 	}
 
-	return &TelegramMarkdownFormatter{markdownFormatter: mf}, nil
+	tf, err := NewSimpleTextFormatter(tags, atUsers)
+	if err != nil {
+		return nil, err
+	}
+	return &TelegramMarkdownFormatter{markdownFormatter: mf, textFormatter: tf}, nil
+}
+
+func (f *TelegramMarkdownFormatter) Format(note *Notification) (string, error) {
+	msg, err := f.markdownFormatter.Format(note)
+	if err != nil || telegramMarkdownLength(msg) <= maxAlertMsgLength {
+		return msg, err
+	}
+
+	msg, err = f.textFormatter.Format(note)
+	if err != nil {
+		return "", err
+	}
+	return escapeMarkdown(truncateStringWithTail(msg)), nil
+}
+
+// telegramMarkdownLength counts visible UTF-16 units conservatively. The built-in
+// templates use only bold markers and escaped text, not arbitrary Markdown.
+func telegramMarkdownLength(s string) (length int) {
+	escaped := false
+	for _, r := range s {
+		if !escaped {
+			if r == '\\' {
+				escaped = true
+				continue
+			}
+			if r == '*' {
+				continue
+			}
+		}
+		length += utf16.RuneLen(r)
+		escaped = false
+	}
+	return length
 }
 
 func toString(val interface{}) string {
@@ -258,17 +302,22 @@ func toString(val interface{}) string {
 }
 
 func escapeMarkdown(v interface{}) string {
-	return bot.EscapeMarkdown(fmt.Sprintf("%v", v))
+	return bot.EscapeMarkdown(strings.ReplaceAll(toString(v), `\`, `\\`))
 }
 
-// truncateStringWithTail is used to immediately truncate the input string to the max length limit.
-// A tail "..." is then added to the end of the string, if the string was longer than max length.
+// truncateStringWithTail bounds plain text in UTF-16 units, including the tail,
+// without splitting a Unicode character. Markdown escaping must happen after it.
 func truncateStringWithTail(s string) string {
-	if len(s) > maxAlertMsgLength {
-		// trim the string and add "..."
-		return s[:maxAlertMsgLength] + "..."
+	length, cut := 0, len(s)
+	for i, r := range s {
+		length += utf16.RuneLen(r)
+		if length > maxAlertMsgLength-len("...") && cut == len(s) {
+			cut = i
+		}
+		if length > maxAlertMsgLength {
+			return s[:cut] + "..."
+		}
 	}
-
 	return s
 }
 
@@ -279,11 +328,11 @@ type htmlFormatter struct {
 func newHtmlFormatter(
 	tags []string, funcMap template.FuncMap, defaultStrTpl, logEntryStrTpl string,
 ) (f *htmlFormatter, err error) {
-	var tpls [2]*template.Template
+	var tpls [2]*htmltemplate.Template
 
 	strTemplates := [2]string{defaultStrTpl, logEntryStrTpl}
 	for i := range strTemplates {
-		tpls[i], err = template.New("html").Funcs(funcMap).Parse(strTemplates[i])
+		tpls[i], err = htmltemplate.New("html").Funcs(htmltemplate.FuncMap(funcMap)).Parse(strTemplates[i])
 		if err != nil {
 			return nil, errors.WithMessage(err, "bad html template")
 		}
@@ -335,7 +384,7 @@ func (f *SmtpHtmlFormatter) Format(note *Notification) (msg string, err error) {
 
 	header := make(map[string]string)
 	header["From"] = f.conf.From
-	header["To"] = strings.Join(f.conf.To, ";")
+	header["To"] = strings.Join(f.conf.To, ", ")
 	header["Subject"] = note.Title
 	header["Content-Type"] = "text/html; charset=UTF-8"
 

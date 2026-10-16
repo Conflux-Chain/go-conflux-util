@@ -87,8 +87,8 @@ Reason
 *Tags*: {{.Tags | escapeMarkdown}}
 *Severity*: {{.Severity | escapeMarkdown}}
 *Time*: {{.Time | formatRFC3339 | escapeMarkdown}}
-*{{.Content | truncateStringWithTail | escapeMarkdown}}*
-{{ range mentions }}@{{ . }} {{ end }}
+*{{.Content | toString | escapeMarkdown}}*
+{{ range mentions }}@{{ . | escapeMarkdown }} {{ end }}
 `,
 		`{{- /* logrus entry markdown template */ -}}
 {{- if isHighPriorityLogLevel .Level }}* 🚨{{.Level | formatLogLevel | escapeMarkdown | upper}}*
@@ -99,14 +99,14 @@ Reason
 *Time*: {{.Time | formatRFC3339 | escapeMarkdown}}
 
 *Message*
-{{.Msg | truncateStringWithTail | escapeMarkdown}}
+{{.Msg | escapeMarkdown}}
 
 {{with .Error}}*Reason*
 {{.Error | escapeMarkdown}}
 
 {{else}}{{ end }}{{ if .CtxFields }}*Context Fields*:{{ range $Key, $Val := .CtxFields }}
-    *{{$Key | escapeMarkdown}}*: {{$Val | toString | truncateStringWithTail | escapeMarkdown}}{{ end }}{{ end }}
-{{ range mentions }}@{{ . }} {{ end }}
+    *{{$Key | escapeMarkdown}}*: {{$Val | toString | escapeMarkdown}}{{ end }}{{ end }}
+{{ range mentions }}@{{ . | escapeMarkdown }} {{ end }}
 `,
 	}
 
