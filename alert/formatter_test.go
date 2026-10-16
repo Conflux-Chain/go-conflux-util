@@ -2,6 +2,7 @@ package alert
 
 import (
 	"errors"
+	"io"
 	"net/mail"
 	"regexp"
 	"strings"
@@ -172,4 +173,26 @@ func telegramVisibleText(msg string) string {
 		}
 		return token[1:]
 	})
+}
+
+func TestSmtpHtmlEscapesDynamicText(t *testing.T) {
+	const input = `<b>unsafe & text</b>`
+	formatter, err := NewSmtpHtmlFormatter(SmtpConfig{}, []string{input})
+	require.NoError(t, err)
+	entry := logrus.NewEntry(logrus.New())
+	entry.Message = input
+	entry.Data = logrus.Fields{logrus.ErrorKey: errors.New(input), input: input}
+	for _, content := range []interface{}{input, entry} {
+		msg, err := formatter.Format(&Notification{Title: input, Content: content})
+		require.NoError(t, err)
+		parsed, err := mail.ReadMessage(strings.NewReader(msg))
+		require.NoError(t, err)
+		// Header handling is separate from HTML escaping.
+		assert.Equal(t, input, parsed.Header.Get("Subject"))
+		body, err := io.ReadAll(parsed.Body)
+		require.NoError(t, err)
+		assert.NotContains(t, string(body), input)
+		assert.Contains(t, string(body), "&lt;b&gt;unsafe &amp; text&lt;/b&gt;")
+		assert.Contains(t, string(body), "<html>")
+	}
 }

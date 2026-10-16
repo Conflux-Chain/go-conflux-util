@@ -3,6 +3,8 @@ package alert
 import (
 	"bytes"
 	"fmt"
+	htmltemplate "html/template"
+	"io"
 	"strings"
 	"text/template"
 	"time"
@@ -24,15 +26,19 @@ type Formatter interface {
 	Format(note *Notification) (string, error)
 }
 
+type templateExecutor interface {
+	Execute(io.Writer, interface{}) error
+}
+
 type tplFormatter struct {
 	tags []string
 
-	defaultTpl  *template.Template
-	logEntryTpl *template.Template
+	defaultTpl  templateExecutor
+	logEntryTpl templateExecutor
 }
 
 func newTplFormatter(
-	tags []string, defaultTpl, logEntryTpl *template.Template) *tplFormatter {
+	tags []string, defaultTpl, logEntryTpl templateExecutor) *tplFormatter {
 	return &tplFormatter{
 		tags: tags, defaultTpl: defaultTpl, logEntryTpl: logEntryTpl,
 	}
@@ -322,11 +328,11 @@ type htmlFormatter struct {
 func newHtmlFormatter(
 	tags []string, funcMap template.FuncMap, defaultStrTpl, logEntryStrTpl string,
 ) (f *htmlFormatter, err error) {
-	var tpls [2]*template.Template
+	var tpls [2]*htmltemplate.Template
 
 	strTemplates := [2]string{defaultStrTpl, logEntryStrTpl}
 	for i := range strTemplates {
-		tpls[i], err = template.New("html").Funcs(funcMap).Parse(strTemplates[i])
+		tpls[i], err = htmltemplate.New("html").Funcs(htmltemplate.FuncMap(funcMap)).Parse(strTemplates[i])
 		if err != nil {
 			return nil, errors.WithMessage(err, "bad html template")
 		}
