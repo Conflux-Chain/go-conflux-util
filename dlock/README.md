@@ -110,6 +110,11 @@ For custom storage, implement the `Backend` interface and pass it to
   connection time zones. Local deadlines assume a stable database clock; forward
   clock jumps can expire a lease earlier. Use a pool in autocommit mode, outside
   caller-managed transactions, so success includes committing the lock write.
+- When switching existing deployments to UTC-based leases, stop all old instances
+  and their protected work first. Once no old holder can continue working, clear
+  existing leases from the dedicated lock table, initialize the schema with
+  `OpenOrCreate(&dlock.Dlock{})`, then start all clients on the new version.
+  Never run old and new versions against the same lock table at the same time.
 - Renewals are explicit. Schedule them before expiry with sufficient margin for
   database delays, and stop protected work if renewal fails or lease validity is
   uncertain. If acquisition returns an error, do not start protected work.
