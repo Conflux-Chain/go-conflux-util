@@ -196,3 +196,19 @@ func TestSmtpHtmlEscapesDynamicText(t *testing.T) {
 		assert.Contains(t, string(body), "<html>")
 	}
 }
+
+func TestSmtpRecipientHeader(t *testing.T) {
+	addresses := []string{"first@example.com", "second@example.com"}
+	formatter, err := NewSmtpHtmlFormatter(SmtpConfig{To: addresses}, nil)
+	require.NoError(t, err)
+	msg, err := formatter.Format(&Notification{Content: "test"})
+	require.NoError(t, err)
+	parsed, err := mail.ReadMessage(strings.NewReader(msg))
+	require.NoError(t, err)
+	recipients, err := parsed.Header.AddressList("To")
+	require.NoError(t, err)
+	require.Len(t, recipients, len(addresses))
+	for i, recipient := range recipients {
+		assert.Equal(t, addresses[i], recipient.Address)
+	}
+}

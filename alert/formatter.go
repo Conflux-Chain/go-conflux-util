@@ -384,7 +384,7 @@ func (f *SmtpHtmlFormatter) Format(note *Notification) (msg string, err error) {
 
 	header := make(map[string]string)
 	header["From"] = f.conf.From
-	header["To"] = strings.Join(f.conf.To, ";")
+	header["To"] = strings.Join(f.conf.To, ", ")
 	header["Subject"] = note.Title
 	header["Content-Type"] = "text/html; charset=UTF-8"
 
