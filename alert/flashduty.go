@@ -115,8 +115,8 @@ func formatDefault(note *Notification) (map[string]string, error) {
 
 func formatToString(v interface{}) (string, error) {
 	switch vv := v.(type) {
-	case string:
-		return vv, nil
+	case string, error:
+		return toString(vv), nil
 	case float64:
 		if vv == float64(int64(vv)) {
 			return strconv.FormatInt(int64(vv), 10), nil
