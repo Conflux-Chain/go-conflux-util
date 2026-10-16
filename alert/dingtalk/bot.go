@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -37,10 +38,10 @@ func NewRobot(webhook, secret string) *Robot {
 // a context with a deadline to bound the request duration.
 // Redirects are rejected; configure the final webhook URL.
 func (r Robot) Send(ctx context.Context, msgType, title, text string, atMobiles []string, isAtAll bool) error {
-	switch msgType {
-	case MsgTypeText:
+	switch {
+	case strings.EqualFold(msgType, MsgTypeText):
 		return r.SendText(ctx, text, atMobiles, isAtAll)
-	case MsgTypeMarkdown:
+	case strings.EqualFold(msgType, MsgTypeMarkdown):
 		return r.SendMarkdown(ctx, title, text, atMobiles, isAtAll)
 	default:
 		return ErrMsgTypeNotSupported(msgType)
