@@ -43,9 +43,12 @@ notifyCh := alert.DefaultManager().Channel(chID)
 
 Once the channel is initialized, you can send a notification message through the channel:
 
-FlashDuty and DingTalk use the supplied context for cancellation and do not add
+SMTP, FlashDuty and DingTalk use the supplied context for cancellation and do not add
 a default request timeout. Set a deadline when calling them directly; the example
 below allows three seconds. The logrus alert hook sets its own `SendTimeout`.
+SMTP cancellation covers TCP connection establishment, the TLS handshake, and
+the entire SMTP session; errors remain identifiable with `errors.Is` against
+`context.Canceled` or `context.DeadlineExceeded`.
 Webhook URLs must point directly to the final endpoint; redirects are rejected.
 
 ```go
