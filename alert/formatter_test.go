@@ -1,6 +1,7 @@
 package alert
 
 import (
+	"errors"
 	"net/mail"
 	"strings"
 	"testing"
@@ -8,6 +9,27 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestTelegramMarkdownFormatterContent(t *testing.T) {
+	formatter, err := NewTelegramMarkdownFormatter(nil, nil)
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		name    string
+		content interface{}
+		want    string
+	}{
+		{"string", "connection_failed", `connection\_failed`},
+		{"int", 42, "42"},
+		{"error", errors.New("connection_failed"), `connection\_failed`},
+		{"map", map[string]int{"attempts": 3}, `map\[attempts:3\]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			msg, err := formatter.Format(&Notification{Title: "alert", Content: tc.content})
+			require.NoError(t, err)
+			assert.Contains(t, msg, "*"+tc.want+"*")
+		})
+	}
+}
 
 func TestSmtpHtmlFormatterSubject(t *testing.T) {
 	formatter, err := NewSmtpHtmlFormatter(SmtpConfig{
