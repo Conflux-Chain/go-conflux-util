@@ -35,6 +35,7 @@ func TestLimiterManagerNewInvalidConfig(t *testing.T) {
 		{"negative TTL", 1, 1, -1},
 		{"TTL overflow", 1, 1, math.MaxInt64},
 		{"refill duration overflow", 1e-10, 1, 60},
+		{"TTL shorter than refill time", 1, 10, 5},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			config := Config{TTLsecs: tc.ttlSecs}
@@ -81,4 +82,28 @@ func TestLimiterManagerExpire(t *testing.T) {
 	manager.ExpireAt(time.Now().Add(20 * time.Second))
 
 	assert.NoError(t, manager.LimitN("free", "ip1", "/v1/status", 5))
+}
+
+func TestLimiterManagerExpireAfterRefill(t *testing.T) {
+	config := Config{TTLsecs: 10}
+	config.Add("free", "/api", 1, 10)
+	manager := NewLimiterManager(config)
+	now := time.Now()
+	assert.NoError(t, manager.LimitAt("free", "key", "/api", now, 10))
+
+	// Before refill completes, cleanup must retain the bucket and its consumed quota.
+	before := now.Add(9 * time.Second)
+	manager.ExpireAt(before)
+	assert.Error(t, manager.LimitAt("free", "key", "/api", before, 10))
+
+	deadline := now.Add(10 * time.Second)
+	manager.ExpireAt(deadline)
+	assert.Len(t, manager.limiters["free"]["/api"], 1)
+
+	// Once expired, the old bucket would be full; recreating it adds no extra quota.
+	later := deadline.Add(time.Nanosecond)
+	manager.ExpireAt(later)
+	assert.Empty(t, manager.limiters["free"]["/api"])
+	assert.NoError(t, manager.LimitAt("free", "key", "/api", later, 10))
+	assert.Error(t, manager.LimitAt("free", "key", "/api", later, 1))
 }

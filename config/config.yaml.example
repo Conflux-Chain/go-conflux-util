@@ -102,6 +102,15 @@
 # REST API Configurations
 # api:
 #   endpoint: :12345
+#   # Maximum time to read request headers.
+#   readHeaderTimeout: 5s
+#   # Maximum time to read the entire request, including its body.
+#   readTimeout: 15s
+#   # Response write deadline also includes request handling time.
+#   writeTimeout: 30s
+#   # Maximum wait for the next request on a keep-alive connection.
+#   idleTimeout: 60s
+#   # Adjust read/write timeouts for large uploads, downloads, or streaming APIs.
 #   recoveryDisabled: false
 #   corsOrigins: []
 #   logger: false

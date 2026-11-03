@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/Conflux-Chain/go-conflux-util/http/middlewares"
 	"github.com/Conflux-Chain/go-conflux-util/viper"
@@ -15,6 +16,15 @@ import (
 type Config struct {
 	Endpoint string `default:":12345"`
 
+	// ReadHeaderTimeout limits the time spent reading request headers.
+	ReadHeaderTimeout time.Duration `default:"5s"`
+	// ReadTimeout limits the time spent reading the entire request, including its body.
+	ReadTimeout time.Duration `default:"15s"`
+	// WriteTimeout limits response writing, including time spent handling the request.
+	WriteTimeout time.Duration `default:"30s"`
+	// IdleTimeout limits the wait for the next request on a keep-alive connection.
+	IdleTimeout time.Duration `default:"60s"`
+
 	RecoveryDisabled bool
 	CorsOrigins      []string
 	Logger           bool
@@ -22,12 +32,19 @@ type Config struct {
 
 type RouteFactory func(router *gin.Engine)
 
+// MustServeFromViper loads the "api" configuration and calls MustServe,
+// sharing its blocking behavior and process-lifetime contract.
+// Configuration loading failures are logged with Fatal and exit the process.
 func MustServeFromViper(factory RouteFactory, middlewares ...middlewares.Middleware) {
 	var config Config
 	viper.MustUnmarshalKey("api", &config)
 	MustServe(config, factory, middlewares...)
 }
 
+// MustServe starts an HTTP server and blocks while serving requests.
+// It is intended to run for the lifetime of the process and provides no graceful
+// shutdown entry point. ListenAndServe errors other than http.ErrServerClosed
+// are logged with Fatal and exit the process.
 func MustServe(config Config, factory RouteFactory, mws ...middlewares.Middleware) {
 	// gin init mode via init(), but .env may be loaded later and ignored the GIN_MODE.
 	if os.Getenv(gin.EnvGinMode) == gin.ReleaseMode {
@@ -49,8 +66,12 @@ func MustServe(config Config, factory RouteFactory, mws ...middlewares.Middlewar
 	factory(router)
 
 	server := http.Server{
-		Addr:    config.Endpoint,
-		Handler: middlewares.Hook(router, mws...),
+		Addr:              config.Endpoint,
+		Handler:           middlewares.Hook(router, mws...),
+		ReadHeaderTimeout: config.ReadHeaderTimeout,
+		ReadTimeout:       config.ReadTimeout,
+		WriteTimeout:      config.WriteTimeout,
+		IdleTimeout:       config.IdleTimeout,
 	}
 
 	logrus.WithField("config", fmt.Sprintf("%+v", config)).Debug("Start REST API server")

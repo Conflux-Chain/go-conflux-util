@@ -43,10 +43,14 @@ func TestValidateTokenBucketConfig(t *testing.T) {
 		err         string
 	}{
 		{"valid", 1, 1, 60, ""},
+		{"timeout equals refill time", 1, 10, 10, ""},
+		{"timeout shorter than refill time", 1, 10, 9, "timeout must not be shorter than full-bucket refill time"},
+		{"fractional refill rounded up", 0.4, 1, 3, ""},
+		{"fractional refill rounded down", 0.4, 1, 2, "timeout must not be shorter than full-bucket refill time"},
 		{"fractional rate", 0.5, 1, 60, ""},
 		{"unlimited rate", float64(xrate.Inf), 1, 60, ""},
 		{"maximum timeout", 1, 1, maxTokenBucketTimeoutSecs, ""},
-		{"maximum refill duration", 1 / float64(maxTokenBucketTimeoutSecs), 1, 60, ""},
+		{"maximum refill duration", 1 / float64(maxTokenBucketTimeoutSecs), 1, maxTokenBucketTimeoutSecs, ""},
 		{"zero rate", 0, 1, 60, "qps must be positive and finite"},
 		{"NaN rate", math.NaN(), 1, 60, "qps must be positive and finite"},
 		{"infinite rate", math.Inf(1), 1, 60, "qps must be positive and finite"},
@@ -223,14 +227,14 @@ func TestTokenBucketRefillDurationRange(t *testing.T) {
 	}
 
 	// A refill at the largest supported whole-second duration is still valid.
-	limiter := NewTokenBucketWithTimeout(1/float64(maxTokenBucketTimeoutSecs), 1, 60)
+	limiter := NewTokenBucketWithTimeout(1/float64(maxTokenBucketTimeoutSecs), 1, maxTokenBucketTimeoutSecs)
 	now := time.Unix(1700000000, 0)
 	assert.NoError(t, limiter.LimitAt(now, 1))
 	assert.ErrorIs(t, limiter.LimitAt(now, 1), ErrRateLimited)
 }
 
 func TestTokenBucketSlowRefill(t *testing.T) {
-	limiter := NewTokenBucketWithTimeout(1e-9, 1, 60)
+	limiter := NewTokenBucketWithTimeout(1e-9, 1, 1_000_000_000)
 	now := time.Unix(1700000000, 0)
 	assert.NoError(t, limiter.LimitAt(now, 1))
 	assert.ErrorIs(t, limiter.LimitAt(now, 1), ErrRateLimited)

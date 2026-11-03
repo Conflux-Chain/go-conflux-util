@@ -30,6 +30,10 @@ func ResponseSuccess(c *gin.Context, data any) {
 	}
 }
 
+// ResponseError writes an error response based on the error's direct type.
+// *api.BusinessError and validator.ValidationErrors must be passed directly to
+// retain their business classification. Wrapped errors are treated as internal
+// errors (HTTP 600, code 2); their full error text is preserved in response Data.
 func ResponseError(c *gin.Context, err error) {
 	switch e := err.(type) {
 	case *api.BusinessError:

@@ -20,6 +20,9 @@ type LimiterManager struct {
 }
 
 // NewLimiterManager creates a new LimiterManager with the given config.
+// It shares config.Limiter's outer and inner maps; callers must not modify them
+// during construction or while the manager is in use. Updating the original
+// config to reload limiter settings is not supported.
 // After applying defaults, it panics if any configured token bucket's rate,
 // burst, or TTL is rejected by rate.ValidateTokenBucketConfig.
 func NewLimiterManager(config Config) *LimiterManager {
@@ -57,6 +60,9 @@ func (manager *LimiterManager) LimitN(tier, key, api string, n int) error {
 
 // LimitAt limits the number of requests for the given tier, key, and api at the given time. It returns an error if the limit is exceeded.
 func (manager *LimiterManager) LimitAt(tier, key, api string, now time.Time, n int) error {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+
 	if limiter, ok := manager.getOrCreateLimiter(tier, key, api); ok {
 		return limiter.LimitAt(now, n)
 	}
@@ -67,9 +73,6 @@ func (manager *LimiterManager) LimitAt(tier, key, api string, now time.Time, n i
 // getOrCreateLimiter returns the limiter for the given tier, key, and api. If the limiter does not exist, it creates a new one.
 // It returns the limiter and a boolean indicating whether the limiter was found or created.
 func (manager *LimiterManager) getOrCreateLimiter(tier, key, api string) (rate.Limiter, bool) {
-	manager.mu.Lock()
-	defer manager.mu.Unlock()
-
 	// limiters by tier
 	limitersByTier, ok := manager.limiters[tier]
 	if !ok {

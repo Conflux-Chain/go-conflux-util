@@ -51,6 +51,8 @@ func NewTokenBucketRate(qps rate.Limit, burst int) Limiter {
 // It returns an error if qps is not positive and finite, or burst or timeoutSecs
 // is not positive. Both timeoutSecs and the full-bucket refill time (burst/qps)
 // must fit within the largest whole-second time.Duration (about 292 years).
+// The timeout must be at least the full-bucket refill time so that removing an
+// expired bucket and recreating it full does not restore quota prematurely.
 // The finite rate.Inf constant is supported for unlimited consumption.
 func ValidateTokenBucketConfig(qps float64, burst int, timeoutSecs int64) error {
 	if qps <= 0 || math.IsNaN(qps) || math.IsInf(qps, 0) {
@@ -69,8 +71,13 @@ func ValidateTokenBucketConfig(qps float64, burst int, timeoutSecs int64) error 
 		return errors.New("rate: token bucket timeout exceeds time.Duration range")
 	}
 
-	if float64(burst)/qps > float64(maxTokenBucketTimeoutSecs) {
+	refillSecs := float64(burst) / qps
+	if refillSecs > float64(maxTokenBucketTimeoutSecs) {
 		return errors.New("rate: token bucket refill duration exceeds time.Duration range")
+	}
+
+	if float64(timeoutSecs) < refillSecs {
+		return errors.New("rate: token bucket timeout must not be shorter than full-bucket refill time")
 	}
 
 	return nil
