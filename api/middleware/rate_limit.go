@@ -19,10 +19,14 @@ type RateLimitKeyExtractorFunc func(c *gin.Context) (tier, key string, err error
 // services have to change the proxy settings when proxy IP address changed.
 //
 // As a result, the service depends on the devops to set the correct "X-Real-IP" header in the reverse proxy.
+// Devops must ensure that requests reach the service only through trusted proxies
+// and that those proxies overwrite any client-supplied "X-Real-IP" header.
+// This function does not verify proxy identity. If clients can bypass the proxy
+// or control this header, they can spoof the returned IP and evade IP-based rate limits.
 func GetRealIP(c *gin.Context) string {
 	ip := c.GetHeader("X-Real-IP")
 
-	// no proxy, use the remote address directly
+	// Without the header, use the connection's remote address.
 	if len(ip) == 0 {
 		ip = c.RemoteIP()
 	}
@@ -31,6 +35,7 @@ func GetRealIP(c *gin.Context) string {
 }
 
 // DefaultRateLimitKeyExtractor is the default implementation of RateLimitKeyExtractorFunc, which uses the client's real IP address as the rate limit key and assigns it to the "free" tier.
+// It relies on the proxy deployment requirements documented by GetRealIP.
 func DefaultRateLimitKeyExtractor(c *gin.Context) (tier, key string, err error) {
 	return RateLimitTierFree, GetRealIP(c), nil
 }
