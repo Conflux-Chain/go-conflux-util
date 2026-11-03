@@ -42,12 +42,12 @@ type Jwt[DATA any, KEY PrivateKey] struct {
 }
 
 func NewJwt[T any, KEY PrivateKey](config JwtConfig, method SigningMethod[KEY]) (*Jwt[T, KEY], error) {
-	if config.AccessTokenTimeout == 0 {
-		return nil, errors.New("Access token timeout not specified")
+	if config.AccessTokenTimeout <= 0 {
+		return nil, errors.New("Access token timeout must be positive")
 	}
 
-	if config.RefreshTokenTimeout == 0 {
-		return nil, errors.New("Refresh token timeout not specified")
+	if config.RefreshTokenTimeout <= 0 {
+		return nil, errors.New("Refresh token timeout must be positive")
 	}
 
 	if len(config.Key) == 0 {
@@ -63,12 +63,12 @@ func NewJwt[T any, KEY PrivateKey](config JwtConfig, method SigningMethod[KEY]) 
 }
 
 func MustNewRandomJwt[T any, KEY PrivateKey](config JwtConfig, method SigningMethod[KEY]) *Jwt[T, KEY] {
-	if config.AccessTokenTimeout == 0 {
-		panic("Access token timeout not specified")
+	if config.AccessTokenTimeout <= 0 {
+		panic("Access token timeout must be positive")
 	}
 
-	if config.RefreshTokenTimeout == 0 {
-		panic("Refresh token timeout not specified")
+	if config.RefreshTokenTimeout <= 0 {
+		panic("Refresh token timeout must be positive")
 	}
 
 	return &Jwt[T, KEY]{config, method, method.MustGenerateKey()}

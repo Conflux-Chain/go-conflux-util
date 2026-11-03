@@ -37,6 +37,40 @@ func mustSignToken[T any, KEY PrivateKey](t *testing.T, auth *Jwt[T, KEY], claim
 	return token
 }
 
+func TestJwtConstructorTimeouts(t *testing.T) {
+	method := SigningMethods.EdDSA
+	keyPEM := string(method.ToPEM(method.MustGenerateKey()))
+	for _, tc := range []struct {
+		name            string
+		access, refresh time.Duration
+		wantErr         string
+	}{
+		{"positive", time.Minute, time.Hour, ""},
+		{"zero access", 0, time.Hour, "Access token timeout must be positive"},
+		{"negative access", -time.Minute, time.Hour, "Access token timeout must be positive"},
+		{"zero refresh", time.Minute, 0, "Refresh token timeout must be positive"},
+		{"negative refresh", time.Minute, -time.Hour, "Refresh token timeout must be positive"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			config := testJwtConfig
+			config.Key = keyPEM
+			config.AccessTokenTimeout, config.RefreshTokenTimeout = tc.access, tc.refresh
+			auth, err := NewJwt[int](config, method)
+			if tc.wantErr != "" {
+				assert.EqualError(t, err, tc.wantErr)
+				assert.Nil(t, auth)
+				assert.PanicsWithValue(t, tc.wantErr, func() {
+					MustNewRandomJwt[int](config, method)
+				})
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, auth)
+			assert.NotPanics(t, func() { MustNewRandomJwt[int](config, method) })
+		})
+	}
+}
+
 func TestJwtValid(t *testing.T) {
 	auth := newTestJwt()
 
