@@ -1,3 +1,6 @@
+# Replace example credentials and addresses before use; YAML does not expand ${...}.
+# Use prefixed environment keys to override values, as shown in .env.example.
+
 # Log Configurations
 # log:
 #   # Log level in format of "level,module1=level1,module2=level2", where module log level is optional.
@@ -35,7 +38,7 @@
 #       numWorkers: 0
 #       # The maximum number of queued jobs.
 #       queueSize: 60
-#       # Maximum timeout allowed to gracefully stop.
+#       # Best-effort queue drain budget after workers exit, not a total shutdown timeout.
 #       StopTimeout: 5s
 
 # Alert Configurations
@@ -55,9 +58,9 @@
 #       # Available message types are `text` and `markdown`.
 #       msgType: markdown
 #       # The webhook URL for the DingTalk robot.
-#       webhook: https://oapi.dingtalk.com/robot/send?access_token=${your_access_token}
+#       webhook: "https://oapi.dingtalk.com/robot/send?access_token=your_access_token"
 #       # The secret key for the DingTalk robot.
-#       secret: ${your_access_secret}
+#       secret: "your_access_secret"
 #       # List of mobile numbers to be mentioned in the alert. If empty, no one is mentioned.
 #       atMobiles: []
 #       # If set to true, all members are mentioned in the alert. If false, only the members
@@ -69,9 +72,9 @@
 #       # The type of the channel. In this case, it's 'telegram'.
 #       platform: telegram
 #       # The API token for the Telegram robot.
-#       apiToken: ${your_api_token}
+#       apiToken: "your_api_token"
 #       # The chat ID for the Telegram chat where the alerts are sent.
-#       chatId: ${your_chat_id}
+#       chatId: "your_chat_id"
 #       # List of public usernames in the chat to be mentioned.
 #       atUsers: []
 
@@ -80,24 +83,24 @@
 #       # The type of the channel. In this case, it's 'smtp'.
 #       platform: smtp
 #       # The host for the SMTP server (including the port number).
-#       host: ${your_smtp_host}
+#       host: "smtp.example.com:465"
 #       # The sender's email address.
-#       from: ${your_sender_address}
+#       from: "alerts@example.com"
 #       # List of recipient email addresses.
-#       to: [${your_recipient_address}]
+#       to: ["ops@example.com"]
 #       # The password for the SMTP server.
-#       password: ${your_smtp_password}
+#       password: "your_smtp_password"
 
 #     # Example configuration for the PagerDuty channel
 #     pagerduty:
 #       # The type of the channel. In this case, it's 'pagerduty'.
 #       platform: pagerduty
 #       # The auth token for the PagerDuty service.
-#       authToken: ${your_auth_token}
+#       authToken: "your_auth_token"
 #       # The routinng key for the integration.
-#       routingKey: ${your_routing_key}
+#       routingKey: "your_routing_key"
 #       # The unique location of the affected system, preferably a hostname or FQDN.
-#       source: ${your_source}
+#       source: "my-service"
 
 # REST API Configurations
 # api:
