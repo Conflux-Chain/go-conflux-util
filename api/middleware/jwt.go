@@ -117,18 +117,20 @@ func (j *Jwt[T, KEY]) Generate(data T, optNow ...time.Time) (string, string, err
 
 // validate checks the token's signature, registered claims, and expected purpose.
 func (j *Jwt[T, KEY]) validate(tokenString, expectedTokenUse string) (*JwtClaims[T], error) {
+	options := []jwt.ParserOption{
+		jwt.WithExpirationRequired(),
+		jwt.WithValidMethods([]string{j.method.JwtSigningMethod().Alg()}),
+		jwt.WithIssuer(j.config.Issuer),
+		jwt.WithSubject(j.config.Subject),
+	}
+
+	keyFunc := func(_ *jwt.Token) (any, error) {
+		return j.key.Public(), nil
+	}
+
 	var claims JwtClaims[T]
-
-	if _, err := jwt.ParseWithClaims(tokenString, &claims, j.getKey); err != nil {
+	if _, err := jwt.ParseWithClaims(tokenString, &claims, keyFunc, options...); err != nil {
 		return nil, errors.WithMessage(err, "Failed to parse token")
-	}
-
-	if len(j.config.Issuer) > 0 && claims.Issuer != j.config.Issuer {
-		return nil, errors.Errorf("Invalid token issuer, expected = %v, actual = %v", j.config.Issuer, claims.Issuer)
-	}
-
-	if len(j.config.Subject) > 0 && claims.Subject != j.config.Subject {
-		return nil, errors.Errorf("Invalid token subject, expected = %v, actual = %v", j.config.Subject, claims.Subject)
 	}
 
 	if claims.TokenUse != expectedTokenUse {
@@ -139,27 +141,15 @@ func (j *Jwt[T, KEY]) validate(tokenString, expectedTokenUse string) (*JwtClaims
 }
 
 // ValidateAccessToken validates an access token, rejecting refresh tokens and
-// legacy tokens without a tokenUse claim.
+// legacy tokens without a tokenUse claim. The exp claim is required.
 func (j *Jwt[T, KEY]) ValidateAccessToken(tokenString string) (*JwtClaims[T], error) {
 	return j.validate(tokenString, tokenUseAccess)
 }
 
 // ValidateRefreshToken validates a refresh token, rejecting access tokens and
-// legacy tokens without a tokenUse claim.
+// legacy tokens without a tokenUse claim. The exp claim is required.
 func (j *Jwt[T, KEY]) ValidateRefreshToken(tokenString string) (*JwtClaims[T], error) {
 	return j.validate(tokenString, tokenUseRefresh)
-}
-
-func (j *Jwt[T, KEY]) getKey(token *jwt.Token) (any, error) {
-	// verify signing method
-	algExp := j.method.JwtSigningMethod().Alg()
-	algActual := token.Method.Alg()
-
-	if algExp != algActual {
-		return nil, errors.Errorf("Invalid token method, expected = %v, actual = %v", algExp, algActual)
-	}
-
-	return j.key.Public(), nil
 }
 
 // Middleware validates an access token from the HTTP Authorization header in

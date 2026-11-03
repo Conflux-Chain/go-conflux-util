@@ -82,6 +82,12 @@ with the access-token middleware. For manual business-request authentication,
 use `ValidateAccessToken`. The former general `Validate` method has been removed;
 existing callers must choose the appropriate purpose-specific method when upgrading.
 
+Both validators require an unexpired `exp` claim and the configured signing algorithm.
+`Issuer` and `Subject` are checked only when their corresponding configuration values
+are nonempty. `Generate` already sets `exp`; externally issued tokens without it are
+rejected. Parser validation errors can be inspected with `errors.Is` and the
+`jwt/v5` error values instead of matching error text.
+
 Tokens issued before this claim was introduced are rejected by the middleware
 and both purpose-specific validators. Users must sign in again or the service
 must arrange a migration; a missing claim must not default to `access`, since

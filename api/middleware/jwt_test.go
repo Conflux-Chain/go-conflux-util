@@ -77,15 +77,117 @@ func TestJwtValidateRejectsMismatchedIssuerOrSubject(t *testing.T) {
 
 	token := mustSignToken(t, auth, claims)
 	parsed, err := auth.ValidateAccessToken(token)
-	assert.ErrorContains(t, err, "Invalid token issuer")
+	assert.ErrorIs(t, err, jwt.ErrTokenInvalidIssuer)
 	assert.Nil(t, parsed)
 
 	claims.Issuer = testJwtConfig.Issuer
 	claims.Subject = "other subject"
 	token = mustSignToken(t, auth, claims)
 	parsed, err = auth.ValidateAccessToken(token)
-	assert.ErrorContains(t, err, "Invalid token subject")
+	assert.ErrorIs(t, err, jwt.ErrTokenInvalidSubject)
 	assert.Nil(t, parsed)
+}
+
+func TestJwtRequiresExpiration(t *testing.T) {
+	auth := newTestJwt()
+	for _, tc := range []struct {
+		purpose  string
+		validate func(string) (*JwtClaims[int], error)
+	}{
+		{tokenUseAccess, auth.ValidateAccessToken},
+		{tokenUseRefresh, auth.ValidateRefreshToken},
+	} {
+		t.Run(tc.purpose, func(t *testing.T) {
+			token := mustSignToken(t, auth, JwtClaims[int]{
+				RegisteredClaims: jwt.RegisteredClaims{
+					Issuer:  testJwtConfig.Issuer,
+					Subject: testJwtConfig.Subject,
+				},
+				TokenUse: tc.purpose,
+			})
+			claims, err := tc.validate(token)
+			assert.ErrorIs(t, err, jwt.ErrTokenRequiredClaimMissing)
+			assert.Nil(t, claims)
+		})
+	}
+}
+
+func TestJwtIssuerAndSubjectOptions(t *testing.T) {
+	for _, tc := range []struct {
+		name, issuer, subject, tokenIssuer, tokenSubject string
+		wantErr                                          error
+	}{
+		{"missing issuer", "issuer", "subject", "", "subject", jwt.ErrTokenRequiredClaimMissing},
+		{"missing subject", "issuer", "subject", "issuer", "", jwt.ErrTokenRequiredClaimMissing},
+		{"issuer unrestricted", "", "subject", "other issuer", "subject", nil},
+		{"subject unrestricted", "issuer", "", "issuer", "other subject", nil},
+		{"both absent", "", "", "", "", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			config := testJwtConfig
+			config.Issuer, config.Subject = tc.issuer, tc.subject
+			auth := MustNewRandomJwt[int](config, SigningMethods.EdDSA)
+			for _, check := range []struct {
+				purpose  string
+				validate func(string) (*JwtClaims[int], error)
+			}{
+				{tokenUseAccess, auth.ValidateAccessToken},
+				{tokenUseRefresh, auth.ValidateRefreshToken},
+			} {
+				token := mustSignToken(t, auth, JwtClaims[int]{
+					RegisteredClaims: jwt.RegisteredClaims{
+						Issuer:    tc.tokenIssuer,
+						Subject:   tc.tokenSubject,
+						ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute)),
+					},
+					TokenUse: check.purpose,
+				})
+				claims, err := check.validate(token)
+				if tc.wantErr != nil {
+					assert.ErrorIs(t, err, tc.wantErr)
+					assert.Nil(t, claims)
+				} else {
+					require.NoError(t, err)
+					require.NotNil(t, claims)
+				}
+			}
+		})
+	}
+}
+
+func TestJwtRejectsUnexpectedSigningMethod(t *testing.T) {
+	auth := MustNewRandomJwt[int](testJwtConfig, SigningMethods.RS256)
+	for _, check := range []struct {
+		purpose  string
+		validate func(string) (*JwtClaims[int], error)
+	}{
+		{tokenUseAccess, auth.ValidateAccessToken},
+		{tokenUseRefresh, auth.ValidateRefreshToken},
+	} {
+		t.Run(check.purpose, func(t *testing.T) {
+			claims := JwtClaims[int]{
+				RegisteredClaims: jwt.RegisteredClaims{
+					Issuer:    testJwtConfig.Issuer,
+					Subject:   testJwtConfig.Subject,
+					ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute)),
+				},
+				TokenUse: check.purpose,
+			}
+			_, err := check.validate(mustSignToken(t, auth, claims))
+			require.NoError(t, err)
+
+			// The same RSA key can verify RS512, but this instance only permits RS256.
+			token, err := jwt.NewWithClaims(jwt.SigningMethodRS512, claims).SignedString(auth.key)
+			require.NoError(t, err)
+			_, err = jwt.Parse(token, func(_ *jwt.Token) (any, error) {
+				return auth.key.Public(), nil
+			})
+			require.NoError(t, err)
+			parsed, err := check.validate(token)
+			assert.ErrorIs(t, err, jwt.ErrTokenSignatureInvalid)
+			assert.Nil(t, parsed)
+		})
+	}
 }
 
 func TestJwtAccessTokenExpired(t *testing.T) {
@@ -158,7 +260,9 @@ func TestJwtTokenUse(t *testing.T) {
 
 	// Inspect the actual signed payload to enforce the camelCase wire format.
 	for token, purpose := range map[string]string{access: tokenUseAccess, refresh: tokenUseRefresh} {
-		parsed, err := jwt.Parse(token, auth.getKey)
+		parsed, err := jwt.Parse(token, func(_ *jwt.Token) (any, error) {
+			return auth.key.Public(), nil
+		})
 		require.NoError(t, err)
 		payload := parsed.Claims.(jwt.MapClaims)
 		assert.Equal(t, purpose, payload["tokenUse"])
