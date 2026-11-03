@@ -20,3 +20,16 @@ Utilities for golang development on Conflux blockchain, especially for backend s
 |[Rate Limit](./rate)|Utilities to limit request rate, along with HTTP handler middlewares|
 |[Store](./store/README.md)|Provides utilities to initialize database.|
 |[Viper](./viper/README.md)|Initialize the original [viper](https://github.com/spf13/viper) in common and fix some issues.|
+
+## Configuration conventions
+
+Intervals for periodic tasks must be positive. When a constructor or initialization
+entry point applies defaults, a zero interval uses the configured default. A
+`default` struct tag alone does not apply defaults when a configuration is created
+directly.
+
+Negative intervals are unsupported. Invalid configurations may return an error or
+panic during initialization or use; the exact failure point is not guaranteed
+unless documented by the API. Field-specific documentation takes precedence.
+This convention does not apply to all `time.Duration` values: for example, some
+timeout settings use nonpositive values to disable timeouts.
