@@ -3,11 +3,16 @@ package rate
 import "time"
 
 type Config struct {
-	Limiter map[string]map[string]LimiterConfig // tier -> api -> LimiterConfig
+	// tier -> api -> LimiterConfig
+	Limiter map[string]map[string]LimiterConfig
 
-	TTLsecs int64 `default:"600"` // TTLsecs is the time (in seconds) to live for the limiter, after which it will be removed from the cache
+	// TTLsecs is the expiration timeout in seconds since the last successful
+	// request (or creation if unused). It must be at least Burst/Rate seconds
+	// for every configured limiter, so eviction cannot restore quota early.
+	TTLsecs int64 `default:"600"`
 
-	ExpireInterval time.Duration `default:"1m"` // ExpireInterval is the interval at which the limiter will be checked for expiration
+	// ExpireInterval is the interval at which the limiter will be checked for expiration
+	ExpireInterval time.Duration `default:"1m"`
 }
 
 type LimiterConfig struct {
