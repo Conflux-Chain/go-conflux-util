@@ -47,6 +47,12 @@ type BusinessError struct {
 
 `Code` **0** indicates success, and `Data` is an object indicates the return value of REST API. `Code` with non-zero value indicates any error, and developers could refer to the `Message` and `Data` fields for more details.
 
+Callers must ensure that data passed to the JSON response helpers can be encoded
+as JSON, including `BusinessError.Data`. For example, `NaN`, infinity, and cyclic
+references cannot be encoded. Encoding failures are not converted into a uniform
+error response; with the default Gin recovery middleware, they result in HTTP 500
+with an empty body. HTTP clients must also handle responses outside this format.
+
 ## Pre-defined Error Codes
 
 There are some pre-defined errors as below:
@@ -59,10 +65,10 @@ There are some pre-defined errors as below:
 
 ## HTTP Response Status Code
 
-To distinguish backend service error and gateway error, we only use `200` and `600` as HTTP response status code:
+The response helpers use the following status codes for successfully encoded JSON responses:
 
 - 200: success, or known business error, e.g. entity not found.
-- 600: unexpected system error, e.g. io error, encoding error.
+- 600: an unexpected system error passed to `ResponseError`, such as an I/O error.
 
 ## Middlewares
 

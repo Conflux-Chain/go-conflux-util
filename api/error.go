@@ -27,6 +27,7 @@ type BusinessError struct {
 	Message string `json:"message"`
 
 	// Data is the return value if success. Otherwise, it is concret failure reason in string type.
+	// Callers must ensure that Data can be encoded as JSON when sending a JSON response.
 	Data any `json:"data"`
 }
 
