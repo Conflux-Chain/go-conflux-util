@@ -10,9 +10,18 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	tokenUseAccess  = "access"
+	tokenUseRefresh = "refresh"
+)
+
 type JwtClaims[T any] struct {
 	jwt.RegisteredClaims
 
+	// TokenUse identifies the token's purpose: "access" or "refresh".
+	TokenUse string `json:"tokenUse"`
+
+	// Custom data carried by the token.
 	Data T
 }
 
@@ -85,7 +94,8 @@ func (j *Jwt[T, KEY]) Generate(data T, optNow ...time.Time) (string, string, err
 			NotBefore: jwt.NewNumericDate(now),
 			IssuedAt:  jwt.NewNumericDate(now),
 		},
-		Data: data,
+		TokenUse: tokenUseAccess,
+		Data:     data,
 	}
 
 	accessToken, err := jwt.NewWithClaims(j.method.JwtSigningMethod(), claims).SignedString(j.key)
@@ -94,6 +104,7 @@ func (j *Jwt[T, KEY]) Generate(data T, optNow ...time.Time) (string, string, err
 	}
 
 	// refresh token
+	claims.TokenUse = tokenUseRefresh
 	claims.ExpiresAt = jwt.NewNumericDate(now.Add(j.config.RefreshTokenTimeout))
 
 	refreshToken, err := jwt.NewWithClaims(j.method.JwtSigningMethod(), claims).SignedString(j.key)
@@ -104,8 +115,8 @@ func (j *Jwt[T, KEY]) Generate(data T, optNow ...time.Time) (string, string, err
 	return accessToken, refreshToken, nil
 }
 
-// Validate validates the specified JWT token and returns parsed claims.
-func (j *Jwt[T, KEY]) Validate(tokenString string) (*JwtClaims[T], error) {
+// validate checks the token's signature, registered claims, and expected purpose.
+func (j *Jwt[T, KEY]) validate(tokenString, expectedTokenUse string) (*JwtClaims[T], error) {
 	var claims JwtClaims[T]
 
 	if _, err := jwt.ParseWithClaims(tokenString, &claims, j.getKey); err != nil {
@@ -120,7 +131,23 @@ func (j *Jwt[T, KEY]) Validate(tokenString string) (*JwtClaims[T], error) {
 		return nil, errors.Errorf("Invalid token subject, expected = %v, actual = %v", j.config.Subject, claims.Subject)
 	}
 
+	if claims.TokenUse != expectedTokenUse {
+		return nil, errors.Errorf("Invalid token use, expected = %v, actual = %v", expectedTokenUse, claims.TokenUse)
+	}
+
 	return &claims, nil
+}
+
+// ValidateAccessToken validates an access token, rejecting refresh tokens and
+// legacy tokens without a tokenUse claim.
+func (j *Jwt[T, KEY]) ValidateAccessToken(tokenString string) (*JwtClaims[T], error) {
+	return j.validate(tokenString, tokenUseAccess)
+}
+
+// ValidateRefreshToken validates a refresh token, rejecting access tokens and
+// legacy tokens without a tokenUse claim.
+func (j *Jwt[T, KEY]) ValidateRefreshToken(tokenString string) (*JwtClaims[T], error) {
+	return j.validate(tokenString, tokenUseRefresh)
 }
 
 func (j *Jwt[T, KEY]) getKey(token *jwt.Token) (any, error) {
@@ -135,7 +162,8 @@ func (j *Jwt[T, KEY]) getKey(token *jwt.Token) (any, error) {
 	return j.key.Public(), nil
 }
 
-// Middleware validates JWT token from HTTP Authorization header that in format of 'Bearer xxx'.
+// Middleware validates an access token from the HTTP Authorization header in
+// the format 'Bearer xxx'. Refresh tokens and tokens without tokenUse are rejected.
 func (j *Jwt[T, KEY]) Middleware(c *gin.Context) {
 	authHeader := c.GetHeader("Authorization")
 
@@ -161,7 +189,7 @@ func (j *Jwt[T, KEY]) validateFromHeader(authHeader string) (*JwtClaims[T], erro
 
 	tokenString := authHeader[len(bearer):]
 
-	claims, err := j.Validate(tokenString)
+	claims, err := j.ValidateAccessToken(tokenString)
 	if err != nil {
 		return nil, api.ErrJwt(err.Error())
 	}

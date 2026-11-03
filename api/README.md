@@ -73,6 +73,20 @@ There are some common used middlewares available:
 - Wrapper to return (value, error) pair
 - Rate limit
 
+### JWT token purpose
+
+`Jwt.Generate` signs access and refresh tokens with a `tokenUse` claim of
+`access` and `refresh`, respectively. `Jwt.Middleware` accepts only access tokens.
+Use `ValidateRefreshToken` in the refresh handler; do not protect that handler
+with the access-token middleware. For manual business-request authentication,
+use `ValidateAccessToken`. The former general `Validate` method has been removed;
+existing callers must choose the appropriate purpose-specific method when upgrading.
+
+Tokens issued before this claim was introduced are rejected by the middleware
+and both purpose-specific validators. Users must sign in again or the service
+must arrange a migration; a missing claim must not default to `access`, since
+legacy refresh tokens have no purpose marker either.
+
 ## Validators
 
 There are some helpful validator tags available:
