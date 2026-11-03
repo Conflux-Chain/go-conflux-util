@@ -88,6 +88,15 @@ The response helpers use the following status codes for successfully encoded JSO
 - 200: success, or known business error, e.g. entity not found.
 - 600: an unexpected system error passed to `ResponseError`, such as an I/O error.
 
+Other middleware and framework responses can use different status codes:
+
+- 429: the rate limit middleware rejects a request and returns a `BusinessError` with code 3.
+- 404: Gin's default response when no route matches, with a plain-text body.
+- 500: Gin's default recovery middleware catches a panic before a response has been written, with an empty body.
+
+Clients must handle these responses without assuming every response contains
+the business JSON format. Custom handlers and middleware may change these defaults.
+
 ## Middlewares
 
 There are some common used middlewares available:
@@ -125,7 +134,10 @@ There are some helpful validator tags available:
 
 ## Unit Test
 
-Developers could easily write unit tests for all exported REST APIs based on the available test utilities. See examples below:
+The request helpers require HTTP 200: `MustExecRaw` panics on any other status,
+and `MustExec` and the request assertion methods call it internally. They can
+test both successful responses and business errors returned with HTTP 200.
+See the example below:
 
 ```go
 package foo
@@ -157,5 +169,32 @@ func TestFoo(t *testing.T) {
 	engine.Post("/users").						// build post URL
 		MustWithJSONBody(User{Name: "Alice"}).	// build JSON body
 		AssertSuccess(t, uint64(1))				// assert new user ID is 1
+}
+```
+
+For other status codes, use `net/http/httptest` and call the underlying Gin
+engine's `ServeHTTP` directly. This lets the test inspect both the status and
+body without the helpers' HTTP 200 requirement. For example:
+
+```go
+package foo
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestNotFound(t *testing.T) {
+	engine := gin.New()
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/missing", nil)
+	engine.ServeHTTP(recorder, request)
+
+	assert.Equal(t, http.StatusNotFound, recorder.Code)
+	assert.Equal(t, "404 page not found", recorder.Body.String())
 }
 ```
