@@ -33,6 +33,14 @@ func someHandler(c *gin.Context) (any, error) {
 
 ```
 
+`MustServe` and `MustServeFromViper` block while serving requests and are intended
+to run for the lifetime of the process. They expose no graceful shutdown entry
+point: canceling an application context does not stop the server, and these
+helpers do not arrange to drain in-flight requests before process exit.
+`ListenAndServe` errors other than `http.ErrServerClosed` are logged with `Fatal`
+and exit the process. Configuration loading failures in `MustServeFromViper`
+also exit the process.
+
 `MustServeFromViper` applies default HTTP server timeouts: 5 seconds for request
 headers, 15 seconds for the entire request, 30 seconds for response writing, and
 60 seconds for idle keep-alive connections. Explicit zero configuration values

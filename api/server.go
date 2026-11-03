@@ -32,12 +32,19 @@ type Config struct {
 
 type RouteFactory func(router *gin.Engine)
 
+// MustServeFromViper loads the "api" configuration and calls MustServe,
+// sharing its blocking behavior and process-lifetime contract.
+// Configuration loading failures are logged with Fatal and exit the process.
 func MustServeFromViper(factory RouteFactory, middlewares ...middlewares.Middleware) {
 	var config Config
 	viper.MustUnmarshalKey("api", &config)
 	MustServe(config, factory, middlewares...)
 }
 
+// MustServe starts an HTTP server and blocks while serving requests.
+// It is intended to run for the lifetime of the process and provides no graceful
+// shutdown entry point. ListenAndServe errors other than http.ErrServerClosed
+// are logged with Fatal and exit the process.
 func MustServe(config Config, factory RouteFactory, mws ...middlewares.Middleware) {
 	// gin init mode via init(), but .env may be loaded later and ignored the GIN_MODE.
 	if os.Getenv(gin.EnvGinMode) == gin.ReleaseMode {
