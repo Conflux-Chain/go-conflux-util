@@ -33,6 +33,16 @@ func someHandler(c *gin.Context) (any, error) {
 
 ```
 
+`MustServeFromViper` applies default HTTP server timeouts: 5 seconds for request
+headers, 15 seconds for the entire request, 30 seconds for response writing, and
+60 seconds for idle keep-alive connections. Explicit zero configuration values
+also use these defaults. `MustServe` uses the supplied `Config` as-is; callers
+constructing it directly must set the desired timeouts themselves.
+
+These fields follow `net/http.Server` timeout semantics. The write deadline also
+includes request handling time; it does not cancel business logic. Adjust the
+read/write timeouts for large uploads, downloads, or streaming APIs.
+
 ## Uniform HTTP Response
 
 This module provides common HTTP responses along with standard errors in JSON format.

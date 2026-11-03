@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/Conflux-Chain/go-conflux-util/http/middlewares"
 	"github.com/Conflux-Chain/go-conflux-util/viper"
@@ -14,6 +15,15 @@ import (
 
 type Config struct {
 	Endpoint string `default:":12345"`
+
+	// ReadHeaderTimeout limits the time spent reading request headers.
+	ReadHeaderTimeout time.Duration `default:"5s"`
+	// ReadTimeout limits the time spent reading the entire request, including its body.
+	ReadTimeout time.Duration `default:"15s"`
+	// WriteTimeout limits response writing, including time spent handling the request.
+	WriteTimeout time.Duration `default:"30s"`
+	// IdleTimeout limits the wait for the next request on a keep-alive connection.
+	IdleTimeout time.Duration `default:"60s"`
 
 	RecoveryDisabled bool
 	CorsOrigins      []string
@@ -49,8 +59,12 @@ func MustServe(config Config, factory RouteFactory, mws ...middlewares.Middlewar
 	factory(router)
 
 	server := http.Server{
-		Addr:    config.Endpoint,
-		Handler: middlewares.Hook(router, mws...),
+		Addr:              config.Endpoint,
+		Handler:           middlewares.Hook(router, mws...),
+		ReadHeaderTimeout: config.ReadHeaderTimeout,
+		ReadTimeout:       config.ReadTimeout,
+		WriteTimeout:      config.WriteTimeout,
+		IdleTimeout:       config.IdleTimeout,
 	}
 
 	logrus.WithField("config", fmt.Sprintf("%+v", config)).Debug("Start REST API server")
