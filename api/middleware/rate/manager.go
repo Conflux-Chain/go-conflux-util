@@ -20,6 +20,9 @@ type LimiterManager struct {
 }
 
 // NewLimiterManager creates a new LimiterManager with the given config.
+// It shares config.Limiter's outer and inner maps; callers must not modify them
+// during construction or while the manager is in use. Updating the original
+// config to reload limiter settings is not supported.
 // After applying defaults, it panics if any configured token bucket's rate,
 // burst, or TTL is rejected by rate.ValidateTokenBucketConfig.
 func NewLimiterManager(config Config) *LimiterManager {

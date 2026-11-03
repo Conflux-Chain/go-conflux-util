@@ -4,6 +4,8 @@ import "time"
 
 type Config struct {
 	// tier -> api -> LimiterConfig
+	// The outer and inner maps are shared with LimiterManager. Finish configuring
+	// them before constructing a manager, and keep them unchanged while it is in use.
 	Limiter map[string]map[string]LimiterConfig
 
 	// TTLsecs is the expiration timeout in seconds since the last successful
@@ -21,6 +23,7 @@ type LimiterConfig struct {
 }
 
 // Add adds a new limiter configuration for a given tier and API. If the configuration already exists, it returns false. Otherwise, it adds the configuration and returns true.
+// It is intended for initialization before passing the config to NewLimiterManager.
 func (config *Config) Add(tier, api string, rate float64, burst int) bool {
 	if config.Limiter == nil {
 		config.Limiter = make(map[string]map[string]LimiterConfig)
