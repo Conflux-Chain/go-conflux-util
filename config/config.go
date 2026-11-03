@@ -12,14 +12,16 @@ import (
 )
 
 // MustInitDefault initializes with "APP" env var prefix and try to load configs from "config.xxx" file.
+// It shares MustInit's initialization and failure contracts.
 func MustInitDefault() {
 	MustInit("APP")
 }
 
 // MustInit performs the necessary initializations for the application, particularly
 // by loading configuration settings from files or environment variables into `Viper`,
-// setting up metrics, alerts, and logging systems. This function is designed to be
-// used at the application's startup phase.
+// setting up metrics, alerts, logging, and pprof.
+// Call exactly one MustInit* entry point once during process startup, before using
+// these components concurrently. Repeated initialization and hot reload are unsupported.
 //
 // Important: The order in which initializations are performed is critical due to
 // dependencies between components.
@@ -30,20 +32,28 @@ func MustInitDefault() {
 //   - configPath : The path to the configuration file. If not provided, search for the default
 //     config file under current directory or `config` subfolder.
 //
-// Panics:
-//   - If any part of the initialization fails, this function will panic, causing the application
-//     to terminate abruptly.
+// Configuration loading/decoding, alert/log initialization, and pprof listening
+// errors are logged with Fatal and exit the process; recover cannot catch these exits.
+// Invalid component configuration may instead panic. Background startup errors
+// may only be logged, so returning does not guarantee that every component is ready.
 func MustInit(viperEnvPrefix string, configPath ...string) {
 	// Delegates to the shared initialization logic with no context for graceful shutdown.
 	mustInit(viperEnvPrefix, nil, nil, configPath...)
 }
 
-// MustInitWithCtx carries out the same initializations as `MustInit` except for support for
-// graceful shutdown by accepting a context and a wait group.
+// MustInitWithCtx performs MustInit's initialization and connects configured
+// asynchronous log-alert workers to ctx and wg. It shares MustInit's startup-only
+// and failure contracts. Metrics reporting and pprof retain process lifetime.
+//
+// Both ctx and wg must be non-nil to enable worker shutdown handling; otherwise,
+// logging is initialized without it. After initialization returns, stop log
+// producers, cancel ctx, and wait on wg. Worker registration calls wg.Add internally;
+// callers should not add a count for this initialization. Waiting covers only the
+// registered workers and their best-effort queue drain, not all initialized services.
 //
 // Parameters:
-//   - ctx: The context for graceful shutdown handling.
-//   - wg: The wait group to track goroutines for shutdown synchronization.
+//   - ctx: The cancellation context for asynchronous log-alert workers.
+//   - wg: The wait group tracking those workers and their queue drain.
 //   - viperEnvPrefix : The prefix used for environment variables that `Viper` should consider
 //     while initializing configurations.
 //   - configPath : The path to the configuration file. If not provided, search for the default
@@ -55,7 +65,7 @@ func MustInitWithCtx(
 
 // mustInit is the internal function responsible for the core initialization steps.
 // It consolidates the setup of `Viper`, metrics, alerts, and logging, adapting the logging
-// setup based on whether graceful shutdown context and wait group are provided.
+// setup based on whether a worker cancellation context and wait group are provided.
 //
 // Important: The order in which initializations are performed is critical due to
 // dependencies between components.
@@ -75,8 +85,7 @@ func mustInit(
 
 	// Initialize the logging system with configurations fetched via Viper.
 	// Logging setup depends on alert initialization since it might use alerting channels.
-	// Additionally, logging setup accepts a context and wait group to ensure logs are handled
-	// properly during shutdown.
+	// The context and wait group apply only to configured asynchronous log-alert workers.
 	if ctx != nil && wg != nil {
 		log.MustInitWithCtxFromViper(ctx, wg)
 	} else {
