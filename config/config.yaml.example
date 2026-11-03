@@ -148,4 +148,5 @@
 # Go performance profiling
 # pprof:
 #   enabled: false
-#   endpoint: ":6060"
+#   # Keep diagnostics local; use a controlled network or tunnel for remote access.
+#   endpoint: "127.0.0.1:6060"
