@@ -97,22 +97,23 @@ func (adapter *Adapter) GetLatestBlockNumber(ctx context.Context) (uint64, error
 
 // GetBlockData implements the poll.Adapter[T] interface.
 func (adapter *Adapter) GetBlockData(ctx context.Context, blockNumber uint64) (BlockData, error) {
+	client := adapter.client.WithContext(ctx)
 	var data BlockData
 
 	bn := types.BlockNumber(blockNumber)
 
-	if err := data.queryBlock(adapter.client, bn); err != nil {
+	if err := data.queryBlock(client, bn); err != nil {
 		return BlockData{}, errors.WithMessage(err, "Failed to query block")
 	}
 
 	if !adapter.option.IgnoreReceipts {
-		if err := data.queryReceipts(adapter.client, bn); err != nil {
+		if err := data.queryReceipts(client, bn); err != nil {
 			return BlockData{}, errors.WithMessage(err, "Failed to query receipts")
 		}
 	}
 
 	if !adapter.option.IgnoreTraces {
-		if err := data.queryTraces(adapter.client, bn); err != nil {
+		if err := data.queryTraces(client, bn); err != nil {
 			return BlockData{}, errors.WithMessage(err, "Failed to query traces")
 		}
 	}
