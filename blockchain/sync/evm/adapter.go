@@ -77,6 +77,10 @@ func (adapter *Adapter) GetFinalizedBlockNumber(ctx context.Context) (uint64, er
 		return 0, err
 	}
 
+	if block == nil {
+		return 0, errors.New("Finalized block not found")
+	}
+
 	return block.Number.Uint64(), nil
 }
 
@@ -85,6 +89,10 @@ func (adapter *Adapter) GetLatestBlockNumber(ctx context.Context) (uint64, error
 	block, err := adapter.client.WithContext(ctx).Eth.BlockByNumber(types.BlockNumber(adapter.option.LatestBlockNumberTag), false)
 	if err != nil {
 		return 0, err
+	}
+
+	if block == nil {
+		return 0, errors.Errorf("Latest block not found by tag %v", adapter.option.LatestBlockNumberTag)
 	}
 
 	bn := block.Number.Uint64()
