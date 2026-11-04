@@ -2,16 +2,21 @@ package dlock
 
 import (
 	"context"
+	"fmt"
 	"time"
 
-	"github.com/Conflux-Chain/go-conflux-util/store"
 	"github.com/pkg/errors"
 )
 
+const leasePrecision = time.Millisecond
+
 var (
-	// Custom Errors
 	ErrLockNotHeld           = errors.New("lock not held")
 	ErrLockAcquisitionFailed = errors.New("failed to acquire lock")
+	ErrInvalidLockIntent     = errors.New("lock intent must not be nil")
+	ErrEmptyNonce            = errors.New("lock nonce must not be empty")
+	ErrInvalidLease          = errors.New("lock lease must be positive")
+	ErrInvalidLockKey        = errors.New("MySQL lock key exceeds 764 bytes")
 )
 
 // Backend defines the interface for the underlying storage backend of the distributed lock.
@@ -25,10 +30,12 @@ type Backend interface {
 	DelEntry(ctx context.Context, key, nonce string) (bool, error)
 }
 
-// The lock intent to acquire a distributed lock.
+// LockIntent identifies a lock holder and its requested lease.
 type LockIntent struct {
-	Key   string        // The unique identifier for the lock.
-	Nonce string        // The lock can only be released with the correct nonce.
+	Key string // The unique identifier for the lock.
+	// Nonce must be nonempty and unique to one holding period. Reuse it only for
+	// renewals; generate a new value when acquiring after release or lease loss.
+	Nonce string
 	Lease time.Duration // The length of the lease duration.
 }
 
@@ -41,43 +48,105 @@ type LockManager struct {
 	backend Backend
 }
 
-// NewLockManager creates a new LockManager with the provided backend.
-func NewLockManager(be Backend) *LockManager {
-	return &LockManager{backend: be}
-}
-
-func NewLockManagerFromViper() *LockManager {
-	conf := store.MustNewConfigFromViper()
-	db := conf.MustOpenOrCreate(&Dlock{})
-	return NewLockManager(NewMySQLBackend(db))
+// NewLockManager uses a caller-owned backend. The caller manages its resources.
+func NewLockManager(backend Backend) *LockManager {
+	return &LockManager{backend: backend}
 }
 
 // Acquire tries to acquire a distributed lock with the given key and lease duration.
-// It returns nil error if the lease was successfully obtained.
-func (l *LockManager) Acquire(ctx context.Context, li *LockIntent) error {
-	ok, err := l.backend.WriteEntry(ctx, li.Key, li.Nonce, li.Lease)
+// It returns nil only while a conservative lease budget remains. Use
+// AcquireWithDeadline to bound protected work by that budget.
+func (manager *LockManager) Acquire(ctx context.Context, intent *LockIntent) error {
+	_, err := manager.AcquireWithDeadline(ctx, intent)
+	return err
+}
+
+// AcquireWithDeadline acquires or renews a lease and returns a local monotonic
+// deadline. The budget starts before storage access and reserves one millisecond
+// for timestamp precision. It assumes the database clock does not jump forward.
+// Stop work by this deadline, or earlier if renewal fails. No deadline is returned
+// on failure; a successful write with an exhausted budget is conditionally released.
+func (manager *LockManager) AcquireWithDeadline(ctx context.Context, intent *LockIntent) (time.Time, error) {
+	start := time.Now()
+	if err := intent.validate(); err != nil {
+		return time.Time{}, err
+	}
+	if err := validateLease(intent.Lease); err != nil {
+		return time.Time{}, err
+	}
+	deadline := start.Add(intent.Lease - leasePrecision)
+	if time.Since(start) >= intent.Lease-leasePrecision {
+		return time.Time{}, ErrLockAcquisitionFailed
+	}
+	ok, err := manager.backend.WriteEntry(ctx, intent.Key, intent.Nonce, intent.Lease)
 	if err != nil {
-		return errors.WithMessage(err, "failed to write lock entry")
+		return time.Time{}, errors.WithMessage(err, "failed to write lock entry")
 	}
 
-	if !ok { // unabled to acquire lock
-		return ErrLockAcquisitionFailed
+	if !ok {
+		return time.Time{}, ErrLockAcquisitionFailed
 	}
 
-	return nil
+	if err := finishAcquisition(ctx, manager.backend, intent.Key, intent.Nonce, start, intent.Lease); err != nil {
+		return time.Time{}, err
+	}
+	return deadline, nil
 }
 
 // Release attempts to release an existing lock.
 // It returns nil error if the lock was successfully released.
-func (l *LockManager) Release(ctx context.Context, li *LockIntent) error {
-	ok, err := l.backend.DelEntry(ctx, li.Key, li.Nonce)
+func (manager *LockManager) Release(ctx context.Context, intent *LockIntent) error {
+	if err := intent.validate(); err != nil {
+		return err
+	}
+	ok, err := manager.backend.DelEntry(ctx, intent.Key, intent.Nonce)
 	if err != nil {
 		return errors.WithMessage(err, "failed to delete lock entry")
 	}
 
-	if !ok { // lock not held
+	if !ok {
 		return ErrLockNotHeld
 	}
 
 	return nil
+}
+
+func (intent *LockIntent) validate() error {
+	if intent == nil {
+		return ErrInvalidLockIntent
+	}
+	return validateNonce(intent.Nonce)
+}
+
+func validateNonce(nonce string) error {
+	if nonce == "" {
+		return ErrEmptyNonce
+	}
+	return nil
+}
+
+func validateLease(lease time.Duration) error {
+	if lease <= 0 {
+		return ErrInvalidLease
+	}
+	return nil
+}
+
+// finishAcquisition confirms a successful write still has a usable lease, or
+// conditionally releases it. Cleanup uses a fresh bounded context because
+// acquisition may have been canceled.
+func finishAcquisition(ctx context.Context, backend Backend, key, nonce string, start time.Time, lease time.Duration) error {
+	err := ctx.Err()
+	if err == nil && time.Since(start) < lease-leasePrecision {
+		return nil
+	}
+	if err == nil {
+		err = ErrLockAcquisitionFailed
+	}
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+	defer cancel()
+	if _, cleanupErr := backend.DelEntry(cleanupCtx, key, nonce); cleanupErr != nil {
+		return fmt.Errorf("%w; failed to discard lease: %w", err, cleanupErr)
+	}
+	return err
 }
