@@ -2,6 +2,7 @@ package poll
 
 import (
 	"context"
+	"runtime"
 	"sync"
 	"time"
 
@@ -18,10 +19,15 @@ import (
 var ModuleName = "sync.poll"
 
 type CatchUpOption struct {
+	// Parallel.Routines defaults to GOMAXPROCS at construction when non-positive.
+	// A zero Parallel.Window defaults to twice that configured number of routines.
+	// A positive window allows bounded prefetching; a negative window disables the limit.
 	Parallel ParallelOption
 
 	Buffer struct {
 		Capacity int `default:"1024"`
+		// MaxBytes bounds estimated data size in the channel, excluding parallel
+		// polling results and processor batches. It is not a total memory limit.
 		MaxBytes int `default:"256000000"` // 256M
 	}
 }
@@ -31,7 +37,7 @@ type CatchUpPoller[T channel.Sizable] struct {
 	option          CatchUpOption
 	adapter         Adapter[T]
 	nextBlockNumber uint64
-	dataCh          *channel.MemoryBoundedChannel[T] // must bounds the memory to avoid OOM
+	dataCh          *channel.MemoryBoundedChannel[T]
 	health          *health.TimedCounter
 }
 
@@ -49,6 +55,14 @@ func normalizeOpt[T any](option ...T) T {
 
 func NewCatchUpPoller[T channel.Sizable](adapter Adapter[T], nextBlockNumber uint64, option ...CatchUpOption) *CatchUpPoller[T] {
 	opt := normalizeOpt(option...)
+
+	if opt.Parallel.Routines <= 0 {
+		opt.Parallel.Routines = runtime.GOMAXPROCS(0)
+	}
+
+	if opt.Parallel.Window == 0 {
+		opt.Parallel.Window = opt.Parallel.Routines * 2
+	}
 
 	return &CatchUpPoller[T]{
 		option:          opt,
