@@ -37,6 +37,7 @@ func NewRetriableProcessor(db *gorm.DB, option Option) *RetriableProcessor {
 }
 
 // Write executes op in a transaction, retrying failures until it succeeds or ctx is canceled.
+// The transaction and database operations using tx share ctx for cancellation and deadlines.
 // It returns true if the transaction committed, or false if cancellation stopped the retries.
 func (processor *RetriableProcessor) Write(ctx context.Context, op Operation) bool {
 	for {
@@ -44,7 +45,7 @@ func (processor *RetriableProcessor) Write(ctx context.Context, op Operation) bo
 			return false
 		}
 
-		err := processor.db.Transaction(func(tx *gorm.DB) error {
+		err := processor.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 			return op.Exec(tx)
 		})
 

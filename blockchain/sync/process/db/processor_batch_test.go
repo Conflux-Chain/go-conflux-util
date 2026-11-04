@@ -37,7 +37,7 @@ func TestBatchResetOnlyAfterCommit(t *testing.T) {
 			name = "canceled"
 		}
 		t.Run(name, func(t *testing.T) {
-			database := newCreateTestDB(t)
+			database := newPersistentTestDB(t)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			batch := &testBatchProcessor{op: func(tx *gorm.DB) error {

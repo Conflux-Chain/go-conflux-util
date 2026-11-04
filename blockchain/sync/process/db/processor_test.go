@@ -3,10 +3,12 @@ package db_test
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 	"time"
 
 	dbproc "github.com/Conflux-Chain/go-conflux-util/blockchain/sync/process/db"
+	"github.com/Conflux-Chain/go-conflux-util/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -15,6 +17,24 @@ import (
 type operationFunc func(*gorm.DB) error
 
 func (f operationFunc) Exec(tx *gorm.DB) error { return f(tx) }
+
+// Canceled transactions may discard their connection. A file database keeps
+// committed data available for assertions even if that connection is replaced.
+func newPersistentTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	config := store.Config{
+		Sqlite:       &store.SqliteConfig{Path: filepath.Join(t.TempDir(), "test.db")},
+		MaxOpenConns: 1,
+		MaxIdleConns: 1,
+		LogLevel:     "warn",
+	}
+	database, err := config.OpenOrCreate(&createRecord{})
+	require.NoError(t, err)
+	sqlDB, err := database.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, sqlDB.Close()) })
+	return database
+}
 
 func TestWriteRetriesUntilCommit(t *testing.T) {
 	database := newCreateTestDB(t)
@@ -44,14 +64,15 @@ func TestWriteCancellationResult(t *testing.T) {
 		name          string
 		cancelBefore  bool
 		failOperation bool
-		wantCommitted bool
 	}{
 		{name: "already canceled", cancelBefore: true},
 		{name: "canceled after failure", failOperation: true},
-		{name: "committed during cancellation", wantCommitted: true},
+		{name: "canceled before commit"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			database := newCreateTestDB(t)
+			database := newPersistentTestDB(t)
+			existing := createRecord{ID: 99, Name: "committed"}
+			require.NoError(t, database.Create(&existing).Error)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			if tc.cancelBefore {
@@ -64,25 +85,23 @@ func TestWriteCancellationResult(t *testing.T) {
 					return err
 				}
 				cancel()
+				assert.ErrorIs(t, tx.Statement.Context.Err(), context.Canceled)
+				assert.Error(t, tx.Exec("SELECT 1").Error)
 				if tc.failOperation {
 					return errors.New("write failed")
 				}
 				return nil
 			})
 			processor := dbproc.NewRetriableProcessor(database, dbproc.Option{})
-			assert.Equal(t, tc.wantCommitted, processor.Write(ctx, op))
+			assert.False(t, processor.Write(ctx, op))
 			if tc.cancelBefore {
 				assert.Zero(t, attempts)
 			} else {
 				assert.Equal(t, 1, attempts)
 			}
-			var count int64
-			require.NoError(t, database.Model(&createRecord{}).Count(&count).Error)
-			if tc.wantCommitted {
-				assert.Equal(t, int64(1), count)
-			} else {
-				assert.Zero(t, count)
-			}
+			var rows []createRecord
+			require.NoError(t, database.Order("id").Find(&rows).Error)
+			assert.Equal(t, []createRecord{existing}, rows)
 		})
 	}
 }
