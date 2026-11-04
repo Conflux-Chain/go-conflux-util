@@ -75,7 +75,9 @@ func NewCatchUpPoller[T channel.Sizable](adapter Adapter[T], nextBlockNumber uin
 
 // DataCh returns a read-only channel to consume data.
 //
-// Note, the channel wil be closed once caught up to the latest finalized block.
+// The channel closes after Poll stops and all buffered data has been received.
+// If consumption stops early, cancel and wait for Poll to stop, then drain the
+// remaining data to release the buffer and its forwarding goroutine.
 func (poller *CatchUpPoller[T]) DataCh() <-chan T {
 	return poller.dataCh.RecvCh()
 }

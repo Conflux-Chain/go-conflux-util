@@ -39,6 +39,7 @@ type ParamsDB[T any] struct {
 // Cancellation stops synchronization without guaranteeing that buffered data or
 // the final batch is committed. If ctx is canceled, ignore the returned height
 // and resume from the database's committed progress on the next run.
+// Any remaining channel data is discarded before returning.
 func CatchUpDB[T channel.Sizable](ctx context.Context, params CatchupParamsDB[T], processors ...db.BatchProcessor[T]) uint64 {
 	var wg sync.WaitGroup
 
@@ -51,6 +52,10 @@ func CatchUpDB[T channel.Sizable](ctx context.Context, params CatchupParamsDB[T]
 	go process.ProcessCatchUp(ctx, &wg, poller.DataCh(), processor)
 
 	wg.Wait()
+
+	// Discard remaining buffered data so the forwarding goroutine can exit.
+	for range poller.DataCh() {
+	}
 
 	return poller.NextBlockNumber()
 }
