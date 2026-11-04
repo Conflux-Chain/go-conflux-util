@@ -45,7 +45,7 @@ func NewRevertableAggregateProcessor[T any](option Option, db *gorm.DB, processo
 }
 
 // Process implements the process.Processor[poll.Revertable[T]] interface.
-func (processor *RevertableAggregateProcessor[T]) Process(ctx context.Context, data poll.Revertable[T]) {
+func (processor *RevertableAggregateProcessor[T]) Process(ctx context.Context, data poll.Revertable[T]) bool {
 	if data.Reverted {
 		var ops []Operation
 
@@ -54,10 +54,12 @@ func (processor *RevertableAggregateProcessor[T]) Process(ctx context.Context, d
 			ops = append(ops, op)
 		}
 
-		processor.Write(ctx, ComposeOperation(ops...))
+		if !processor.Write(ctx, ComposeOperation(ops...)) {
+			return false
+		}
 
 		log.WithModule(ModuleName).Debug("Succeeded to process reverted blockchain data")
 	}
 
-	processor.AggregateProcessor.Process(ctx, data.Data)
+	return processor.AggregateProcessor.Process(ctx, data.Data)
 }

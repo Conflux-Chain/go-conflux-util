@@ -57,7 +57,7 @@ func NewBatchAggregateProcessor[T any](option BatchOption, db *gorm.DB, processo
 }
 
 // Process implements the process.CatchUpProcessor[T] interface.
-func (processor *BatchAggregateProcessor[T]) Process(ctx context.Context, data T) {
+func (processor *BatchAggregateProcessor[T]) Process(ctx context.Context, data T) bool {
 	processor.size = 0
 
 	for _, v := range processor.processors {
@@ -70,16 +70,18 @@ func (processor *BatchAggregateProcessor[T]) Process(ctx context.Context, data T
 	// This situation will rarely happen in catch up phase, and the worst case is that
 	// only one batch data not written into database in time.
 	if processor.size < processor.option.BatchSize && time.Since(processor.lastBatchTime) < processor.option.BatchTimeout {
-		return
+		return true
 	}
 
-	processor.write(ctx)
+	return processor.write(ctx)
 }
 
-func (processor *BatchAggregateProcessor[T]) write(ctx context.Context) {
+func (processor *BatchAggregateProcessor[T]) write(ctx context.Context) bool {
 	start := time.Now()
 
-	processor.Write(ctx, processor)
+	if !processor.Write(ctx, processor) {
+		return false
+	}
 
 	log.WithModule(ModuleName).WithFields(logrus.Fields{
 		"size":    processor.size,
@@ -93,6 +95,8 @@ func (processor *BatchAggregateProcessor[T]) write(ctx context.Context) {
 	for _, v := range processor.processors {
 		v.BatchReset()
 	}
+
+	return true
 }
 
 // Exec implements the Operation interface.
@@ -106,7 +110,7 @@ func (processor *BatchAggregateProcessor[T]) Exec(tx *gorm.DB) error {
 	return nil
 }
 
-// Close implements the process.CatchUpProcessor[T] interface.
+// OnCatchedUp implements the process.CatchUpProcessor[T] interface.
 func (processor *BatchAggregateProcessor[T]) OnCatchedUp(ctx context.Context) {
 	if processor.size > 0 {
 		processor.write(ctx)

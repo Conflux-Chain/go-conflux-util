@@ -36,9 +36,14 @@ func NewRetriableProcessor(db *gorm.DB, option Option) *RetriableProcessor {
 	}
 }
 
-// Write executes the given op in a transaction. If failed, it will try again till succeeded.
-func (processor *RetriableProcessor) Write(ctx context.Context, op Operation) {
+// Write executes op in a transaction, retrying failures until it succeeds or ctx is canceled.
+// It returns true if the transaction committed, or false if cancellation stopped the retries.
+func (processor *RetriableProcessor) Write(ctx context.Context, op Operation) bool {
 	for {
+		if ctxutil.IsDone(ctx) {
+			return false
+		}
+
 		err := processor.db.Transaction(func(tx *gorm.DB) error {
 			return op.Exec(tx)
 		})
@@ -46,13 +51,13 @@ func (processor *RetriableProcessor) Write(ctx context.Context, op Operation) {
 		processor.health.LogOnError(err, "Process blockchain data in Database")
 
 		if err == nil {
-			return
+			return true
 		}
 
 		log.WithModule(ModuleName).WithError(err).Debug("Failed to write database")
 
 		if err = ctxutil.Sleep(ctx, processor.option.RetryInterval); err != nil {
-			return
+			return false
 		}
 	}
 }
