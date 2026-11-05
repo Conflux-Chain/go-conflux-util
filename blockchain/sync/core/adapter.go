@@ -21,9 +21,12 @@ type AdapterOption struct {
 	// RPC
 	RequestTimeout time.Duration `default:"3s"`
 
-	// latest block number
-	LatestBlockNumberTag    string `default:"latest_state"` // latest_mined, latest_state, latest_confirmed or latest_finalized
-	LatestBlockNumberOffset uint64 // N blocks behind the `LatestBlockNumberTag`
+	// LatestBlockNumberTag selects the epoch tag used by GetLatestBlockNumber.
+	// Supported values: latest_mined, latest_state, latest_confirmed.
+	// For finalized synchronization, use FinalizedPoller.
+	LatestBlockNumberTag string `default:"latest_state"`
+	// N epochs behind LatestBlockNumberTag
+	LatestBlockNumberOffset uint64
 	latestEpoch             *types.Epoch
 
 	// allow to ignore receipts and/or traces, only block and transactions are required
