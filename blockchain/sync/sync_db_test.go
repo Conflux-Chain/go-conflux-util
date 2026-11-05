@@ -11,6 +11,7 @@ import (
 	"github.com/Conflux-Chain/go-conflux-util/parallel"
 	"github.com/Conflux-Chain/go-conflux-util/store"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCatchUpDB(t *testing.T) {
@@ -63,6 +64,10 @@ func TestSyncFinalizedDB(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
+	t.Cleanup(func() {
+		cancel()
+		wg.Wait()
+	})
 
 	StartFinalizedDB(ctx, &wg, FinalizedParamsDB[testutil.Data]{
 		Adapter:         adapter,
@@ -77,14 +82,14 @@ func TestSyncFinalizedDB(t *testing.T) {
 		ParentHash: "DataHash-4",
 	})
 
+	cancel()
+	wg.Wait()
+
 	processor.assertData(t,
 		nil,
 		[]uint64{2, 3, 4, 5},
 		nil,
 	)
-
-	cancel()
-	wg.Wait()
 }
 
 func TestSyncLatestDB(t *testing.T) {
@@ -114,6 +119,10 @@ func TestSyncLatestDB(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
+	t.Cleanup(func() {
+		cancel()
+		wg.Wait()
+	})
 
 	err := StartLatestDB(ctx, &wg, LatestParamsDB[testutil.Data]{
 		Adapter: adapter,
@@ -123,7 +132,7 @@ func TestSyncLatestDB(t *testing.T) {
 			FinalizedBlockHash:   "DataHash-1",
 		},
 	}, processor)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// wait for poll-and-process
 	processor.waitFor(t, testutil.Data{
@@ -131,6 +140,9 @@ func TestSyncLatestDB(t *testing.T) {
 		Hash:       "DataHash-999",
 		ParentHash: "DataHash-888",
 	})
+
+	cancel()
+	wg.Wait()
 
 	processor.assertData(t,
 		nil,
@@ -141,7 +153,4 @@ func TestSyncLatestDB(t *testing.T) {
 			{7, 8},
 		},
 	)
-
-	cancel()
-	wg.Wait()
 }

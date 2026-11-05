@@ -3,6 +3,7 @@ package sync
 import (
 	"encoding/json"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,6 +18,8 @@ type dummyDBOp struct{}
 func (op dummyDBOp) Exec(tx *gorm.DB) error { return nil }
 
 type testDBProcessor struct {
+	mu sync.Mutex
+
 	batch   []testutil.Data
 	batches [][]testutil.Data
 
@@ -31,6 +34,7 @@ func newTestDBProcessor() *testDBProcessor {
 	return &testDBProcessor{}
 }
 
+// requiresContinuous must be called with p.mu held.
 func (p *testDBProcessor) requiresContinuous(data testutil.Data) {
 	if len(p.prev.Hash) == 0 {
 		return
@@ -46,6 +50,9 @@ func (p *testDBProcessor) requiresContinuous(data testutil.Data) {
 }
 
 func (p *testDBProcessor) Process(data testutil.Data) db.Operation {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	p.requiresContinuous(data)
 
 	p.singles = append(p.singles, data)
@@ -56,6 +63,9 @@ func (p *testDBProcessor) Process(data testutil.Data) db.Operation {
 }
 
 func (p *testDBProcessor) Revert(data testutil.Data) db.Operation {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	if len(p.singles) == 0 {
 		panic("No block to revert")
 	}
@@ -86,6 +96,9 @@ func (p *testDBProcessor) Revert(data testutil.Data) db.Operation {
 }
 
 func (p *testDBProcessor) BatchProcess(data testutil.Data) int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	p.requiresContinuous(data)
 
 	p.batch = append(p.batch, data)
@@ -100,11 +113,17 @@ func (p *testDBProcessor) BatchExec(tx *gorm.DB, createBatchSize int) error {
 }
 
 func (p *testDBProcessor) BatchReset() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	p.batches = append(p.batches, p.batch)
 	p.batch = nil
 }
 
 func (p *testDBProcessor) assertData(t *testing.T, batches [][]uint64, singles []uint64, drops [][]uint64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	assert.Equal(t, batches, p.toNumberSlice2D(p.batches))
 	assert.Nil(t, p.batch)
 	assert.Equal(t, singles, p.toNumberSlice(p.singles))
@@ -140,18 +159,27 @@ func (p *testDBProcessor) toNumberSlice2D(data [][]testutil.Data) [][]uint64 {
 }
 
 func (p *testDBProcessor) waitFor(t *testing.T, data testutil.Data) {
+	t.Helper()
+
 	for i := 0; i < 30; i++ {
 		time.Sleep(100 * time.Millisecond)
 
-		if p.prev == data {
+		p.mu.Lock()
+		matched := p.prev == data
+		p.mu.Unlock()
+
+		if matched {
 			return
 		}
 	}
 
-	assert.Fail(t, "Timeout to wait for block")
+	t.Fatal("Timeout to wait for block")
 }
 
 func (p *testDBProcessor) String() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	data := map[string]any{
 		"batches": p.toNumberSlice2D(p.batches),
 		"batch":   p.toNumberSlice(p.batch),
