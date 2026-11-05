@@ -75,10 +75,7 @@ During catch up phase, to achieve batch database operations, user could implemen
 // Note, thread-safe is not required in the implementations, since batch
 // related methods are executed in a single thread.
 type BatchProcessor[T any] interface {
-    Processor[T]
-
-    // BatchProcess processes the given data and returns the number of SQLs
-    // to be executed in batch.
+    // BatchProcess processes data and returns the cumulative pending SQL count.
     BatchProcess(data T) int
 
     // BatchExec executes SQLs in batch.

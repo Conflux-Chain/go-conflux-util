@@ -15,7 +15,9 @@ import (
 // Note, thread-safe is not required in the implementations, since batch
 // related methods are executed in a single thread.
 type BatchProcessor[T any] interface {
-	// BatchProcess processes the given data and returns the number of SQLs to be executed in batch.
+	// BatchProcess processes the given data and returns this processor's cumulative
+	// pending SQL count since the last BatchReset, including the given data.
+	// It must return the total for the current batch, not just the count added by this call.
 	BatchProcess(data T) int
 
 	// BatchExec executes SQLs in batch.
@@ -28,7 +30,9 @@ type BatchProcessor[T any] interface {
 type BatchOption struct {
 	Option `mapstructure:",squash"`
 
-	BatchSize       int           `default:"3000"`
+	BatchSize int `default:"3000"`
+	// BatchTimeout is checked only when Process receives data; it does not
+	// trigger a write while idle. Normal catch-up completion flushes the final batch.
 	BatchTimeout    time.Duration `default:"3s"`
 	CreateBatchSize int           `default:"1000"`
 }
