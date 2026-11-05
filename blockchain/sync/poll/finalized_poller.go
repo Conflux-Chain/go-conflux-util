@@ -85,7 +85,7 @@ func (poller *FinalizedPoller[T]) Poll(ctx context.Context, wg *sync.WaitGroup) 
 
 func (poller *FinalizedPoller[T]) pollOnce(ctx context.Context) (data T, ok bool, err error) {
 	// get the finalized block number
-	finalizedBlockNumber, err := poller.adapter.GetFinalizedBlockNumber(ctx)
+	finalizedBlockNumber, _, err := poller.adapter.GetFinalizedBlock(ctx)
 	if err != nil {
 		return data, false, errors.WithMessage(err, "Failed to get finalized block number")
 	}

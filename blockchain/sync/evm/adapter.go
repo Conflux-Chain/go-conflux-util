@@ -70,18 +70,18 @@ func (adapter *Adapter) Close() {
 	adapter.client.Close()
 }
 
-// GetFinalizedBlockNumber implements the poll.Adapter[T] interface.
-func (adapter *Adapter) GetFinalizedBlockNumber(ctx context.Context) (uint64, error) {
+// GetFinalizedBlock implements the poll.Adapter[T] interface.
+func (adapter *Adapter) GetFinalizedBlock(ctx context.Context) (uint64, string, error) {
 	block, err := adapter.client.WithContext(ctx).Eth.BlockByNumber(types.FinalizedBlockNumber, false)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 
 	if block == nil {
-		return 0, errors.New("Finalized block not found")
+		return 0, "", errors.New("Finalized block not found")
 	}
 
-	return block.Number.Uint64(), nil
+	return block.Number.Uint64(), block.Hash.Hex(), nil
 }
 
 // GetLatestBlockNumber implements the poll.Adapter[T] interface.

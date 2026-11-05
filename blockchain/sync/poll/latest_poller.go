@@ -17,6 +17,8 @@ type Revertable[T any] struct {
 }
 
 // LatestPoller is used to poll the latest blockchain data block by block.
+// Reorg detection is driven by the next block's parent hash. If the chain head
+// stays below the next height to poll, corrections wait until polling can resume.
 type LatestPoller[T any] struct {
 	option          Option
 	adapter         Adapter[T]
@@ -100,14 +102,6 @@ func (poller *LatestPoller[T]) Poll(ctx context.Context, wg *sync.WaitGroup) {
 }
 
 func (poller *LatestPoller[T]) pollOnce(ctx context.Context) (data T, ok bool, reorg bool, err error) {
-	// Evict finalized blocks in reorg window
-	finalizedBlockNumber, err := poller.adapter.GetFinalizedBlockNumber(ctx)
-	if err != nil {
-		return data, false, false, errors.WithMessage(err, "Failed to get finalized block number")
-	}
-
-	poller.window.Evict(finalizedBlockNumber)
-
 	// get the latest block number
 	latestBlockNumber, err := poller.adapter.GetLatestBlockNumber(ctx)
 	if err != nil {
@@ -137,6 +131,17 @@ func (poller *LatestPoller[T]) pollOnce(ctx context.Context) (data T, ok bool, r
 			"parent": parentBlockHash,
 			"window": poller.window,
 		}).Fatal("Block not in sequence or finalized block reverted")
+	}
+
+	if appended {
+		// Eviction is optional maintenance. A failed finality query must not
+		// prevent delivery of a block already appended to the window.
+		number, hash, err := poller.adapter.GetFinalizedBlock(ctx)
+		if err != nil {
+			log.WithModule(ModuleName).WithError(err).Debug("Failed to get finalized block for reorg window eviction")
+		} else {
+			poller.window.Evict(number, hash)
+		}
 	}
 
 	return data, appended, popped, nil

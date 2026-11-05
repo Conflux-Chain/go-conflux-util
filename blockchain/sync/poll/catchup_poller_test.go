@@ -23,12 +23,13 @@ type gatedCatchUpAdapter struct {
 	started chan uint64
 }
 
-func (a *gatedCatchUpAdapter) GetFinalizedBlockNumber(context.Context) (uint64, error) {
-	return uint64(a.blocks - 1), nil
+func (a *gatedCatchUpAdapter) GetFinalizedBlock(context.Context) (uint64, string, error) {
+	return uint64(a.blocks - 1), fmt.Sprint(a.blocks - 1), nil
 }
 
 func (a *gatedCatchUpAdapter) GetLatestBlockNumber(ctx context.Context) (uint64, error) {
-	return a.GetFinalizedBlockNumber(ctx)
+	number, _, err := a.GetFinalizedBlock(ctx)
+	return number, err
 }
 
 func (a *gatedCatchUpAdapter) GetBlockData(ctx context.Context, n uint64) (catchUpData, error) {

@@ -42,16 +42,13 @@ func MustNewAdapter(finalized []uint64, latestBlocks []Data) *Adapter {
 	}
 }
 
-func (adapter *Adapter) GetFinalizedBlockNumber(ctx context.Context) (uint64, error) {
-	if adapter.nextFinalized == len(adapter.finalized) {
-		return adapter.finalized[adapter.nextFinalized-1], nil
+func (adapter *Adapter) GetFinalizedBlock(ctx context.Context) (uint64, string, error) {
+	if adapter.nextFinalized < len(adapter.finalized) {
+		adapter.nextFinalized++
 	}
 
-	finalized := adapter.finalized[adapter.nextFinalized]
-
-	adapter.nextFinalized++
-
-	return finalized, nil
+	finalized := adapter.finalized[adapter.nextFinalized-1]
+	return finalized, fmt.Sprintf("DataHash-%v", finalized), nil
 }
 
 func (adapter *Adapter) GetLatestBlockNumber(ctx context.Context) (uint64, error) {

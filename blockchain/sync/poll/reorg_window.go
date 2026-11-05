@@ -12,13 +12,12 @@ type ReorgWindowParams struct {
 //
 // Basically, the reorg window maintains the recent blocks and the latest finalized block.
 //
-// Note, the reorg window do not require a capacity. Because, the data size of block number
-// and hash are very small. Besides, there are a few blocks between the finalized block and latest block.
+// Entries contain only block numbers and hashes. They are retained until a matching
+// finalized block is available within the window; no explicit capacity is required.
 type ReorgWindow struct {
 	blockNumber2Hashes map[uint64]string // recent blocks in sequence
 	finalized          uint64            // the finalized block number, which will not be reverted
 	latest             uint64            // the latest block number, which may be reverted
-	verified           bool              // whether verified by on-chain data
 }
 
 // NewReorgWindow creates an empty reorg window. Generally, it is used to sync from the genesis block.
@@ -67,7 +66,6 @@ func (window *ReorgWindow) Push(blockNumber uint64, blockHash, parentBlockHash s
 		window.finalized = blockNumber
 		window.latest = blockNumber
 		window.blockNumber2Hashes[blockNumber] = blockHash
-		window.verified = true
 		return true, false, nil
 	}
 
@@ -80,7 +78,6 @@ func (window *ReorgWindow) Push(blockNumber uint64, blockHash, parentBlockHash s
 	if window.blockNumber2Hashes[window.latest] == parentBlockHash {
 		window.blockNumber2Hashes[blockNumber] = blockHash
 		window.latest = blockNumber
-		window.verified = true
 		return true, false, nil
 	}
 
@@ -96,25 +93,24 @@ func (window *ReorgWindow) Push(blockNumber uint64, blockHash, parentBlockHash s
 	return false, true, nil
 }
 
-// Evict evicts finalized blocks from reorg window.
-func (window *ReorgWindow) Evict(finalizedBlockNumber uint64) (evicted int) {
-	if len(window.blockNumber2Hashes) == 0 {
+// Evict removes blocks before the given finalized block and returns the number removed.
+// The given number and hash must identify the same on-chain finalized block.
+// It keeps that block as the new finalized anchor and ignores an older or equal
+// finalized height, a height beyond the window, a missing window entry, or a hash mismatch.
+func (window *ReorgWindow) Evict(number uint64, hash string) (evicted int) {
+	if number <= window.finalized || number > window.latest {
 		return
 	}
 
-	// When service restarted, the reorg window will be initialized with recent blocks from database.
-	// These blocks may be reverted during service down time, and requires to compare with on-chain blocks.
-	// So, only when new on-chain block successfully pushed into the reorg window, the recent blocks could
-	// be evicted from reorg window.
-	if !window.verified {
+	// Restored or previously polled blocks may belong to an old fork. Match the
+	// finalized hash before discarding history needed to recover from a reorg.
+	cachedHash, ok := window.blockNumber2Hashes[number]
+	if !ok || cachedHash != hash {
 		return
 	}
 
-	// keep at latest one finalized block
-	evictUntil := min(finalizedBlockNumber, window.latest)
-
-	for i := window.finalized; i < evictUntil; i++ {
-		delete(window.blockNumber2Hashes, i)
+	for window.finalized < number {
+		delete(window.blockNumber2Hashes, window.finalized)
 		window.finalized++
 		evicted++
 	}
@@ -127,6 +123,6 @@ func (window ReorgWindow) String() string {
 		return "{ blocks = 0 }"
 	}
 
-	return fmt.Sprintf("{ blocks = %v, finalized = %v, latest = %v, verified = %v }",
-		len(window.blockNumber2Hashes), window.finalized, window.latest, window.verified)
+	return fmt.Sprintf("{ blocks = %v, finalized = %v, latest = %v }",
+		len(window.blockNumber2Hashes), window.finalized, window.latest)
 }

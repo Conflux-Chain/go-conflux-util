@@ -11,8 +11,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-const defaultRpcRetry = 3
-
 type AdapterConfig struct {
 	AdapterOption `mapstructure:",squash"`
 
@@ -81,23 +79,35 @@ func (adapter *Adapter) Close() {
 	adapter.client.Close()
 }
 
-// GetFinalizedBlockNumber implements the poll.Adapter[T] interface.
-func (adapter *Adapter) GetFinalizedBlockNumber(ctx context.Context) (uint64, error) {
-	var retry int
+// GetFinalizedBlock implements the poll.Adapter[T] interface.
+func (adapter *Adapter) GetFinalizedBlock(ctx context.Context) (uint64, string, error) {
+	client := adapter.client.WithContext(ctx)
 
-	// retry for rpc failure due to temp chain reorg
-	for {
-		status, err := adapter.client.WithContext(ctx).GetStatus()
-		if err == nil {
-			return max(uint64(status.LatestCheckpoint), uint64(status.LatestFinalized)), nil
-		}
-
-		retry++
-
-		if retry > defaultRpcRetry {
-			return 0, err
-		}
+	checkpoint, err := client.GetBlockSummaryByEpoch(types.EpochLatestCheckpoint)
+	if err != nil {
+		return 0, "", errors.WithMessage(err, "Failed to get latest checkpoint block")
 	}
+
+	if checkpoint == nil {
+		return 0, "", errors.New("Latest checkpoint block not found")
+	}
+
+	finalized, err := client.GetBlockSummaryByEpoch(types.EpochLatestFinalized)
+	if err != nil {
+		return 0, "", errors.WithMessage(err, "Failed to get latest finalized block")
+	}
+
+	if finalized == nil {
+		return 0, "", errors.New("Latest finalized block not found")
+	}
+
+	// Both summaries identify irreversible pivot blocks. Keep the epoch number
+	// and hash from the same summary even if finality advances between requests.
+	if finalized.EpochNumber.ToInt().Cmp(checkpoint.EpochNumber.ToInt()) > 0 {
+		return finalized.EpochNumber.ToInt().Uint64(), finalized.Hash.String(), nil
+	}
+
+	return checkpoint.EpochNumber.ToInt().Uint64(), checkpoint.Hash.String(), nil
 }
 
 // GetLatestBlockNumber implements the poll.Adapter[T] interface.
@@ -118,9 +128,6 @@ func (adapter *Adapter) GetLatestBlockNumber(ctx context.Context) (uint64, error
 
 // GetBlockData implements the poll.Adapter[T] interface.
 func (adapter *Adapter) GetBlockData(ctx context.Context, blockNumber uint64) (EpochData, error) {
-	// FIXME: SDK v1.6.1 WithContext shallow-copies subclients, whose core
-	// pointers still reference the original client. Receipt and trace queries
-	// therefore do not use ctx. Remove this note after upgrading to a fixed SDK.
 	client := adapter.client.WithContext(ctx)
 	var data EpochData
 

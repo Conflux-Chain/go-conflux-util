@@ -49,7 +49,7 @@ func TestReorgWindowEvict(t *testing.T) {
 	window := NewReorgWindow()
 
 	// evict empty window
-	assert.Equal(t, 0, window.Evict(5))
+	assert.Equal(t, 0, window.Evict(5, "Hash - 5"))
 
 	// push block 1 - 9
 	for i := uint64(1); i <= 9; i++ {
@@ -60,10 +60,23 @@ func TestReorgWindowEvict(t *testing.T) {
 	}
 
 	// finalized block == 5, evict block 1 - 4.
-	assert.Equal(t, 4, window.Evict(5))
+	assert.Equal(t, 4, window.Evict(5, "Hash - 5"))
+	assert.Len(t, window.blockNumber2Hashes, 5)
+	assert.Equal(t, uint64(5), window.finalized)
+	assert.Equal(t, "Hash - 5", window.blockNumber2Hashes[5])
 
-	// finalized block is very big, then evit all except the latest block 9
-	assert.Equal(t, 4, window.Evict(100))
+	// Stale heights, heights outside the window and another fork cannot advance finality.
+	assert.Equal(t, 0, window.Evict(4, "Hash - 4"))
+	assert.Equal(t, 0, window.Evict(5, "Hash - 5"))
+	assert.Equal(t, 0, window.Evict(100, "Hash - 100"))
+	assert.Equal(t, 0, window.Evict(9, "Hash - 99"))
+	assert.Len(t, window.blockNumber2Hashes, 5)
+	assert.Equal(t, uint64(5), window.finalized)
+
+	// A matching finalized tip removes blocks 5-8, keeping block 9 as the anchor.
+	assert.Equal(t, 4, window.Evict(9, "Hash - 9"))
+	assert.Equal(t, uint64(9), window.finalized)
+	assert.Equal(t, map[uint64]string{9: "Hash - 9"}, window.blockNumber2Hashes)
 }
 
 func TestReorgWindowWithLatestBlocks(t *testing.T) {
@@ -78,9 +91,12 @@ func TestReorgWindowWithLatestBlocks(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	// evict nothing since not verify against on-chain data
-	assert.Equal(t, 0, window.Evict(100))
-	assert.Equal(t, 0, window.Evict(7))
+	// A matching finalized hash verifies the restored prefix without a new Push.
+	assert.Equal(t, 0, window.Evict(100, "Hash - 100"))
+	assert.Equal(t, 0, window.Evict(7, "Hash - 77"))
+	assert.Equal(t, 2, window.Evict(7, "Hash - 7"))
+	assert.Equal(t, uint64(7), window.finalized)
+	assert.Equal(t, map[uint64]string{7: "Hash - 7", 8: "Hash - 8"}, window.blockNumber2Hashes)
 
 	// push block 9, but reorg happened during service down time
 	pushed, popped, err := window.Push(9, "Hash - 9", "Hash - 88")
