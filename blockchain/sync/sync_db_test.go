@@ -64,7 +64,7 @@ func TestSyncFinalizedDB(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 
-	StartFinalizedDB(ctx, &wg, ParamsDB[testutil.Data]{
+	StartFinalizedDB(ctx, &wg, FinalizedParamsDB[testutil.Data]{
 		Adapter:         adapter,
 		DB:              DB,
 		NextBlockNumber: 2, // start to sync from block 2
@@ -115,11 +115,15 @@ func TestSyncLatestDB(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 
-	StartLatestDB(ctx, &wg, ParamsDB[testutil.Data]{
-		Adapter:         adapter,
-		DB:              DB,
-		NextBlockNumber: 2, // start to sync from block 2
+	err := StartLatestDB(ctx, &wg, LatestParamsDB[testutil.Data]{
+		Adapter: adapter,
+		DB:      DB,
+		Reorg: poll.ReorgWindowParams{
+			FinalizedBlockNumber: 1,
+			FinalizedBlockHash:   "DataHash-1",
+		},
 	}, processor)
+	assert.NoError(t, err)
 
 	// wait for poll-and-process
 	processor.waitFor(t, testutil.Data{

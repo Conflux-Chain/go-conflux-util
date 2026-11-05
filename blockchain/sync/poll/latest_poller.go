@@ -20,29 +20,30 @@ type Revertable[T any] struct {
 // Reorg detection is driven by the next block's parent hash. If the chain head
 // stays below the next height to poll, corrections wait until polling can resume.
 type LatestPoller[T any] struct {
-	option          Option
-	adapter         Adapter[T]
-	nextBlockNumber uint64
-	dataCh          chan Revertable[T]
-	window          *ReorgWindow
-	health          *health.TimedCounter
+	option  Option
+	adapter Adapter[T]
+	dataCh  chan Revertable[T]
+	window  *ReorgWindow
+	health  *health.TimedCounter
 }
 
-func NewLatestPoller[T any](adapter Adapter[T], nextBlockNumber uint64, reorgParams ReorgWindowParams, option ...Option) (*LatestPoller[T], error) {
+// NewLatestPoller creates a poller starting from genesis if reorgParams is empty.
+// With a restored window, polling starts after its highest block (the finalized
+// anchor if no later blocks are supplied).
+func NewLatestPoller[T any](adapter Adapter[T], reorgParams ReorgWindowParams, option ...Option) (*LatestPoller[T], error) {
 	opt := normalizeOpt(option...)
 
-	window, err := NewReorgWindowWithLatestBlocks(reorgParams)
+	window, err := NewReorgWindow(reorgParams)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to create reorg window")
 	}
 
 	return &LatestPoller[T]{
-		option:          opt,
-		adapter:         adapter,
-		nextBlockNumber: nextBlockNumber,
-		dataCh:          make(chan Revertable[T], opt.BufferSize),
-		window:          window,
-		health:          health.NewTimedCounter(opt.Health),
+		option:  opt,
+		adapter: adapter,
+		dataCh:  make(chan Revertable[T], opt.BufferSize),
+		window:  window,
+		health:  health.NewTimedCounter(opt.Health),
 	}, nil
 }
 
@@ -62,7 +63,8 @@ func (poller *LatestPoller[T]) Poll(ctx context.Context, wg *sync.WaitGroup) {
 	var reverted bool
 
 	for {
-		data, ok, reorg, err := poller.pollOnce(ctx)
+		blockNumber := poller.window.NextBlockNumber()
+		data, ok, reorg, err := poller.pollOnce(ctx, blockNumber)
 
 		// return if context done
 		if ctxutil.IsDone(ctx) {
@@ -71,7 +73,7 @@ func (poller *LatestPoller[T]) Poll(ctx context.Context, wg *sync.WaitGroup) {
 
 		poller.health.LogOnError(err, "Poll latest blockchain data")
 
-		logger := log.WithModule(ModuleName).WithField("block", poller.nextBlockNumber)
+		logger := log.WithModule(ModuleName).WithField("block", blockNumber)
 
 		if err != nil {
 			logger.WithError(err).Debug("Failed to poll latest data")
@@ -83,11 +85,9 @@ func (poller *LatestPoller[T]) Poll(ctx context.Context, wg *sync.WaitGroup) {
 				Reverted: reverted,
 			})
 
-			poller.nextBlockNumber++
 			reverted = false
 		} else if reorg {
 			logger.Debug("Reorg detected")
-			poller.nextBlockNumber--
 			reverted = true
 		} else {
 			logger.Trace("No latest data to poll")
@@ -101,7 +101,7 @@ func (poller *LatestPoller[T]) Poll(ctx context.Context, wg *sync.WaitGroup) {
 	}
 }
 
-func (poller *LatestPoller[T]) pollOnce(ctx context.Context) (data T, ok bool, reorg bool, err error) {
+func (poller *LatestPoller[T]) pollOnce(ctx context.Context, blockNumber uint64) (data T, ok bool, reorg bool, err error) {
 	// get the latest block number
 	latestBlockNumber, err := poller.adapter.GetLatestBlockNumber(ctx)
 	if err != nil {
@@ -109,24 +109,24 @@ func (poller *LatestPoller[T]) pollOnce(ctx context.Context) (data T, ok bool, r
 	}
 
 	// already caught up
-	if poller.nextBlockNumber > latestBlockNumber {
+	if blockNumber > latestBlockNumber {
 		return data, false, false, nil
 	}
 
 	// retrieve the next blockchain data
-	if data, err = poller.adapter.GetBlockData(ctx, poller.nextBlockNumber); err != nil {
+	if data, err = poller.adapter.GetBlockData(ctx, blockNumber); err != nil {
 		return data, false, false, errors.WithMessage(err, "Failed to retrieve blockchain data")
 	}
 
 	// detect reorg
 	blockHash := poller.adapter.GetBlockHash(data)
 	parentBlockHash := poller.adapter.GetParentBlockHash(data)
-	appended, popped, err := poller.window.Push(poller.nextBlockNumber, blockHash, parentBlockHash)
+	appended, popped, err := poller.window.Push(blockNumber, blockHash, parentBlockHash)
 
 	// should never happen
 	if err != nil {
 		log.WithModule(ModuleName).WithError(err).WithFields(logrus.Fields{
-			"block":  poller.nextBlockNumber,
+			"block":  blockNumber,
 			"hash":   blockHash,
 			"parent": parentBlockHash,
 			"window": poller.window,

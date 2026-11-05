@@ -1,11 +1,18 @@
 package poll
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
+// ReorgWindowParams describes a finalized anchor and optional consecutive blocks
+// from the same chain. The caller must ensure the anchor is finalized.
+// Zero parameters select an empty window for synchronization from genesis.
 type ReorgWindowParams struct {
 	FinalizedBlockNumber uint64
 	FinalizedBlockHash   string
-	LatestBlocks         map[uint64]string
+	// LatestBlocks starts at FinalizedBlockNumber + 1, with no gaps or empty hashes.
+	LatestBlocks map[uint64]string
 }
 
 // ReorgWindow is used to detect chain reorg.
@@ -20,21 +27,22 @@ type ReorgWindow struct {
 	latest             uint64            // the latest block number, which may be reverted
 }
 
-// NewReorgWindow creates an empty reorg window. Generally, it is used to sync from the genesis block.
-func NewReorgWindow() *ReorgWindow {
-	return &ReorgWindow{
-		blockNumber2Hashes: make(map[uint64]string),
-	}
-}
-
-// NewReorgWindowWithLatestBlocks creates a reorg window with given recent blocks and the last finalized block number.
+// NewReorgWindow restores a window from a finalized anchor and
+// optional consecutive blocks after it. The anchor hash and all block hashes
+// must be nonempty. Zero parameters create an empty window whose first Push
+// must be genesis (block 0), which becomes the initial finalized anchor.
 //
 // When service restarted, user should load recent blocks and the last finalized block from database,
 // and initialize the reorg window so as to correctly handle chain reorg during the service down time.
-func NewReorgWindowWithLatestBlocks(params ReorgWindowParams) (*ReorgWindow, error) {
-	window := NewReorgWindow()
+func NewReorgWindow(params ReorgWindowParams) (*ReorgWindow, error) {
+	window := &ReorgWindow{
+		blockNumber2Hashes: make(map[uint64]string),
+	}
 
 	if len(params.FinalizedBlockHash) == 0 {
+		if params.FinalizedBlockNumber != 0 || len(params.LatestBlocks) != 0 {
+			return nil, errors.New("Invalid reorg window params to sync from genesis block")
+		}
 		return window, nil
 	}
 
@@ -52,6 +60,10 @@ func NewReorgWindowWithLatestBlocks(params ReorgWindowParams) (*ReorgWindow, err
 			return nil, fmt.Errorf("Block %v missed", expectedBlockNumber)
 		}
 
+		if len(hash) == 0 {
+			return nil, fmt.Errorf("Block %v hash is empty", expectedBlockNumber)
+		}
+
 		window.blockNumber2Hashes[expectedBlockNumber] = hash
 		window.latest = expectedBlockNumber
 	}
@@ -59,13 +71,29 @@ func NewReorgWindowWithLatestBlocks(params ReorgWindowParams) (*ReorgWindow, err
 	return window, nil
 }
 
-// Push pushes the latest block into reorg window.
-func (window *ReorgWindow) Push(blockNumber uint64, blockHash, parentBlockHash string) (appended, popped bool, err error) {
-	// window is empty, e.g. sync from genesis block
+// NextBlockNumber returns the next height to push, or 0 for an empty window.
+func (window *ReorgWindow) NextBlockNumber() uint64 {
 	if len(window.blockNumber2Hashes) == 0 {
-		window.finalized = blockNumber
-		window.latest = blockNumber
-		window.blockNumber2Hashes[blockNumber] = blockHash
+		return 0
+	}
+
+	return window.latest + 1
+}
+
+// Push pushes the latest block into reorg window.
+// An empty window accepts only genesis (block 0), without checking its parent hash.
+// Subsequent blocks must follow the window's latest height; a parent hash mismatch
+// rolls back one block, but never the finalized anchor.
+func (window *ReorgWindow) Push(blockNumber uint64, blockHash, parentBlockHash string) (appended, popped bool, err error) {
+	// Initialize the anchor from genesis only.
+	if len(window.blockNumber2Hashes) == 0 {
+		if blockNumber != 0 {
+			return false, false, fmt.Errorf("Empty reorg window must start from genesis, got block %v", blockNumber)
+		}
+
+		window.finalized = 0
+		window.latest = 0
+		window.blockNumber2Hashes[0] = blockHash
 		return true, false, nil
 	}
 
