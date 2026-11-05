@@ -39,6 +39,8 @@ func (userOp *PackedUserOperation) CallGasLimit() *big.Int {
 }
 
 // SetAccountGasLimits sets the verification and call gas limits in the AccountGasLimits field of the user operation.
+// Callers must ensure each non-nil value is in [0, 2^128); no validation is performed.
+// A nil value leaves the corresponding gas limit unchanged.
 func (userOp *PackedUserOperation) SetAccountGasLimits(verificationGasLimit, callGasLimit *big.Int) {
 	SafeBigFillBytes(verificationGasLimit, userOp.AccountGasLimits[:16])
 	SafeBigFillBytes(callGasLimit, userOp.AccountGasLimits[16:])
@@ -55,6 +57,8 @@ func (userOp *PackedUserOperation) MaxFeePerGas() *big.Int {
 }
 
 // SetGasFees sets the max priority fee per gas and max fee per gas in the GasFees field of the user operation.
+// Callers must ensure each non-nil value is in [0, 2^128); no validation is performed.
+// A nil value leaves the corresponding fee unchanged.
 func (userOp *PackedUserOperation) SetGasFees(maxPriorityFeePerGas, maxFeePerGas *big.Int) {
 	SafeBigFillBytes(maxPriorityFeePerGas, userOp.GasFees[:16])
 	SafeBigFillBytes(maxFeePerGas, userOp.GasFees[16:])
@@ -88,6 +92,9 @@ func (userOp *PackedUserOperation) PaymasterPostOpGasLimit() *big.Int {
 }
 
 // SetPaymasterGasLimits sets the paymaster verification and post-operation gas limits in the PaymasterAndData field of the user operation.
+// Callers must ensure each non-nil value is in [0, 2^128); no validation is performed.
+// A nil value leaves the corresponding gas limit unchanged.
+// If PaymasterAndData is shorter than MinPaymasterAndDataLen, this method does nothing.
 func (userOp *PackedUserOperation) SetPaymasterGasLimits(paymasterVerificationGasLimit, paymasterPostOpGasLimit *big.Int) {
 	if len(userOp.PaymasterAndData) >= MinPaymasterAndDataLen {
 		SafeBigFillBytes(paymasterVerificationGasLimit, userOp.PaymasterAndData[20:36])
@@ -105,6 +112,8 @@ func (userOp *PackedUserOperation) PaymasterData() []byte {
 }
 
 // SetPaymasterAndData sets the paymaster address, gas limits, and custom paymaster data in the PaymasterAndData field of the user operation.
+// Callers must ensure each non-nil gas limit is in [0, 2^128); no validation is performed.
+// This method replaces PaymasterAndData with a new buffer, so nil gas limits become zero.
 func (userOp *PackedUserOperation) SetPaymasterAndData(paymaster common.Address, paymasterVerificationGasLimit, paymasterPostOpGasLimit *big.Int, paymasterData []byte) {
 	userOp.PaymasterAndData = make([]byte, MinPaymasterAndDataLen+len(paymasterData))
 
