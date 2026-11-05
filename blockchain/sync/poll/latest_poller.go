@@ -25,6 +25,11 @@ type LatestPoller[T any] struct {
 	dataCh  chan Revertable[T]
 	window  *ReorgWindow
 	health  *health.TimedCounter
+
+	// Cache finality observed before fetching block data, independently of polling progress.
+	// The initial boundary is genesis (0), which never requires eviction.
+	finalizedNumber uint64
+	finalizedHash   string
 }
 
 // NewLatestPoller creates a poller starting from genesis if reorgParams is empty.
@@ -113,6 +118,19 @@ func (poller *LatestPoller[T]) pollOnce(ctx context.Context, blockNumber uint64)
 		return data, false, false, nil
 	}
 
+	// Reuse the finalized boundary while replaying history. Query before fetching
+	// data so blocks inside that boundary are already immutable when retrieved.
+	if blockNumber > poller.finalizedNumber {
+		number, hash, err := poller.adapter.GetFinalizedBlock(ctx)
+		if err != nil {
+			// Finality maintenance is optional; retain any previously known boundary.
+			log.WithModule(ModuleName).WithError(err).Debug("Failed to get finalized block for reorg window eviction")
+		} else if number > poller.finalizedNumber {
+			poller.finalizedNumber = number
+			poller.finalizedHash = hash
+		}
+	}
+
 	// retrieve the next blockchain data
 	if data, err = poller.adapter.GetBlockData(ctx, blockNumber); err != nil {
 		return data, false, false, errors.WithMessage(err, "Failed to retrieve blockchain data")
@@ -134,13 +152,13 @@ func (poller *LatestPoller[T]) pollOnce(ctx context.Context, blockNumber uint64)
 	}
 
 	if appended {
-		// Eviction is optional maintenance. A failed finality query must not
-		// prevent delivery of a block already appended to the window.
-		number, hash, err := poller.adapter.GetFinalizedBlock(ctx)
-		if err != nil {
-			log.WithModule(ModuleName).WithError(err).Debug("Failed to get finalized block for reorg window eviction")
+		if blockNumber < poller.finalizedNumber {
+			// This block was already finalized when fetched. Keep it as the new
+			// anchor and discard earlier hashes now that Push has accepted it.
+			poller.window.Evict(blockNumber, blockHash)
 		} else {
-			poller.window.Evict(number, hash)
+			// At or beyond the boundary, match the hash from the finality query.
+			poller.window.Evict(poller.finalizedNumber, poller.finalizedHash)
 		}
 	}
 
