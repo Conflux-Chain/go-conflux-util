@@ -13,7 +13,10 @@ import (
 type RevertableProcessor[T any] interface {
 	Processor[T]
 
-	// Revert deletes data from database of given data block number.
+	// Revert returns an operation that rolls back old-chain data at and above
+	// the block number represented by data. The data belongs to the replacement block.
+	// Any persisted sync progress and related state must be rolled back in the
+	// same transaction so that synchronization can resume from the retained data.
 	Revert(data T) Operation
 }
 
@@ -45,7 +48,12 @@ func NewRevertableAggregateProcessor[T any](option Option, db *gorm.DB, processo
 }
 
 // Process implements the process.Processor[poll.Revertable[T]] interface.
-func (processor *RevertableAggregateProcessor[T]) Process(ctx context.Context, data poll.Revertable[T]) {
+//
+// Reorg rollback and replacement insertion intentionally use separate transactions.
+// A committed rollback is a valid restart point even if replacement insertion is
+// interrupted. On restart, load committed database progress and recheck recent
+// blocks for reorgs before continuing synchronization.
+func (processor *RevertableAggregateProcessor[T]) Process(ctx context.Context, data poll.Revertable[T]) bool {
 	if data.Reverted {
 		var ops []Operation
 
@@ -54,10 +62,13 @@ func (processor *RevertableAggregateProcessor[T]) Process(ctx context.Context, d
 			ops = append(ops, op)
 		}
 
-		processor.Write(ctx, ComposeOperation(ops...))
+		if !processor.Write(ctx, ComposeOperation(ops...)) {
+			return false
+		}
 
 		log.WithModule(ModuleName).Debug("Succeeded to process reverted blockchain data")
 	}
 
-	processor.AggregateProcessor.Process(ctx, data.Data)
+	// Reuse normal processing and retries without repeating the committed rollback.
+	return processor.AggregateProcessor.Process(ctx, data.Data)
 }

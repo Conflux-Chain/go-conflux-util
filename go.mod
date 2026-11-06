@@ -3,7 +3,7 @@ module github.com/Conflux-Chain/go-conflux-util
 go 1.23.0
 
 require (
-	github.com/Conflux-Chain/go-conflux-sdk v1.6.1
+	github.com/Conflux-Chain/go-conflux-sdk v1.6.3
 	github.com/DmitriyVTitov/size v1.5.0
 	github.com/PagerDuty/go-pagerduty v1.8.0
 	github.com/ethereum/go-ethereum v1.15.11

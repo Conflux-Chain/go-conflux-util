@@ -9,8 +9,11 @@ import (
 
 // Processor defines how to process the polled blockchain data.
 type Processor[T any] interface {
-	// Process processes the given data.
-	Process(ctx context.Context, data T)
+	// Process returns true when the processing step completes, or false when
+	// cancellation interrupts it. Failures must be retried until completion or
+	// cancellation; returning false must not be used to skip failed data.
+	// For batch processors, completion may mean buffering data for a later commit.
+	Process(ctx context.Context, data T) bool
 }
 
 type CatchUpProcessor[T any] interface {
@@ -35,15 +38,15 @@ func process[T any](ctx context.Context, dataCh <-chan T, processor Processor[T]
 		case <-ctx.Done():
 			return false
 		case data, ok := <-dataCh:
+			if ctxutil.IsDone(ctx) {
+				return false
+			}
+
 			if !ok {
 				return true
 			}
 
-			processor.Process(ctx, data)
-
-			// Check if context is done during processing, otherwise the for loop may continue to
-			// process the next data when data channel has more data to process.
-			if ctxutil.IsDone(ctx) {
+			if !processor.Process(ctx, data) {
 				return false
 			}
 		}

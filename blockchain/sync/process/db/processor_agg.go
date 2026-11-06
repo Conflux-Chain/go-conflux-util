@@ -26,7 +26,7 @@ func NewAggregateProcessor[T any](option Option, db *gorm.DB, processors ...Proc
 }
 
 // Process implements the process.Processor[T] interface.
-func (processor *AggregateProcessor[T]) Process(ctx context.Context, data T) {
+func (processor *AggregateProcessor[T]) Process(ctx context.Context, data T) bool {
 	var ops []Operation
 
 	for _, v := range processor.processors {
@@ -34,5 +34,5 @@ func (processor *AggregateProcessor[T]) Process(ctx context.Context, data T) {
 		ops = append(ops, op)
 	}
 
-	processor.Write(ctx, ComposeOperation(ops...))
+	return processor.Write(ctx, ComposeOperation(ops...))
 }

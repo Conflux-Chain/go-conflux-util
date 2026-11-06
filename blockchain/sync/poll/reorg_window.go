@@ -1,41 +1,66 @@
 package poll
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
+// ErrReorgWindowFull indicates that space must be freed before another block can be appended.
+var ErrReorgWindowFull = errors.New("Reorg window is full")
+
+// ReorgWindowParams describes a finalized anchor and optional consecutive blocks
+// from the same chain. The caller must ensure the anchor is finalized.
+// Zero parameters select an empty window for synchronization from genesis.
 type ReorgWindowParams struct {
+	// Capacity limits retained blocks, including the finalized anchor.
+	// Zero defaults to 1,000,000; explicit values must be at least 2.
+	Capacity             int
 	FinalizedBlockNumber uint64
 	FinalizedBlockHash   string
-	LatestBlocks         map[uint64]string
+	// LatestBlocks starts at FinalizedBlockNumber + 1, with no gaps or empty hashes.
+	LatestBlocks map[uint64]string
 }
 
 // ReorgWindow is used to detect chain reorg.
 //
 // Basically, the reorg window maintains the recent blocks and the latest finalized block.
 //
-// Note, the reorg window do not require a capacity. Because, the data size of block number
-// and hash are very small. Besides, there are a few blocks between the finalized block and latest block.
+// Entries contain only block numbers and hashes. Capacity bounds their count;
+// unfinalized history is never discarded merely to make room for new blocks.
 type ReorgWindow struct {
+	capacity           int
 	blockNumber2Hashes map[uint64]string // recent blocks in sequence
 	finalized          uint64            // the finalized block number, which will not be reverted
 	latest             uint64            // the latest block number, which may be reverted
-	verified           bool              // whether verified by on-chain data
 }
 
-// NewReorgWindow creates an empty reorg window. Generally, it is used to sync from the genesis block.
-func NewReorgWindow() *ReorgWindow {
-	return &ReorgWindow{
-		blockNumber2Hashes: make(map[uint64]string),
-	}
-}
-
-// NewReorgWindowWithLatestBlocks creates a reorg window with given recent blocks and the last finalized block number.
+// NewReorgWindow restores a window from a finalized anchor and
+// optional consecutive blocks after it. The anchor hash and all block hashes
+// must be nonempty. Zero parameters create an empty window whose first Push
+// must be genesis (block 0), which becomes the initial finalized anchor.
 //
 // When service restarted, user should load recent blocks and the last finalized block from database,
 // and initialize the reorg window so as to correctly handle chain reorg during the service down time.
-func NewReorgWindowWithLatestBlocks(params ReorgWindowParams) (*ReorgWindow, error) {
-	window := NewReorgWindow()
+func NewReorgWindow(params ReorgWindowParams) (*ReorgWindow, error) {
+	if params.Capacity == 0 {
+		params.Capacity = 1_000_000
+	}
+	if params.Capacity < 2 {
+		return nil, errors.New("Reorg window capacity must be at least 2")
+	}
+	if len(params.LatestBlocks) >= params.Capacity {
+		return nil, errors.New("Restored blocks and finalized anchor exceed reorg window capacity")
+	}
+
+	window := &ReorgWindow{
+		capacity:           params.Capacity,
+		blockNumber2Hashes: make(map[uint64]string),
+	}
 
 	if len(params.FinalizedBlockHash) == 0 {
+		if params.FinalizedBlockNumber != 0 || len(params.LatestBlocks) != 0 {
+			return nil, errors.New("Invalid reorg window params to sync from genesis block")
+		}
 		return window, nil
 	}
 
@@ -53,6 +78,10 @@ func NewReorgWindowWithLatestBlocks(params ReorgWindowParams) (*ReorgWindow, err
 			return nil, fmt.Errorf("Block %v missed", expectedBlockNumber)
 		}
 
+		if len(hash) == 0 {
+			return nil, fmt.Errorf("Block %v hash is empty", expectedBlockNumber)
+		}
+
 		window.blockNumber2Hashes[expectedBlockNumber] = hash
 		window.latest = expectedBlockNumber
 	}
@@ -60,14 +89,49 @@ func NewReorgWindowWithLatestBlocks(params ReorgWindowParams) (*ReorgWindow, err
 	return window, nil
 }
 
-// Push pushes the latest block into reorg window.
-func (window *ReorgWindow) Push(blockNumber uint64, blockHash, parentBlockHash string) (appended, popped bool, err error) {
-	// window is empty, e.g. sync from genesis block
+// Full reports whether the retained blocks have reached capacity.
+func (window *ReorgWindow) Full() bool {
+	return len(window.blockNumber2Hashes) >= window.capacity
+}
+
+// FinalizedBlockNumber returns the anchor height, or 0 for an empty window.
+func (window *ReorgWindow) FinalizedBlockNumber() uint64 {
+	return window.finalized
+}
+
+// RewindToAnchor discards all blocks after the finalized anchor.
+// Call only after detecting a reorg; an empty window remains empty.
+func (window *ReorgWindow) RewindToAnchor() {
+	for window.latest > window.finalized {
+		delete(window.blockNumber2Hashes, window.latest)
+		window.latest--
+	}
+}
+
+// NextBlockNumber returns the next height to push, or 0 for an empty window.
+func (window *ReorgWindow) NextBlockNumber() uint64 {
 	if len(window.blockNumber2Hashes) == 0 {
-		window.finalized = blockNumber
-		window.latest = blockNumber
-		window.blockNumber2Hashes[blockNumber] = blockHash
-		window.verified = true
+		return 0
+	}
+
+	return window.latest + 1
+}
+
+// Push pushes the latest block into reorg window.
+// An empty window accepts only genesis (block 0), without checking its parent hash.
+// Subsequent blocks must follow the window's latest height; a parent hash mismatch
+// rolls back one block, but never the finalized anchor.
+// At capacity, appending returns ErrReorgWindowFull; rolling back remains allowed.
+func (window *ReorgWindow) Push(blockNumber uint64, blockHash, parentBlockHash string) (appended, popped bool, err error) {
+	// Initialize the anchor from genesis only.
+	if len(window.blockNumber2Hashes) == 0 {
+		if blockNumber != 0 {
+			return false, false, fmt.Errorf("Empty reorg window must start from genesis, got block %v", blockNumber)
+		}
+
+		window.finalized = 0
+		window.latest = 0
+		window.blockNumber2Hashes[0] = blockHash
 		return true, false, nil
 	}
 
@@ -78,9 +142,13 @@ func (window *ReorgWindow) Push(blockNumber uint64, blockHash, parentBlockHash s
 
 	// appended if parent block hash matches
 	if window.blockNumber2Hashes[window.latest] == parentBlockHash {
+		if window.Full() {
+			return false, false, ErrReorgWindowFull
+		}
+
 		window.blockNumber2Hashes[blockNumber] = blockHash
 		window.latest = blockNumber
-		window.verified = true
+
 		return true, false, nil
 	}
 
@@ -96,25 +164,24 @@ func (window *ReorgWindow) Push(blockNumber uint64, blockHash, parentBlockHash s
 	return false, true, nil
 }
 
-// Evict evicts finalized blocks from reorg window.
-func (window *ReorgWindow) Evict(finalizedBlockNumber uint64) (evicted int) {
-	if len(window.blockNumber2Hashes) == 0 {
+// Evict removes blocks before the given finalized block and returns the number removed.
+// The given number and hash must identify the same on-chain finalized block.
+// It keeps that block as the new finalized anchor and ignores an older or equal
+// finalized height, a height beyond the window, a missing window entry, or a hash mismatch.
+func (window *ReorgWindow) Evict(number uint64, hash string) (evicted int) {
+	if number <= window.finalized || number > window.latest {
 		return
 	}
 
-	// When service restarted, the reorg window will be initialized with recent blocks from database.
-	// These blocks may be reverted during service down time, and requires to compare with on-chain blocks.
-	// So, only when new on-chain block successfully pushed into the reorg window, the recent blocks could
-	// be evicted from reorg window.
-	if !window.verified {
+	// Restored or previously polled blocks may belong to an old fork. Match the
+	// finalized hash before discarding history needed to recover from a reorg.
+	cachedHash, ok := window.blockNumber2Hashes[number]
+	if !ok || cachedHash != hash {
 		return
 	}
 
-	// keep at latest one finalized block
-	evictUntil := min(finalizedBlockNumber, window.latest)
-
-	for i := window.finalized; i < evictUntil; i++ {
-		delete(window.blockNumber2Hashes, i)
+	for window.finalized < number {
+		delete(window.blockNumber2Hashes, window.finalized)
 		window.finalized++
 		evicted++
 	}
@@ -127,6 +194,6 @@ func (window ReorgWindow) String() string {
 		return "{ blocks = 0 }"
 	}
 
-	return fmt.Sprintf("{ blocks = %v, finalized = %v, latest = %v, verified = %v }",
-		len(window.blockNumber2Hashes), window.finalized, window.latest, window.verified)
+	return fmt.Sprintf("{ blocks = %v, finalized = %v, latest = %v }",
+		len(window.blockNumber2Hashes), window.finalized, window.latest)
 }

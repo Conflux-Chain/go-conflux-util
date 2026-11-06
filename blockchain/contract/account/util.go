@@ -2,9 +2,10 @@ package account
 
 import "math/big"
 
-// SafeBigFillBytes fills the destination byte slice with the big-endian representation of the given big.Int.
+// SafeBigFillBytes fills dest with the big-endian representation of num's absolute value.
 // If the number is nil or the destination slice is empty, it does nothing.
-// This function ensures that the destination slice is always filled with the correct number of bytes, truncating or padding as necessary.
+// Short values are padded with leading zeros; oversized values retain only the
+// least significant len(dest) bytes. It does not validate the sign or range.
 func SafeBigFillBytes(num *big.Int, dest []byte) {
 	if num == nil || len(dest) == 0 {
 		return

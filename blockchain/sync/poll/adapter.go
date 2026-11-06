@@ -8,8 +8,11 @@ import "context"
 // Generic type T is used to support different kinds of blockchain data, e.g. Conflux core space and eSpace.
 type Adapter[T any] interface {
 
-	// GetFinalizedBlockNumber returns the finalized block number, which will no longer be reverted.
-	GetFinalizedBlockNumber(ctx context.Context) (uint64, error)
+	// GetFinalizedBlock returns the number and hash of the same finalized block,
+	// which will no longer be reverted. The hash must use the same representation
+	// as GetBlockHash. For Conflux core space, these are the epoch number and its
+	// pivot block hash.
+	GetFinalizedBlock(ctx context.Context) (number uint64, hash string, err error)
 
 	// GetLatestBlockNumber returns the latest block number, which may be reverted later.
 	//

@@ -70,14 +70,18 @@ func (adapter *Adapter) Close() {
 	adapter.client.Close()
 }
 
-// GetFinalizedBlockNumber implements the poll.Adapter[T] interface.
-func (adapter *Adapter) GetFinalizedBlockNumber(ctx context.Context) (uint64, error) {
+// GetFinalizedBlock implements the poll.Adapter[T] interface.
+func (adapter *Adapter) GetFinalizedBlock(ctx context.Context) (uint64, string, error) {
 	block, err := adapter.client.WithContext(ctx).Eth.BlockByNumber(types.FinalizedBlockNumber, false)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 
-	return block.Number.Uint64(), nil
+	if block == nil {
+		return 0, "", errors.New("Finalized block not found")
+	}
+
+	return block.Number.Uint64(), block.Hash.Hex(), nil
 }
 
 // GetLatestBlockNumber implements the poll.Adapter[T] interface.
@@ -85,6 +89,10 @@ func (adapter *Adapter) GetLatestBlockNumber(ctx context.Context) (uint64, error
 	block, err := adapter.client.WithContext(ctx).Eth.BlockByNumber(types.BlockNumber(adapter.option.LatestBlockNumberTag), false)
 	if err != nil {
 		return 0, err
+	}
+
+	if block == nil {
+		return 0, errors.Errorf("Latest block not found by tag %v", adapter.option.LatestBlockNumberTag)
 	}
 
 	bn := block.Number.Uint64()
@@ -97,22 +105,23 @@ func (adapter *Adapter) GetLatestBlockNumber(ctx context.Context) (uint64, error
 
 // GetBlockData implements the poll.Adapter[T] interface.
 func (adapter *Adapter) GetBlockData(ctx context.Context, blockNumber uint64) (BlockData, error) {
+	client := adapter.client.WithContext(ctx)
 	var data BlockData
 
 	bn := types.BlockNumber(blockNumber)
 
-	if err := data.queryBlock(adapter.client, bn); err != nil {
+	if err := data.queryBlock(client, bn); err != nil {
 		return BlockData{}, errors.WithMessage(err, "Failed to query block")
 	}
 
 	if !adapter.option.IgnoreReceipts {
-		if err := data.queryReceipts(adapter.client, bn); err != nil {
+		if err := data.queryReceipts(client, bn); err != nil {
 			return BlockData{}, errors.WithMessage(err, "Failed to query receipts")
 		}
 	}
 
 	if !adapter.option.IgnoreTraces {
-		if err := data.queryTraces(adapter.client, bn); err != nil {
+		if err := data.queryTraces(client, bn); err != nil {
 			return BlockData{}, errors.WithMessage(err, "Failed to query traces")
 		}
 	}
