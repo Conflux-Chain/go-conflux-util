@@ -100,6 +100,9 @@ func TestReorgWindowWithLatestBlocks(t *testing.T) {
 	}{
 		{"height without anchor hash", ReorgWindowParams{FinalizedBlockNumber: 5}},
 		{"blocks without anchor hash", ReorgWindowParams{LatestBlocks: map[uint64]string{1: "Hash - 1"}}},
+		{"negative capacity", ReorgWindowParams{Capacity: -1}},
+		{"capacity without room for next block", ReorgWindowParams{Capacity: 1}},
+		{"restored window exceeds capacity", ReorgWindowParams{Capacity: 2, FinalizedBlockHash: "Hash - 0", LatestBlocks: map[uint64]string{1: "Hash - 1", 2: "Hash - 2"}}},
 		{"gap after anchor", ReorgWindowParams{FinalizedBlockNumber: 5, FinalizedBlockHash: "Hash - 5", LatestBlocks: map[uint64]string{7: "Hash - 7"}}},
 		{"empty block hash", ReorgWindowParams{FinalizedBlockNumber: 5, FinalizedBlockHash: "Hash - 5", LatestBlocks: map[uint64]string{6: ""}}},
 	} {
@@ -139,4 +142,35 @@ func TestReorgWindowWithLatestBlocks(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, true, pushed)
 	assert.Equal(t, false, popped)
+}
+
+func TestReorgWindowCapacity(t *testing.T) {
+	window, err := NewReorgWindow(ReorgWindowParams{
+		Capacity:           2,
+		FinalizedBlockHash: "Hash - 0",
+		LatestBlocks:       map[uint64]string{1: "Hash - 1"},
+	})
+	require.NoError(t, err)
+	require.True(t, window.Full())
+
+	appended, popped, err := window.Push(2, "Hash - 2", "Hash - 1")
+	require.ErrorIs(t, err, ErrReorgWindowFull)
+	require.False(t, appended)
+	require.False(t, popped)
+	require.Equal(t, uint64(2), window.NextBlockNumber())
+	require.Len(t, window.blockNumber2Hashes, 2)
+
+	// A full window must still allow recovery from a fork.
+	appended, popped, err = window.Push(2, "Hash - 2", "replacement-1")
+	require.NoError(t, err)
+	require.False(t, appended)
+	require.True(t, popped)
+	require.False(t, window.Full())
+	require.Equal(t, uint64(0), window.FinalizedBlockNumber())
+
+	appended, popped, err = window.Push(1, "replacement-1", "Hash - 0")
+	require.NoError(t, err)
+	require.True(t, appended)
+	require.False(t, popped)
+	require.True(t, window.Full())
 }

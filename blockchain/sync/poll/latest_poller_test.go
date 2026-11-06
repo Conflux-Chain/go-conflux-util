@@ -3,6 +3,7 @@ package poll
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/poll/testutil"
@@ -14,6 +15,8 @@ type observedLatestAdapter struct {
 	finalizedErr   error
 	finalizedCalls int
 	calls          []string
+	dataErr        error
+	requested      []uint64
 }
 
 func (a *observedLatestAdapter) GetFinalizedBlock(ctx context.Context) (uint64, string, error) {
@@ -27,7 +30,99 @@ func (a *observedLatestAdapter) GetFinalizedBlock(ctx context.Context) (uint64, 
 
 func (a *observedLatestAdapter) GetBlockData(ctx context.Context, number uint64) (testutil.Data, error) {
 	a.calls = append(a.calls, "data")
+	a.requested = append(a.requested, number)
+	if a.dataErr != nil {
+		return testutil.Data{}, a.dataErr
+	}
 	return a.Adapter.GetBlockData(ctx, number)
+}
+
+func TestLatestPollerFullWindowWaits(t *testing.T) {
+	adapter := &observedLatestAdapter{Adapter: testutil.MustNewAdapter([]uint64{5, 10}, nil)}
+	poller, err := NewLatestPoller[testutil.Data](adapter, ReorgWindowParams{
+		Capacity: 3, FinalizedBlockNumber: 5, FinalizedBlockHash: "DataHash-5",
+		LatestBlocks: map[uint64]string{6: "DataHash-6", 7: "DataHash-7"},
+	})
+	require.NoError(t, err)
+	ctx := context.Background()
+
+	// Neither a failed finality query nor stalled finality should fetch block data.
+	adapter.finalizedErr = errors.New("finality unavailable")
+	_, ok, reorg, err := poller.pollOnce(ctx, 8)
+	require.ErrorIs(t, err, adapter.finalizedErr)
+	require.False(t, ok)
+	require.False(t, reorg)
+	adapter.finalizedErr = nil
+	_, ok, reorg, err = poller.pollOnce(ctx, 8)
+	require.ErrorContains(t, err, "Finalized block number not advanced, anchor = 5, finalized = 5")
+	require.False(t, ok)
+	require.False(t, reorg)
+	require.Empty(t, adapter.requested)
+
+	// Once finality advances, a failed anchor+1 query must also leave history intact.
+	adapter.dataErr = errors.New("block unavailable")
+	_, ok, reorg, err = poller.pollOnce(ctx, 8)
+	require.ErrorIs(t, err, adapter.dataErr)
+	require.False(t, ok)
+	require.False(t, reorg)
+	require.Equal(t, map[uint64]string{5: "DataHash-5", 6: "DataHash-6", 7: "DataHash-7"}, poller.window.blockNumber2Hashes)
+
+	adapter.dataErr = nil
+	_, ok, reorg, err = poller.pollOnce(ctx, 8)
+	require.NoError(t, err)
+	require.False(t, ok)
+	require.False(t, reorg)
+	require.Equal(t, []uint64{6, 6}, adapter.requested)
+	require.Equal(t, []string{"finalized", "data"}, adapter.calls[len(adapter.calls)-2:])
+	require.False(t, poller.window.Full())
+	require.Equal(t, uint64(6), poller.window.FinalizedBlockNumber())
+	require.Equal(t, uint64(8), poller.window.NextBlockNumber())
+
+	data, ok, reorg, err := poller.pollOnce(ctx, poller.window.NextBlockNumber())
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.False(t, reorg)
+	require.Equal(t, uint64(8), data.Number)
+}
+
+func TestLatestPollerFullWindowFork(t *testing.T) {
+	for _, firstFork := range []uint64{6, 7} {
+		t.Run(fmt.Sprintf("fork at %d", firstFork), func(t *testing.T) {
+			blocks := map[uint64]string{6: "DataHash-6", 7: "old-7"}
+			if firstFork == 6 {
+				blocks[6] = "old-6"
+			}
+			adapter := &observedLatestAdapter{Adapter: testutil.MustNewAdapter([]uint64{10}, nil)}
+			poller, err := NewLatestPoller[testutil.Data](adapter, ReorgWindowParams{
+				Capacity: 3, FinalizedBlockNumber: 5, FinalizedBlockHash: "DataHash-5", LatestBlocks: blocks,
+			})
+			require.NoError(t, err)
+			ctx := context.Background()
+			_, ok, reorg, err := poller.pollOnce(ctx, 8)
+			require.NoError(t, err)
+			require.False(t, ok)
+			require.Equal(t, []uint64{6}, adapter.requested)
+			require.False(t, poller.window.Full())
+			if firstFork == 6 {
+				require.True(t, reorg)
+				require.Equal(t, map[uint64]string{5: "DataHash-5"}, poller.window.blockNumber2Hashes)
+			} else {
+				// Confirming block 6 must not mark the later fork as finalized.
+				require.False(t, reorg)
+				require.Equal(t, uint64(6), poller.window.FinalizedBlockNumber())
+				_, ok, reorg, err = poller.pollOnce(ctx, poller.window.NextBlockNumber())
+				require.NoError(t, err)
+				require.False(t, ok)
+				require.True(t, reorg)
+			}
+			require.Equal(t, firstFork, poller.window.NextBlockNumber())
+			data, ok, reorg, err := poller.pollOnce(ctx, poller.window.NextBlockNumber())
+			require.NoError(t, err)
+			require.True(t, ok)
+			require.False(t, reorg)
+			require.Equal(t, firstFork, data.Number)
+		})
+	}
 }
 
 func TestLatestPollerFinalizedReplay(t *testing.T) {

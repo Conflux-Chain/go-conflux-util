@@ -5,10 +5,16 @@ import (
 	"fmt"
 )
 
+// ErrReorgWindowFull indicates that space must be freed before another block can be appended.
+var ErrReorgWindowFull = errors.New("Reorg window is full")
+
 // ReorgWindowParams describes a finalized anchor and optional consecutive blocks
 // from the same chain. The caller must ensure the anchor is finalized.
 // Zero parameters select an empty window for synchronization from genesis.
 type ReorgWindowParams struct {
+	// Capacity limits retained blocks, including the finalized anchor.
+	// Zero defaults to 1,000,000; explicit values must be at least 2.
+	Capacity             int
 	FinalizedBlockNumber uint64
 	FinalizedBlockHash   string
 	// LatestBlocks starts at FinalizedBlockNumber + 1, with no gaps or empty hashes.
@@ -19,9 +25,10 @@ type ReorgWindowParams struct {
 //
 // Basically, the reorg window maintains the recent blocks and the latest finalized block.
 //
-// Entries contain only block numbers and hashes. They are retained until a matching
-// finalized block is available within the window; no explicit capacity is required.
+// Entries contain only block numbers and hashes. Capacity bounds their count;
+// unfinalized history is never discarded merely to make room for new blocks.
 type ReorgWindow struct {
+	capacity           int
 	blockNumber2Hashes map[uint64]string // recent blocks in sequence
 	finalized          uint64            // the finalized block number, which will not be reverted
 	latest             uint64            // the latest block number, which may be reverted
@@ -35,7 +42,18 @@ type ReorgWindow struct {
 // When service restarted, user should load recent blocks and the last finalized block from database,
 // and initialize the reorg window so as to correctly handle chain reorg during the service down time.
 func NewReorgWindow(params ReorgWindowParams) (*ReorgWindow, error) {
+	if params.Capacity == 0 {
+		params.Capacity = 1_000_000
+	}
+	if params.Capacity < 2 {
+		return nil, errors.New("Reorg window capacity must be at least 2")
+	}
+	if len(params.LatestBlocks) >= params.Capacity {
+		return nil, errors.New("Restored blocks and finalized anchor exceed reorg window capacity")
+	}
+
 	window := &ReorgWindow{
+		capacity:           params.Capacity,
 		blockNumber2Hashes: make(map[uint64]string),
 	}
 
@@ -71,6 +89,25 @@ func NewReorgWindow(params ReorgWindowParams) (*ReorgWindow, error) {
 	return window, nil
 }
 
+// Full reports whether the retained blocks have reached capacity.
+func (window *ReorgWindow) Full() bool {
+	return len(window.blockNumber2Hashes) >= window.capacity
+}
+
+// FinalizedBlockNumber returns the anchor height, or 0 for an empty window.
+func (window *ReorgWindow) FinalizedBlockNumber() uint64 {
+	return window.finalized
+}
+
+// RewindToAnchor discards all blocks after the finalized anchor.
+// Call only after detecting a reorg; an empty window remains empty.
+func (window *ReorgWindow) RewindToAnchor() {
+	for window.latest > window.finalized {
+		delete(window.blockNumber2Hashes, window.latest)
+		window.latest--
+	}
+}
+
 // NextBlockNumber returns the next height to push, or 0 for an empty window.
 func (window *ReorgWindow) NextBlockNumber() uint64 {
 	if len(window.blockNumber2Hashes) == 0 {
@@ -84,6 +121,7 @@ func (window *ReorgWindow) NextBlockNumber() uint64 {
 // An empty window accepts only genesis (block 0), without checking its parent hash.
 // Subsequent blocks must follow the window's latest height; a parent hash mismatch
 // rolls back one block, but never the finalized anchor.
+// At capacity, appending returns ErrReorgWindowFull; rolling back remains allowed.
 func (window *ReorgWindow) Push(blockNumber uint64, blockHash, parentBlockHash string) (appended, popped bool, err error) {
 	// Initialize the anchor from genesis only.
 	if len(window.blockNumber2Hashes) == 0 {
@@ -104,8 +142,13 @@ func (window *ReorgWindow) Push(blockNumber uint64, blockHash, parentBlockHash s
 
 	// appended if parent block hash matches
 	if window.blockNumber2Hashes[window.latest] == parentBlockHash {
+		if window.Full() {
+			return false, false, ErrReorgWindowFull
+		}
+
 		window.blockNumber2Hashes[blockNumber] = blockHash
 		window.latest = blockNumber
+
 		return true, false, nil
 	}
 
