@@ -1,6 +1,6 @@
 module github.com/Conflux-Chain/go-conflux-util
 
-go 1.23.0
+go 1.24
 
 require (
 	github.com/Conflux-Chain/go-conflux-sdk v1.6.3
@@ -77,7 +77,7 @@ require (
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kilic/bls12-381 v0.1.0 // indirect
-	github.com/klauspost/compress v1.16.0 // indirect
+	github.com/klauspost/compress v1.18.7 // indirect
 	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/magiconair/properties v1.8.5 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
