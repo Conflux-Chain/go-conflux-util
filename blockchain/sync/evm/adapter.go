@@ -23,7 +23,7 @@ type AdapterOption struct {
 	RequestTimeout time.Duration `default:"3s"`
 
 	// latest block number
-	LatestBlockNumberTag    int64  `default:"-1"` // -1: "latest", -3: "finalized", -4: "safe"
+	LatestBlockNumberTag    int64  `default:"-2"` // -2: "latest", -3: "finalized", -4: "safe"
 	LatestBlockNumberOffset uint64 // N blocks behind the `LatestBlockNumberTag`
 
 	// allow to ignore receipts and/or traces, only block and transactions are required
