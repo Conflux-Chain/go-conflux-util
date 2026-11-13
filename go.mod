@@ -17,8 +17,8 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/mcuadros/go-defaults v1.2.0
 	github.com/mitchellh/mapstructure v1.4.3
-	github.com/openweb3/go-rpc-provider v0.3.9
-	github.com/openweb3/web3go v0.3.7
+	github.com/openweb3/go-rpc-provider v0.3.10
+	github.com/openweb3/web3go v0.3.8
 	github.com/pkg/errors v0.9.1
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9
 	github.com/sirupsen/logrus v1.9.3
@@ -99,7 +99,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/openweb3/go-ethereum-hdwallet v0.1.0 // indirect
-	github.com/openweb3/go-sdk-common v0.0.0-20261112080213-2a43cf71b367 // indirect
+	github.com/openweb3/go-sdk-common v0.1.0 // indirect
 	github.com/pelletier/go-toml v1.9.4 // indirect
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
 	github.com/pion/dtls/v3 v3.1.5 // indirect
