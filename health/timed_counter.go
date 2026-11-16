@@ -63,7 +63,7 @@ func (counter *TimedCounter) IsSuccess() bool {
 
 // OnSuccess erases failure status and return recover information if any.
 //
-//	@return recovered bool - indicates whether recovered from unhealthy status.
+//	@return recovered bool - indicates whether this failure interval previously reported unhealthy.
 //	@return elapsed time.Duration - indicates the duration since the first failure time.
 func (counter *TimedCounter) OnSuccess() (recovered bool, elapsed time.Duration) {
 	counter.mu.Lock()
@@ -78,10 +78,9 @@ func (counter *TimedCounter) onSuccessAt(now time.Time) (recovered bool, elapsed
 		return
 	}
 
-	// report health now after a long time
-	if elapsed = now.Sub(counter.failedAt); elapsed >= counter.config.Threshold {
-		recovered = true
-	}
+	elapsed = now.Sub(counter.failedAt)
+	// Report recovery only if this failure interval reported unhealthy.
+	recovered = counter.reports > 0
 
 	// reset
 	counter.failedAt = time.Time{}

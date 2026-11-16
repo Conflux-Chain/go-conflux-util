@@ -110,3 +110,45 @@ func TestCounterRemind(t *testing.T) {
 	assert.True(t, recovered)
 	assert.Equal(t, testCounterConfig.Threshold+testCounterConfig.Remind, failures)
 }
+
+func TestCounterRecoveryRequiresUnhealthyReport(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		failures uint64
+	}{
+		{"below threshold", testCounterConfig.Threshold - 1},
+		{"at threshold", testCounterConfig.Threshold},
+		{"after reminder", testCounterConfig.Threshold + testCounterConfig.Remind},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			counter := NewCounter(testCounterConfig)
+			for i := uint64(1); i <= tt.failures; i++ {
+				recovered, unhealthy, unrecovered, failures := counter.OnError(assert.AnError)
+				assert.False(t, recovered)
+				assert.Equal(t, i == testCounterConfig.Threshold, unhealthy)
+				assert.Equal(t, i == testCounterConfig.Threshold+testCounterConfig.Remind, unrecovered)
+				assert.Equal(t, i, failures)
+			}
+
+			recovered, unhealthy, unrecovered, failures := counter.OnError(nil)
+			assert.Equal(t, tt.failures >= testCounterConfig.Threshold, recovered)
+			assert.False(t, unhealthy)
+			assert.False(t, unrecovered)
+			assert.Equal(t, tt.failures, failures)
+			assert.True(t, counter.IsSuccess())
+			recovered, failures = counter.OnSuccess()
+			assert.False(t, recovered)
+			assert.Zero(t, failures)
+
+			// A short failure interval after recovery must not report recovery again.
+			unhealthy, unrecovered, failures = counter.OnFailure()
+			assert.False(t, unhealthy)
+			assert.False(t, unrecovered)
+			assert.Equal(t, uint64(1), failures)
+			recovered, failures = counter.OnSuccess()
+			assert.False(t, recovered)
+			assert.Equal(t, uint64(1), failures)
+			assert.True(t, counter.IsSuccess())
+		})
+	}
+}
