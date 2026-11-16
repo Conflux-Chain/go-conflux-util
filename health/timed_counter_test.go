@@ -163,3 +163,93 @@ func TestTimedCounterRemind(t *testing.T) {
 	assert.False(t, unrecovered)
 	assert.Equal(t, testTimedCounterConfig.Threshold, elapsed)
 }
+
+func TestTimedCounterSuccessWithoutUnhealthyReport(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		elapsed time.Duration
+	}{
+		{"before threshold", testTimedCounterConfig.Threshold - time.Nanosecond},
+		{"at threshold", testTimedCounterConfig.Threshold},
+		{"after threshold", testTimedCounterConfig.Threshold + time.Second},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			counter := NewTimedCounter(testTimedCounterConfig)
+			start := time.Unix(1700000000, 0)
+			for _, offset := range []time.Duration{0, testTimedCounterConfig.Threshold / 2} {
+				unhealthy, unrecovered, elapsed := counter.onFailureAt(start.Add(offset))
+				assert.False(t, unhealthy)
+				assert.False(t, unrecovered)
+				assert.Equal(t, offset, elapsed)
+			}
+
+			recovered, elapsed := counter.onSuccessAt(start.Add(tt.elapsed))
+			assert.False(t, recovered)
+			assert.Equal(t, tt.elapsed, elapsed)
+			assert.True(t, counter.IsSuccess())
+
+			recovered, elapsed = counter.onSuccessAt(start.Add(tt.elapsed + time.Second))
+			assert.False(t, recovered)
+			assert.Zero(t, elapsed)
+		})
+	}
+}
+
+func TestTimedCounterRecoveryResetsReportState(t *testing.T) {
+	for _, remind := range []bool{false, true} {
+		name := "after unhealthy report"
+		if remind {
+			name = "after reminder"
+		}
+		t.Run(name, func(t *testing.T) {
+			counter := NewTimedCounter(testTimedCounterConfig)
+			start := time.Unix(1700000000, 0)
+			counter.onFailureAt(start)
+			reportAt := start.Add(testTimedCounterConfig.Threshold)
+			unhealthy, unrecovered, _ := counter.onFailureAt(reportAt)
+			assert.True(t, unhealthy)
+			assert.False(t, unrecovered)
+			if remind {
+				reportAt = reportAt.Add(testTimedCounterConfig.Remind)
+				unhealthy, unrecovered, _ = counter.onFailureAt(reportAt)
+				assert.False(t, unhealthy)
+				assert.True(t, unrecovered)
+			}
+
+			recovered, elapsed := counter.onSuccessAt(reportAt)
+			assert.True(t, recovered)
+			assert.Equal(t, reportAt.Sub(start), elapsed)
+			assert.True(t, counter.IsSuccess())
+			recovered, elapsed = counter.onSuccessAt(reportAt.Add(time.Second))
+			assert.False(t, recovered)
+			assert.Zero(t, elapsed)
+
+			// A new interval must not inherit the previous unhealthy report.
+			restartedAt := reportAt.Add(2 * time.Second)
+			unhealthy, unrecovered, elapsed = counter.onFailureAt(restartedAt)
+			assert.False(t, unhealthy)
+			assert.False(t, unrecovered)
+			assert.Zero(t, elapsed)
+			recovered, elapsed = counter.onSuccessAt(restartedAt.Add(testTimedCounterConfig.Threshold))
+			assert.False(t, recovered)
+			assert.Equal(t, testTimedCounterConfig.Threshold, elapsed)
+			assert.True(t, counter.IsSuccess())
+		})
+	}
+}
+
+func TestTimedCounterOnErrorSuccessWithoutUnhealthyReport(t *testing.T) {
+	counter := NewTimedCounter(testTimedCounterConfig)
+	// Put the first failure in the past so OnError crosses the threshold without sleeping.
+	unhealthy, unrecovered, elapsed := counter.onFailureAt(time.Now().Add(-testTimedCounterConfig.Threshold - time.Second))
+	assert.False(t, unhealthy)
+	assert.False(t, unrecovered)
+	assert.Zero(t, elapsed)
+
+	recovered, unhealthy, unrecovered, elapsed := counter.OnError(nil)
+	assert.False(t, recovered)
+	assert.False(t, unhealthy)
+	assert.False(t, unrecovered)
+	assert.GreaterOrEqual(t, elapsed, testTimedCounterConfig.Threshold)
+	assert.True(t, counter.IsSuccess())
+}
